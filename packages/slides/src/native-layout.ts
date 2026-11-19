@@ -73,11 +73,10 @@ export function nativeLayoutTemplate(
       `${i + 2}`,
       '/native/template.xml',
     );
-    const text = nativeObjectText(
-      '',
+    const text = nativeObjectText({
       fontSize,
-      slot.role === 'ctrTitle' || slot.role === 'subTitle',
-    );
+      horizontalAlignment: slot.role === 'ctrTitle' || slot.role === 'subTitle' ? 'center' : 'start',
+    });
     return {
       ...object,
       placeholder: slot.role === 'body' ? 'obj' : slot.role,

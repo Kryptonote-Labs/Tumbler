@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import {
   applyPresentationCommand,
   createPresentation,
+  importNativePresentation,
   openPresentationArtifact,
 } from '../src/index.ts';
 
@@ -45,4 +46,37 @@ test('new text boxes retain top left text alignment', () => {
     anchor: 'top',
     paragraphs: [{ align: 'left' }],
   });
+});
+
+test('shape insertion keeps authored text style and layout through PPTX and native editing', () => {
+  for (const deck of [createPresentation(), importNativePresentation(createPresentation())]) {
+    const inserted = applyPresentationCommand(deck, {
+      name: 'insert-object',
+      slideId: deck.document.slides[0]!.id,
+      bounds: { x: 100, y: 100, width: 300, height: 150 },
+      object: {
+        kind: 'shape',
+        geometry: 'rect',
+        text: 'A label\n',
+        fontFamily: 'A & B',
+        fontSize: 18,
+        bold: true,
+        textColor: '#123456',
+        horizontalAlignment: 'end',
+        verticalAlignment: 'bottom',
+        textInset: [2, 4, 6, 8],
+      },
+    });
+    const style = { fontFamily: 'A & B', fontSize: 24, bold: true, color: 'rgba(18,52,86,1)' };
+    for (const artifact of [inserted, openPresentationArtifact(inserted.bytes())]) {
+      expect(artifact.document.slides[0]!.objects[0]!.text).toMatchObject({
+        anchor: 'bottom',
+        inset: [2, 4, 6, 8],
+        paragraphs: [
+          { align: 'right', runs: [{ text: 'A label', ...style }] },
+          { align: 'right', endRun: style },
+        ],
+      });
+    }
+  }
 });

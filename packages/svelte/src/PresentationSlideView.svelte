@@ -157,6 +157,11 @@
   let lastSelectedKey: string | undefined;
   let lastSelectedKeys: string[] | undefined;
   function select(keys: string[]) {
+    const editingKey = untrack(() => editing);
+    if (editingKey && (keys.length !== 1 || keys[0] !== editingKey)) {
+      editing = undefined;
+      pendingFormat = undefined;
+    }
     selectedKeys = keys;
     selectedKey = keys.at(-1);
     lastSelectedKey = keys.at(-1);

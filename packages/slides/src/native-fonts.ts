@@ -64,21 +64,17 @@ export function nativeObjectTheme(
     language: undefined,
     scale: 1,
   };
+  const withContext = (run: SlideTextRun): SlideTextRun => {
+    const nativeFonts = run.nativeOwnFonts ? { ...context, authored: run.nativeOwnFonts } : context;
+    return { ...run, nativeFonts, fontFamily: nativeTypeface(nativeFonts, 'latin', 'Latn') };
+  };
   const text = (value: SlideObject['text']) =>
     value && {
       ...value,
       paragraphs: value.paragraphs.map((p) => ({
         ...p,
-        runs: p.runs.flatMap((run) => nativeScriptRuns({ ...run, nativeFonts: context })),
-        ...(p.endRun
-          ? {
-              endRun: {
-                ...p.endRun,
-                nativeFonts: context,
-                fontFamily: nativeTypeface(context, 'latin', 'Latn'),
-              },
-            }
-          : {}),
+        runs: p.runs.flatMap((run) => nativeScriptRuns(withContext(run))),
+        ...(p.endRun ? { endRun: withContext(p.endRun) } : {}),
       })),
     };
   return {

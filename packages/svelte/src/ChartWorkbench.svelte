@@ -33,6 +33,7 @@
   const encoded = $derived(current.workbook);
   let sheet = $state<string>();
   let dataOpen = $state(false);
+  let embeddedRange = $state<string>();
   let handledRequest: number | undefined;
   $effect(() => { const next = request; if (!next || next.sequence === handledRequest) return; handledRequest = next.sequence; if (next.action === 'data') untrack(() => { if (embeddedData) dataOpen = true; else oneditdata?.(true); }); });
   const draft = $derived.by(() => {
@@ -45,17 +46,18 @@
     const artifact = encoded === undefined ? draft?.value?.artifact : openSpreadsheetArtifact(chartBase64ToBytes(encoded));
     return artifact && sheet !== undefined && artifact.workbook.sheet(sheet) ? artifact.selectSheet(sheet) : artifact;
   });
-  let preview = $state<ChartTypeChange>();
   let plotIndex = $state(0);
   const selectedPlot = $derived(Math.max(0, Math.min(plotIndex, chartDataState(bytes).plots.length - 1)));
   let error = $state<string>(), typeError = $state<string>();
   let sourcePreview = $state<Uint8Array>();
-  const previewModel = $derived.by((): ChartModel => {
+  function chartPreview(change?: ChartTypeChange): ChartModel {
     try {
-      const xml = sourcePreview ? new TextDecoder().decode(sourcePreview) : preview ? new TextDecoder().decode(convertChartType(bytes, preview, selectedPlot)) : current.xml;
+      const source = change ? convertChartType(bytes, change, selectedPlot) : sourcePreview;
+      const xml = source ? new TextDecoder().decode(source) : current.xml;
       return { ...chartContentModel({ ...current, xml }), themeColors, themeFonts };
     } catch (cause) { return { status: 'unsupported', chartType: undefined, reason: cause instanceof Error ? cause.message : 'This data cannot use that chart type.', title: undefined, legend: undefined }; }
-  });
+  }
+  const previewModel = $derived(chartPreview());
   function publish(content: ChartContent, reason?: 'type' | 'series') { if (disabled || content === current) return; onchange(content, reason); current = content; error = undefined; typeError = undefined; sourcePreview = undefined; }
   function changeType(change: ChartTypeChange) {
     try {
@@ -86,17 +88,18 @@
 {#snippet appearanceControls()}<ChartAppearance inline {bytes} {disabled} {themeColors} onchange={(source) => publish({ ...current, xml: new TextDecoder().decode(source) })} />{/snippet}
 {#snippet dataControls(close: () => void)}
   {@render dataSourceEditor?.(close)}
-  <ChartSeriesProperties onedit={(input) => { try { publish(applyChartContentEdit(current,input), 'series'); } catch (cause) { error = cause instanceof Error ? cause.message : 'The series could not be changed.'; } }} bytes={dataBytes} ranges={!embeddedData} {selectedRange} {disabled} onchange={changeSource} />
+  <ChartSeriesProperties onedit={(input) => { try { publish(applyChartContentEdit(current,input), 'series'); } catch (cause) { error = cause instanceof Error ? cause.message : 'The series could not be changed.'; } }} bytes={dataBytes} ranges={!embeddedData || workbook !== undefined} selectedRange={embeddedData ? (dataOpen ? embeddedRange : undefined) : selectedRange} {disabled} onchange={changeSource} />
   {#if error || draft?.error}<p class="error" role="alert">{error ?? draft?.error}</p>{/if}
 {/snippet}
 {#snippet properties(mode: 'all' | 'type' | 'elements' | 'format', close?: () => void)}
-<ChartProperties {mode} onchoose={close} {bytes} {request} {disabled} {themeColors} plotIndex={selectedPlot} onplotselect={(index) => { plotIndex = index; preview = undefined; }}
+<ChartProperties {mode} onchoose={close} {bytes} {request} {disabled} {themeColors} plotIndex={selectedPlot} onplotselect={(index) => { plotIndex = index; }}
   {typeError} dataExpanded={embeddedData ? dataOpen : undefined} onsourcepreview={(source) => { sourcePreview = source; }}
   onchange={(source) => publish({ ...current, xml: new TextDecoder().decode(source) })}
-  ontypechange={changeType} ontypepreview={(value) => { preview = value; }} oneditdata={embeddedData ? openData : oneditdata}>
-  {#snippet typePreview()}
-    <OoxmlChart {patternOrigin} model={previewModel} width={previewSize.width} height={previewSize.height} />
-    {#if previewModel.status === 'unsupported'}<p class="preview-error" role="status">{previewModel.reason}</p>{/if}
+  ontypechange={changeType} oneditdata={embeddedData ? openData : oneditdata}>
+  {#snippet typePreview(change)}
+    {@const model = chartPreview(change)}
+    <OoxmlChart {patternOrigin} {model} width={previewSize.width} height={previewSize.height} />
+    {#if model.status === 'unsupported'}<p class="preview-error" role="status">{model.reason}</p>{/if}
   {/snippet}
   {#snippet viewPreview()}<OoxmlChart {patternOrigin} model={previewModel} width={previewSize.width} height={previewSize.height} />{/snippet}
   {#snippet fillEditor(target, label, targetKey)}<ChartFillEditor {targetKey} content={current} {target} {label} {themeColors} {disabled} preview={viewPreview} onpreview={(source) => { sourcePreview = source; }} onchange={(content) => publish(content)} />{/snippet}
@@ -106,7 +109,7 @@
   {/snippet}
 </ChartProperties>
 {/snippet}
-{#if embeddedData && dataOpen && workbook}<ChartDataEditor artifact={workbook} source={dataBytes} {themeColors} {disabled} onchange={changeData} onsheetselect={(name) => { sheet = name; }} onclose={() => { dataOpen = false; }} />{/if}
+{#if embeddedData && dataOpen && workbook}<ChartDataEditor artifact={workbook} source={dataBytes} {themeColors} {disabled} onchange={changeData} onrangeselect={(reference) => { embeddedRange = reference; }} onsheetselect={(name) => { sheet = name; }} onclose={() => { dataOpen = false; }} />{/if}
 <style>
   .error { color: var(--tumbler-control-danger, var(--danger, #ff6b6b)); font-size: 12px; margin: 4px 0; }
   .preview-error { position: absolute; inset: auto 6px 4px; margin: 0; padding: 4px; background: var(--surface, #181818); color: var(--text, #e2fee7); font-size: 11px; }

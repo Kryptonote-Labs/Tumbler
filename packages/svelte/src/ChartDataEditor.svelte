@@ -19,10 +19,11 @@
     /** Receives each successful edit. Formulas keep their source and are parsed by the workbook engine. */
     readonly onchange: (artifact: SpreadsheetArtifact) => void;
     readonly onclose?: () => void;
+    readonly onrangeselect?: (reference: string) => void;
     readonly onsheetselect?: (name: string) => void;
   }
 
-  let { artifact, disabled = false, source, themeColors = {}, onchange, onclose, onsheetselect }: Props = $props();
+  let { artifact, disabled = false, source, themeColors = {}, onchange, onclose, onrangeselect, onsheetselect }: Props = $props();
 
   // Follows the host's artifact, and runs ahead of it between an edit and the host's next render.
   let current = $derived(artifact);
@@ -38,6 +39,10 @@
   const highlights = $derived(source ? chartDataHighlights(source, current.activeSheet.name, themeColors) : []);
   onMount(() => { void tick().then(() => region?.querySelector<HTMLElement>('[role="grid"]')?.focus()); });
   const reference = $derived(formatCellReference(selection.anchor));
+  $effect(() => {
+    const sheet = current.activeSheet.name.replaceAll("'", "''");
+    onrangeselect?.(`'${sheet}'!${formatCellRange(selection.range)}`);
+  });
 
   function apply(edit: (artifact: SpreadsheetArtifact) => SpreadsheetArtifact): boolean {
     try {
@@ -87,7 +92,7 @@
   <div class="grid">
     <SpreadsheetGrid minimumColumnWidth={152} worksheet={current.worksheet} calculation={current.calculation} {selection} highlightRanges={highlights} readonly={disabled}
       onselectionchange={(next) => { selection = next; }} onedit={editCell}
-      onclear={(selection) => apply(artifact=>applySpreadsheetCommand(artifact,{name:'clear-range',sheetId:String(artifact.activeSheet.sheetId),range:formatCellRange(selection.range)}))} />
+      clearOnBackspace onclear={(selection) => apply(artifact=>applySpreadsheetCommand(artifact,{name:'clear-range',sheetId:String(artifact.activeSheet.sheetId),range:formatCellRange(selection.range)}))} />
     {#if error}<p class="error" role="alert">{error}</p>{/if}
   </div>
   {#if current.workbook.sheets.filter((sheet) => sheet.state === 'visible').length > 1}

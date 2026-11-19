@@ -29,6 +29,7 @@ import { isPresentationBlock } from './native-block.ts';
 import { importNativePresentation } from './native-document.ts';
 import { openPresentationArtifact } from './artifact.ts';
 import { validatePresentationShapeStyle } from './authoring-validation.ts';
+import { nativeBackground, applyNativeBackgroundToAll } from './native-background.ts';
 import { inheritNativeText } from './native-text-inheritance.ts';
 type AtomicCommand = Exclude<PresentationCommand, { name: 'batch' | 'replace-all' }>;
 export function applyNativeModelCommand(
@@ -314,7 +315,7 @@ export function applyNativeModelCommand(
           ? (donor.layoutContext?.titleInsertion ?? donor.insertion)
           : donor?.insertion;
       const id = nextId(),
-        template = source?.slide ?? layoutTemplate('blank', state.width, state.height);
+        template = source?.slide ?? { ...layoutTemplate('blank', state.width, state.height), ...donor?.inheritedBackground };
       const part = `/native/${id}.xml`,
         objects = template.objects.map((o) => ({
           ...o,
@@ -458,50 +459,21 @@ export function applyNativeModelCommand(
         command.name === 'background'
           ? { kind: 'solid' as const, color: command.color }
           : command.fill;
-      let slide = {
-        ...target!.slide,
-        backgroundGradient: undefined as PresentationSlide['backgroundGradient'],
-        backgroundPattern: undefined,
-        backgroundPicture: undefined,
-      } as PresentationSlide;
-      if (fill.kind === 'inherit') slide = { ...slide, ...target!.inheritedBackground };
-      if (fill.kind === 'solid')
-        slide = { ...slide, background: nativeColour(fill.color, fill.opacity ?? 1) };
-      if (fill.kind === 'gradient')
-        slide = { ...slide, background: 'none', backgroundGradient: nativeGradient(fill) };
-      if (fill.kind === 'pattern')
-        slide = {
-          ...slide,
-          background: 'none',
-          backgroundPattern: {
-            preset: fill.preset,
-            foreground: nativeColour(fill.foreground),
-            background: nativeColour(fill.background),
+      if (command.name === 'set-background' && command.scope === 'presentation') {
+        slides = applyNativeBackgroundToAll(slides, fill);
+      } else {
+        const background = fill.kind === 'inherit' ? target!.inheritedBackground : nativeBackground(fill);
+        patchSlide({
+          ...target!,
+          slide: {
+            ...target!.slide,
+            backgroundPattern: undefined,
+            backgroundPicture: undefined,
+            ...background,
           },
-        };
-      if (fill.kind === 'picture')
-        slide = {
-          ...slide,
-          background: 'none',
-          backgroundPicture: {
-            bytes: Uint8Array.from(atob(fill.data), (c) => c.charCodeAt(0)),
-            contentType: fill.contentType,
-            crop: fill.crop ?? [0, 0, 0, 0],
-            opacity: fill.opacity ?? 1,
-            ...(fill.tile
-              ? {
-                  tile: {
-                    ...fill.tile,
-                    x: fill.tile.x ?? 0,
-                    y: fill.tile.y ?? 0,
-                    align: fill.tile.align ?? 'tl',
-                    flip: fill.tile.flip ?? 'none',
-                  },
-                }
-              : {}),
-          },
-        };
-      patchSlide({ ...target!, slide, backgroundOverride: fill.kind !== 'inherit' });
+          backgroundOverride: fill.kind !== 'inherit',
+        });
+      }
       break;
     }
     default: {

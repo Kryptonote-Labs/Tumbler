@@ -23,6 +23,9 @@ export function presentationHelp(commandName = "tumbler", name?: string) {
       `${commandName} <document> slides render [--slide <slide-id>]`,
       `${commandName} <document> slides <command> --input JSON [--page <read-handle>]`,
       ...(!name || textCommands.includes(name) ? [textHelp] : []),
+      ...(name === "insert-object"
+        ? ["For shapes, set text styling on object. Font size is in points and textInset is [top, right, bottom, left] in slide pixels."]
+        : []),
       "Read the slide before editing. Commands use slideId and objectKey from that read. One command is one undo step.",
       "Without --slide, read returns the first slide. To read another slide, use its id from slides, not its number or title. An empty slide has empty:true, objectCount:0 and objects:[]; notes and background are reported separately.",
       "Commands: " +

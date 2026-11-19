@@ -51,16 +51,32 @@ function color(value: string) {
   if (!/^#[a-f\d]{6}$/i.test(value)) throw new TypeError("Use #RRGGBB colors or none.");
   return `<a:solidFill><a:srgbClr val="${value.slice(1)}"/></a:solidFill>`;
 }
-function textBody(value: string, fontSize = 24, centered = false) {
+export type NewSlideShape = Extract<NewSlideObject, { kind: "shape" }>;
+
+function textBody(shape: NewSlideShape) {
+  const { text = "", fontSize = 24, fontFamily, bold, textColor, textInset } = shape;
   if (!Number.isFinite(fontSize) || fontSize < 1 || fontSize > 4000)
     throw new RangeError("DrawingML font size must be between 1 and 4000 points.");
-  return `<a:bodyPr${centered ? ' anchor="ctr"' : ""}/><a:lstStyle/>${value
-    .split("\n")
-    .map(
-      (text) =>
-        `<a:p>${centered ? '<a:pPr algn="ctr"/>' : ""}<a:r><a:rPr lang="en-US" sz="${Math.round(fontSize * 100)}"/><a:t>${xml(text)}</a:t></a:r><a:endParaRPr lang="en-US" sz="${Math.round(fontSize * 100)}"/></a:p>`,
-    )
-    .join("")}`;
+  const centered = shape.geometry !== undefined && shape.geometry !== "line";
+  const alignment = shape.horizontalAlignment ?? (centered ? "center" : undefined);
+  const anchor = shape.verticalAlignment ?? (centered ? "center" : undefined);
+  const anchors = { top: "t", center: "ctr", bottom: "b" };
+  const alignments = { start: "l", center: "ctr", end: "r", justify: "just" };
+  const anchorAttr = anchor ? ` anchor="${anchors[anchor]}"` : "";
+  const insetAttrs = textInset
+    ? ` tIns="${emu(textInset[0])}" rIns="${emu(textInset[1])}" bIns="${emu(textInset[2])}" lIns="${emu(textInset[3])}"`
+    : "";
+  const pPr = alignment ? `<a:pPr algn="${alignments[alignment]}"/>` : "";
+  const properties = `lang="en-US" sz="${Math.round(fontSize * 100)}"${bold === undefined ? "" : ` b="${bold ? 1 : 0}"`}`;
+  const typefaces = fontFamily
+    ? ["latin", "ea", "cs"].map((tag) => `<a:${tag} typeface="${xml(fontFamily)}"/>`).join("")
+    : "";
+  const style = (tag: string) =>
+    `<a:${tag} ${properties}>${textColor ? color(textColor) : ""}${typefaces}</a:${tag}>`;
+  const paragraphs = text.split("\n").map((line) =>
+    `<a:p>${pPr}${line ? `<a:r>${style("rPr")}<a:t>${xml(line)}</a:t></a:r>` : ""}${style("endParaRPr")}</a:p>`,
+  );
+  return `<a:bodyPr${anchorAttr}${insetAttrs}/><a:lstStyle/>${paragraphs.join("")}`;
 }
 export function insertObject(
   artifact: PresentationArtifact,
@@ -80,7 +96,7 @@ export function insertObject(
       throw new RangeError("Corner radius requires a rounded rectangle and a finite nonnegative value.");
     const adjustment = input.cornerRadius === undefined ? "" :
       `<a:gd name="adj" fmla="val ${Math.round(Math.min(.5, input.cornerRadius / Math.min(bounds.width, bounds.height)) * 100000)}"/>`;
-    markup = `<p:sp ${ns}><p:nvSpPr><p:cNvPr id="${id}" name="${input.geometry ? "Shape" : "Text Box"} ${id}"/><p:cNvSpPr${input.geometry ? "" : ' txBox="1"'}/><p:nvPr/></p:nvSpPr><p:spPr>${transform}<a:prstGeom prst="${input.geometry ?? "rect"}"><a:avLst>${adjustment}</a:avLst></a:prstGeom>${color(input.fill ?? (input.geometry && input.geometry !== "line" ? "#4472C4" : "none"))}<a:ln>${color(input.stroke ?? (input.geometry === "line" ? "#4472C4" : "none"))}</a:ln></p:spPr><p:txBody>${textBody(input.text ?? "", input.fontSize, !!input.geometry && input.geometry !== "line")}</p:txBody></p:sp>`;
+    markup = `<p:sp ${ns}><p:nvSpPr><p:cNvPr id="${id}" name="${input.geometry ? "Shape" : "Text Box"} ${id}"/><p:cNvSpPr${input.geometry ? "" : ' txBox="1"'}/><p:nvPr/></p:nvSpPr><p:spPr>${transform}<a:prstGeom prst="${input.geometry ?? "rect"}"><a:avLst>${adjustment}</a:avLst></a:prstGeom>${color(input.fill ?? (input.geometry && input.geometry !== "line" ? "#4472C4" : "none"))}<a:ln>${color(input.stroke ?? (input.geometry === "line" ? "#4472C4" : "none"))}</a:ln></p:spPr><p:txBody>${textBody(input)}</p:txBody></p:sp>`;
   } else if (input.kind === "image") {
     if (!/^[A-Za-z0-9+/]*={0,2}$/.test(input.data) || input.data.length % 4)
       throw new TypeError("Image data must be base64.");

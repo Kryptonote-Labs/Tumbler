@@ -6,7 +6,7 @@ import { editPresentationChart, insertPresentationChart } from './chart-authorin
 import { chartResourcesSchema } from '@tumblerjs/charts';
 import { formatPresentationTable } from './table-format.ts';
 import { gradientFill } from './gradient-authoring.ts';
-import { backgroundFill, setSlideBackground } from "./background-authoring.ts";
+import { backgroundFill, setPresentationBackground, setSlideBackground } from "./background-authoring.ts";
 import { insertPresentationInk } from "./ink-authoring.ts";
 import { findPresentationMatches } from "./search.ts";
 import { editPresentationTable } from "./table-edit.ts";
@@ -28,8 +28,11 @@ import { applyPresentationLayout } from "./authoring-layout.ts";
 import { paragraphFormat } from "./paragraph-format.ts";
 
 import { authorMetadata } from './authoring-metadata.ts';
+import { EMUS_PER_PIXEL } from './geometry.ts';
 
 const number = z.number().finite();
+// DrawingML stores body insets as ST_Coordinate32 values in EMUs.
+const inset = number.nonnegative().max(2147483647 / EMUS_PER_PIXEL);
 const id = z.string().min(1);
 const target = { slideId: id, objectKey: id };
 const range = { start: z.number().int().nonnegative(), end: z.number().int().nonnegative() };
@@ -138,7 +141,7 @@ const singlePresentationCommand = z.discriminatedUnion("name", [
   z
     .object({ name: z.literal("move-slide"), slideId: id, index: z.number().int().nonnegative() })
     .strict(),
-  z.object({ name: z.literal("set-background"), slideId: id, fill: backgroundFill }).strict(),
+  z.object({ name: z.literal("set-background"), slideId: id, fill: backgroundFill, scope: z.literal("presentation").optional() }).strict(),
   z
     .object({
       name: z.literal("background"),
@@ -173,6 +176,12 @@ const singlePresentationCommand = z.discriminatedUnion("name", [
             fill: color.optional(),
             stroke: color.optional(),
             fontSize: number.min(1).max(4000).optional(),
+            fontFamily: z.string().trim().min(1).max(255).optional(),
+            bold: z.boolean().optional(),
+            textColor: z.string().regex(/^#[a-f\d]{6}$/i).optional(),
+            horizontalAlignment: z.enum(["start", "center", "end", "justify"]).optional(),
+            verticalAlignment: z.enum(["top", "center", "bottom"]).optional(),
+            textInset: z.tuple([inset, inset, inset, inset]).optional(),
           })
           .strict(),
         z
@@ -332,7 +341,9 @@ export function applyPresentationCommand(
     case "background":
       return setSlideBackground(artifact, command.slideId, { kind: "solid", color: command.color });
     case "set-background":
-      return setSlideBackground(artifact, command.slideId, command.fill);
+      return command.scope === "presentation"
+        ? setPresentationBackground(artifact, command.fill)
+        : setSlideBackground(artifact, command.slideId, command.fill);
     case "insert-object":
       return insertObject(artifact, command.slideId, command.bounds, command.object);
     case "insert-ink":

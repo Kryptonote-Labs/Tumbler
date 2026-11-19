@@ -73,6 +73,7 @@
     readonly onselectionchange?: (selection: GridSelection) => void;
     readonly onedit?: (edit: SpreadsheetGridEdit) => void;
     readonly onclear?: (selection: GridSelection) => void;
+    readonly clearOnBackspace?: boolean;
     readonly onhyperlink?: (hyperlink: SpreadsheetHyperlink) => void;
     objectSelection?: number;
     readonly onobjectmove?: (objectId: number, bounds: SpreadsheetDrawingBounds) => void;
@@ -103,6 +104,7 @@
     onselectionchange,
     onedit,
     onclear,
+    clearOnBackspace = false,
     onhyperlink,
     objectSelection, onobjectmove, onobjectdelete,
     chartSelection,
@@ -549,11 +551,12 @@
   }
 
   function cellClick(event: MouseEvent, row: number, column: number) {
-    if (suppressCellClick) return;
+    if (suppressCellClick || interactivePointerTarget(event)) return;
+    if (!preserveInputFocus) scroller?.closest<HTMLElement>('[role="grid"]')?.focus({ preventScroll: true });
     select(row, column, event.shiftKey, false);
   }
 
-  function interactivePointerTarget(event: PointerEvent): boolean {
+  function interactivePointerTarget(event: MouseEvent): boolean {
     return event.target instanceof Element && event.target.closest("button, input") !== null;
   }
 
@@ -582,14 +585,15 @@
         event.preventDefault();
         beginEdit(selection.anchor.row, selection.anchor.column);
       }
-    } else if (event.key === "Backspace") {
+    } else if (event.key === "Backspace" && !clearOnBackspace) {
       if (editable) {
         event.preventDefault();
         beginEdit(selection.anchor.row, selection.anchor.column, "");
       }
-    } else if (event.key === "Delete") {
+    } else if (event.key === "Delete" || event.key === "Backspace") {
       if (editable) {
         event.preventDefault();
+        event.stopPropagation();
         if (onclear !== undefined) onclear(selection);
         else {
           const owner = worksheet.mergedRange(selection.focus)?.start ?? selection.focus;

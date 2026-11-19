@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack, tick, onDestroy, type Snippet } from "svelte";
+  import { untrack, tick, type Snippet } from "svelte";
   import {
     chartPropertyDefinition,
     chartPropertyTree,
@@ -39,10 +39,10 @@
     readonly onchange: (bytes: Uint8Array) => void;
     /** A committed type choice. The host converts the chart. */
     readonly ontypechange?: (options: ChartTypeChange) => void;
-    /** A hovered or focused type, or undefined when previewing ends. The document is unchanged. */
     readonly ontypepreview?: (options: ChartTypeChange | undefined) => void;
+    /** A hovered or focused type, or undefined when previewing ends. The document is unchanged. */
     readonly oneditdata?: () => void;
-    readonly typePreview?: Snippet;
+    readonly typePreview?: Snippet<[ChartTypeChange | undefined]>;
     readonly viewPreview?: Snippet;
     readonly onsourcepreview?: (bytes: Uint8Array | undefined) => void;
     readonly typeError?: string;
@@ -80,8 +80,7 @@
       if (next.action === 'format') void tick().then(() => formatSelect?.focus());
     });
   });
-  onDestroy(() => ontypepreview?.(undefined));
-  let previewed: ChartTypeChange | undefined;
+  let previewed = $state.raw<ChartTypeChange>();
   let trigger = $state<HTMLButtonElement>();
   let listbox = $state<HTMLDivElement>();
   let dataTrigger = $state<HTMLButtonElement>();
@@ -158,9 +157,12 @@
   }
   function choose(option: ChartTypeChange) {
     if (unavailable(option)) return;
-    closePicker(true);
-    if (!type || !sameChartType(type.change, option)) ontypechange?.(option);
-    onchoose?.();
+    const change = !type || !sameChartType(type.change, option) ? ontypechange : undefined;
+    const close = onchoose;
+    // Closing the ribbon gallery tears down this picker. Capture its handlers before closing.
+    closePicker(!close);
+    close?.();
+    change?.(option);
   }
   function navigate(event: KeyboardEvent) {
     const options = [...(listbox?.querySelectorAll<HTMLElement>('[role="option"]') ?? [])];
@@ -197,7 +199,7 @@
   <div class="chart-properties">
     {#if mode !== "format"}<fieldset {disabled}>
       {#if mode === "all" || mode === "type"}
-      {#if plots.length > 1}<label class="row"><span>Chart group</span><select aria-label="Chart plot" value={plotIndex} onchange={(event) => onplotselect?.(Number(event.currentTarget.value))}>
+      {#if plots.length > 1}<label class="row"><span>Chart group</span><select aria-label="Chart plot" value={plotIndex} onchange={(event) => { preview(undefined); onplotselect?.(Number(event.currentTarget.value)); }}>
         {#each plots as plot, index}<option value={index}>{index + 1} · {plot.series.map(series => series.name).join(', ')}</option>{/each}
       </select></label>{/if}
       {#if mode === "all"}<div class="row">
@@ -215,7 +217,7 @@
         <div class="row"><span>Data</span><button bind:this={dataTrigger} type="button" class="button" aria-expanded={dataExpanded} aria-controls={dataExpanded === undefined ? undefined : `${id}-data`} onclick={() => oneditdata?.()}>Edit data</button></div>
       {/if}
       {#if mode === "type" || picking}
-        {#if typePreview}<div class="type-preview">{@render typePreview()}</div>{/if}
+        {#if typePreview}<div class="type-preview">{@render typePreview(previewed)}</div>{/if}
         <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
         <div bind:this={listbox} id={`${id}-types`} class="types" role="listbox" tabindex="-1" aria-label="Chart types"
           onkeydown={navigate} onfocusout={leave} onpointerleave={() => preview(undefined)}>

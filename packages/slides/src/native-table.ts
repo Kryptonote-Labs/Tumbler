@@ -126,7 +126,7 @@ export function editNativeTable(
         column,
         rowSpan: 1,
         columnSpan: 1,
-        text: nativeObjectText('', 18),
+        text: nativeObjectText({ fontSize: 18 }),
       });
     }
   const totalW = widths.reduce((n, w) => n + w, 0),

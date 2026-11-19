@@ -14,7 +14,7 @@
   } from "./presentation-text-edit.ts";
   import { presentationTabs } from "./presentation-tabs.ts";
   import { presentationTextLayout } from "./presentation-text-layout.ts";
-  import type { SlideText } from "@tumblerjs/slides";
+  import { slideParagraphFontSize, type SlideText } from "@tumblerjs/slides";
   let {
     text,
     onslide,
@@ -46,6 +46,7 @@
     ? "clip"
     : "visible"}
   style:white-space={text.wrap ? "pre-wrap" : "pre"}
+  style:overflow-wrap={text.wrap ? "anywhere" : undefined}
   style:transform={`rotate(${(text.rotation ?? 0) + (text.direction === "vert270" ? 180 : 0)}deg)`}
 >
   <div
@@ -70,11 +71,16 @@
     style:tab-size={`${text.tabSize ?? 96}px`}
   >
     {#each text.paragraphs as paragraph}
+      {@const base = paragraph.runs[0] ?? paragraph.endRun}
+      {@const family = base?.fontFamily ?? "Arial"}
       <p
         use:presentationTabs={paragraph}
         data-text-paragraph
         dir={paragraph.rtl ? "rtl" : "ltr"}
-        style:font-size={`${paragraph.fontSize ?? Math.max(1, ...paragraph.runs.map((run) => run.fontSize))}px`}
+        style:font-family={fonts?.family(family) ?? cssFontFamily(family)}
+        style:font-size={`${slideParagraphFontSize(paragraph)}px`}
+        style:font-weight={base?.bold ? 700 : 400}
+        style:font-style={base?.italic ? "italic" : "normal"}
         style:text-align={paragraph.align}
         style:text-align-last={paragraph.distributed ? "justify" : undefined}
         style:text-justify={paragraph.distributed
@@ -85,15 +91,15 @@
         style:text-indent={`${paragraph.indent}px`}
         style:margin-top={`${paragraph.before}px`}
         style:margin-bottom={`${paragraph.after}px`}
-        style:line-height={paragraph.lineHeight}
+        style:line-height={typeof paragraph.lineHeight === "number" ? "normal" : paragraph.lineHeight}
       >
         {#if paragraph.bullet && (editor?.active || paragraph.runs.some(run => run.text.trim()))}<span
             data-bullet
             contenteditable="false"
-            style:font-family={fonts?.family(paragraph.bulletFont ?? "Arial") ??
-              cssFontFamily(paragraph.bulletFont ?? "Arial")}
+            style:font-family={fonts?.family(paragraph.bulletFont ?? family) ??
+              cssFontFamily(paragraph.bulletFont ?? family)}
             style:color={paragraph.bulletColor}
-            style:font-size={`${paragraph.bulletSize ?? 24}px`}
+            style:font-size={`${paragraph.bulletSize ?? base?.fontSize ?? 24}px`}
             style:display="inline-block"
             style:min-width={`${Math.max(0, -paragraph.indent)}px`}
             >{paragraph.bullet}
@@ -173,7 +179,6 @@
     color: inherit;
     flex-shrink: 0;
     font: inherit;
-    min-height: 1em;
   }
   a {
     color: inherit;
