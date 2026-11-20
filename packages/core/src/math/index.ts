@@ -18,3 +18,4 @@ export {
   type MathTextStyle,
 } from "./layout.ts";
 export * from "./serialize.ts";
+export * from "./omml.ts";

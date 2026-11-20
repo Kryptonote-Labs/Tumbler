@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import * as Y from "yjs";
 import { typeMathText, createMathEditor, emptyEquation } from "@tumblerjs/core/math";
-import { createWordArtifact, NativeWordDocument } from "../src/index.ts";
+import { createWordArtifact, importWordContent, NativeWordDocument, openWordArtifact } from "../src/index.ts";
 import { prepareWordOperation } from "../src/operations/index.ts";
 import { openWordOperationDocument } from "../src/operations/index.ts";
 
@@ -45,4 +45,29 @@ test("equation attributes are validated as object characters", () => {
   expect(() =>
     prepareWordOperation(text, { start: 0, end: 1 }, { name: "edit-object", input: { equation } }),
   ).toThrow();
+});
+
+test("Office Math in an opened package is editable and round-trips", () => {
+  const reopen = (bytes: Uint8Array) => openWordArtifact(new Uint8Array(bytes));
+  const runs = (artifact: ReturnType<typeof reopen>) => (importWordContent(artifact)[0] as { runs: readonly { text: string; equation?: unknown }[] }).runs;
+  const source = createWordArtifact({ paragraphs: [{ runs: [{ text: "Let " }, { text: "￼", equation, format: { fontSizePoints: 16 } }, { text: " hold." }] }] });
+  const opened = reopen(source.bytes());
+  expect(runs(opened).map((run) => run.text).join("")).toBe("Let ￼ hold.");
+  expect(runs(opened).find((run) => run.equation)?.equation).toEqual(equation);
+
+  const session = openWordOperationDocument(opened);
+  try {
+    session.text.applyDelta(prepareWordOperation(session.text, { start: 6, end: 10 }, { name: "replace", input: { value: "true" } }).delta);
+    expect(runs(reopen(session.artifact().bytes())).find((run) => run.equation)?.equation).toEqual(equation);
+    const next = typeMathText(createMathEditor(emptyEquation), "\\sqrt (a)").equation;
+    // Object edits on shared text arrive as a Yjs update.
+    const edit: { delta: Parameters<Y.Text["applyDelta"]>[0]; update?: Uint8Array } = prepareWordOperation(session.text, { start: 4, end: 5 }, { name: "edit-object", input: { equation: next } });
+    if (edit.update) Y.applyUpdate(session.text.doc!, edit.update);
+    else session.text.applyDelta(edit.delta);
+    const saved = runs(reopen(session.artifact().bytes()));
+    expect(saved.map((run) => run.text).join("")).toBe("Let ￼ true.");
+    expect(saved.find((run) => run.equation)?.equation).toEqual(next);
+  } finally {
+    session.destroy();
+  }
 });

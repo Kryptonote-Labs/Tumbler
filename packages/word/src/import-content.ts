@@ -32,6 +32,7 @@ export function importWordContent(artifact: WordArtifact): WordContentBlock[] {
         ...(links.get(segment.runElementId) ? { link: links.get(segment.runElementId)! } : {}),
         ...(segment.tab ? { tab: segment.tab } : {}),
         ...(segment.field ? { field: segment.field } : {}),
+        ...(segment.equation ? { equation: segment.equation } : {}),
         // Soft line breaks are distinct from paragraph boundaries in a collaborative text stream.
         text: segment.kind === 'break' ? '\u2028' : segment.value,
         format: {

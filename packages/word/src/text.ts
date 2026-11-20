@@ -30,6 +30,7 @@ export interface WordParagraphTextSegment {
   readonly kind: "text" | "symbol" | "tab" | "break" | "drawing" | "note" | "page-field" | "math";
   readonly field?: import("./page-fields.ts").WordPageField;
   readonly symbolFont?: string;
+  readonly equation?: import("@tumblerjs/core/math").MathEquation;
   /** Additional source elements owned by a projected complex field. */
   readonly replacedElementIds?: readonly number[];
   readonly elementId: number;
@@ -67,6 +68,7 @@ export function wordParagraphTextSegments(_document: WordDocument | undefined, p
         kind: projected.kind,
         ...(content.kind === "symbol" && !content.unicodeFallback ? { symbolFont: content.fontFamily } : {}),
         ...(content.kind === "break" ? { breakType: content.breakType } : {}),
+        ...(content.kind === "math" ? { equation: content.equation } : {}),
         ...(content.kind === "tab" && content.position ? { tab: content.position } : {}),
         ...(content.kind === "page-field" ? { field: content.field, ...(content.replacedElementIds ? { replacedElementIds: content.replacedElementIds } : {}) } : {}),
         elementId: content.elementId,

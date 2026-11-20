@@ -1,0 +1,110 @@
+import { mathChars, type MathEquation, type MathNode, type MathRow } from "./model.ts";
+
+export const OMML_NAMESPACE = "http://schemas.openxmlformats.org/officeDocument/2006/math";
+
+/** The parts of a parsed XML element the reader needs; hosts pass their own parser's elements. */
+export interface OmmlElement {
+  readonly kind: "element";
+  readonly localName: string;
+  readonly namespaceUri: string;
+  readonly attributes: readonly { readonly localName: string; readonly namespaceUri: string; readonly value: string }[];
+  readonly children: readonly (OmmlElement | { readonly kind: "text" | "cdata" | "comment" | "processing_instruction"; readonly value: string })[];
+}
+
+const math = (element: OmmlElement) => element.children.filter((child): child is OmmlElement => child.kind === "element" && child.namespaceUri === OMML_NAMESPACE);
+const child = (element: OmmlElement | undefined, name: string) => (element ? math(element).find((item) => item.localName === name) : undefined);
+const value = (element: OmmlElement | undefined) => element?.attributes.find((item) => item.localName === "val" && item.namespaceUri === OMML_NAMESPACE)?.value;
+const property = (element: OmmlElement, properties: string, name: string) => value(child(child(element, properties), name));
+const on = (element: OmmlElement, properties: string, name: string) => {
+  const flag = child(child(element, properties), name);
+  return !!flag && !["0", "off", "false"].includes(value(flag) ?? "1");
+};
+const text = (element: OmmlElement): string =>
+  element.children.map((item) => (item.kind === "element" ? text(item) : item.kind === "text" || item.kind === "cdata" ? item.value : "")).join("");
+
+function row(element: OmmlElement | undefined): MathNode[] {
+  return element ? math(element).flatMap(node) : [];
+}
+const slot = (element: OmmlElement, name: string) => row(child(element, name));
+const optional = (element: OmmlElement, name: string, hidden: boolean): MathRow | undefined => (hidden ? undefined : slot(element, name));
+
+/** One OMML element as model nodes. Unknown wrappers keep their contents. */
+function node(element: OmmlElement): MathNode[] {
+  switch (element.localName) {
+    case "r": {
+      const style = property(element, "rPr", "sty");
+      return mathChars(math(element).filter((item) => item.localName === "t").map(text).join(""), style === "p" || on(element, "rPr", "nor"));
+    }
+    case "f": {
+      const type = property(element, "fPr", "type");
+      const style = type === "skw" ? "skewed" : type === "lin" ? "linear" : type === "noBar" ? "stacked" : undefined;
+      return [{ kind: "fraction", ...(style ? { style } : {}), num: slot(element, "num"), den: slot(element, "den") }];
+    }
+    case "sSup":
+      return [{ kind: "script", base: slot(element, "e"), sup: slot(element, "sup") }];
+    case "sSub":
+      return [{ kind: "script", base: slot(element, "e"), sub: slot(element, "sub") }];
+    case "sSubSup":
+      return [{ kind: "script", base: slot(element, "e"), sub: slot(element, "sub"), sup: slot(element, "sup") }];
+    case "sPre":
+      return [{ kind: "script", pre: true, base: slot(element, "e"), sub: slot(element, "sub"), sup: slot(element, "sup") }];
+    case "rad": {
+      const degree = optional(element, "deg", on(element, "radPr", "degHide"));
+      return [{ kind: "radical", ...(degree?.length ? { degree } : {}), body: slot(element, "e") }];
+    }
+    case "d": {
+      const open = property(element, "dPr", "begChr") ?? "(";
+      const close = property(element, "dPr", "endChr") ?? ")";
+      const separator = mathChars(property(element, "dPr", "sepChr") ?? "|");
+      const body = math(element)
+        .filter((item) => item.localName === "e")
+        .flatMap((item, index) => [...(index ? separator : []), ...row(item)]);
+      return [{ kind: "delimiter", open, close, body }];
+    }
+    case "nary": {
+      const sub = optional(element, "sub", on(element, "naryPr", "subHide"));
+      const sup = optional(element, "sup", on(element, "naryPr", "supHide"));
+      return [{
+        kind: "nary",
+        operator: property(element, "naryPr", "chr") ?? "∫",
+        ...(sub ? { sub } : {}),
+        ...(sup ? { sup } : {}),
+        body: slot(element, "e"),
+        ...(property(element, "naryPr", "limLoc") === "subSup" ? { side: true } : {}),
+      }];
+    }
+    case "func":
+      return [{ kind: "function", name: slot(element, "fName"), body: slot(element, "e") }];
+    case "acc":
+      return [{ kind: "accent", accent: property(element, "accPr", "chr") ?? "̂", body: slot(element, "e") }];
+    case "limLow":
+    case "limUpp":
+      return [{ kind: "limit", position: element.localName === "limLow" ? "lower" : "upper", base: slot(element, "e"), limit: slot(element, "lim") }];
+    case "m":
+      return [{ kind: "matrix", rows: math(element).filter((item) => item.localName === "mr").map((cells) => math(cells).filter((item) => item.localName === "e").map(row)) }];
+    case "eqArr":
+      return [{ kind: "matrix", rows: math(element).filter((item) => item.localName === "e").map((item) => [row(item)]) }];
+    case "groupChr": {
+      const character = property(element, "groupChrPr", "chr") ?? "⏟";
+      const position = property(element, "groupChrPr", "pos") === "top" ? "upper" : "lower";
+      return [{ kind: "limit", position, base: slot(element, "e"), limit: mathChars(character) }];
+    }
+    case "bar":
+      return [{ kind: "accent", accent: "̅", body: slot(element, "e") }];
+    // Property elements describe their parent; control properties have no content.
+    case "ctrlPr":
+    case "argPr":
+      return [];
+    default:
+      return element.localName.endsWith("Pr") ? [] : row(element);
+  }
+}
+
+/**
+ * An `m:oMath` or `m:oMathPara` zone as an editable equation. Structures the model lacks
+ * (boxes, phantoms, borders) keep their contents; a paragraph's zones join into one row.
+ */
+export function mathFromOmml(element: OmmlElement): MathEquation {
+  const zones = element.localName === "oMathPara" ? math(element).filter((item) => item.localName === "oMath") : [element];
+  return { body: zones.flatMap((zone) => row(zone)) };
+}

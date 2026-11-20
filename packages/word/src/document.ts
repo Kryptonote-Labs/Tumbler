@@ -5,6 +5,7 @@ import { readWordColour } from "./theme-colour-xml.ts";
 import type { WordColour } from "./theme-colours.ts";
 import { readTableBorders, readTableShading, tableChild, type WordTableBorders, type WordCellBorders } from './table-format.ts';
 import { pageFieldInstruction } from './page-fields.ts';
+import { mathFromOmml, OMML_NAMESPACE } from "@tumblerjs/core/math";
 import { resolveComplexPageFields } from './complex-page-fields.ts';
 import { OOXML_NAMESPACES, parseLosslessXml, type LosslessXmlDocument, type LosslessXmlElement } from "@tumblerjs/ooxml";
 import { RelationshipsError, type OpcPackage, type OpcPart, type Relationships } from "@tumblerjs/opc";
@@ -696,6 +697,7 @@ function parseInline(
   budget: ParseBudget,
 ): WordInline {
   takeInline(budget);
+  if (element.namespaceUri === OMML_NAMESPACE && (element.localName === "oMath" || element.localName === "oMathPara")) return parseMath(element, namespace);
   if (element.namespaceUri !== namespace) return unsupportedInline(element);
   if (element.localName === "r") return parseRun(element, source, namespace, budget);
   if (element.localName === 'fldSimple') {
@@ -735,6 +737,24 @@ function parseInline(
     });
   }
   return unsupportedInline(element);
+}
+
+/** An Office Math zone is one editable run; its first math run's `w:rPr` supplies the typography. */
+function parseMath(element: LosslessXmlElement, namespace: string): WordRun {
+  const properties = (function find(node: LosslessXmlElement): LosslessXmlElement | undefined {
+    for (const child of node.children) {
+      if (child.kind !== "element") continue;
+      if (child.namespaceUri === namespace && child.localName === "rPr") return child;
+      const found = find(child);
+      if (found) return found;
+    }
+  })(element);
+  return Object.freeze({
+    kind: "run",
+    elementId: element.id,
+    propertiesElementId: properties?.id,
+    contents: Object.freeze([{ kind: "math", elementId: element.id, equation: mathFromOmml(element) } as const]),
+  });
 }
 
 function parseRun(
