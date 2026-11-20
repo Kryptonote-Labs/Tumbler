@@ -25,6 +25,17 @@ export {
 } from './latex-metadata';
 export type { LatexCommandArgument } from './latex-metadata';
 export { latexEquationRows, latexNumbering } from './latex-numbering';
+export {
+  bibEntryName,
+  latexBibliographyDatabases,
+  latexBibliographyFiles,
+  latexCitationKeys,
+  latexCitationNumbers,
+  parseBibtex,
+  setLatexBibliographyEntries,
+  writeBibEntry,
+} from './latex-bibliography';
+export type { BibEntry, LatexBibliographyDatabase } from './latex-bibliography';
 export type { LatexNumbering } from './latex-numbering';
 
 export const blankLatex =
