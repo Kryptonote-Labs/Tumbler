@@ -61,12 +61,14 @@ export function readSpreadsheetDrawingObjects(workbook: SpreadsheetWorkbook, dra
     const properties = child(e, group ? 'grpSpPr' : 'spPr');
     const transform = child(properties, 'xfrm');
     const offset = child(transform, 'off'), extent = child(transform, 'ext');
-    const width = extent ? number(extent, 'cx') / 9525 : fallback?.width ?? 0, height = extent ? number(extent, 'cy') / 9525 : fallback?.height ?? 0;
+    const body = child(e, 'txBody');
+    const equation = body && readDrawingEquation(e);
+    // Text reflows rather than stretching, so an equation box takes its anchor's size when it has one.
+    const sized = extent && !(equation && fallback);
+    const width = sized ? number(extent, 'cx') / 9525 : fallback?.width ?? 0, height = sized ? number(extent, 'cy') / 9525 : fallback?.height ?? 0;
     const nonvisual = children(e).find(n => n.localName.startsWith('nv'));
     const geometry = child(properties, 'prstGeom') ?? child(properties, 'custGeom');
     const line = child(properties, 'ln');
-    const body = child(e, 'txBody');
-    const equation = body && readDrawingEquation(e);
     let image: SpreadsheetDrawingObject['image'];
     const blip = child(child(e, 'blipFill'), 'blip');
     const rid = blip?.attributes.find(a => a.namespaceUri === relNs && a.localName === 'embed')?.value;
