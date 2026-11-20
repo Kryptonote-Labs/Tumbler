@@ -71,41 +71,63 @@ const LATEX_SYMBOLS: Readonly<Record<string, string>> = {
   "∬": "\\iint", "∮": "\\oint", "⋃": "\\bigcup", "⋂": "\\bigcap",
 };
 
+const LATEX_FUNCTIONS = new Set(["sin", "cos", "tan", "sec", "csc", "cot", "sinh", "cosh", "tanh", "arcsin", "arccos", "arctan", "log", "ln", "exp", "lim", "max", "min", "det", "gcd"]);
+
 /** LaTeX for copy and conversion. */
 export function mathToLatex(equation: MathEquation): string {
   const group = (nodes: MathRow | undefined) => `{${row(nodes ?? [])}}`;
-  const row = (nodes: MathRow): string =>
-    nodes
-      .map((node) => {
-        switch (node.kind) {
-          case "char": {
-            const symbol = LATEX_SYMBOLS[node.value];
-            return symbol ? `${symbol} ` : node.normal && /\p{L}/u.test(node.value) ? `\\text{${node.value}}` : node.value;
-          }
-          case "fraction":
-            return `\\frac${group(node.num)}${group(node.den)}`;
-          case "script":
-            return node.pre
-              ? `{}${node.sub ? `_${group(node.sub)}` : ""}${node.sup ? `^${group(node.sup)}` : ""}${row(node.base)}`
-              : `${node.base.length === 1 ? row(node.base) : group(node.base)}${node.sub ? `_${group(node.sub)}` : ""}${node.sup ? `^${group(node.sup)}` : ""}`;
-          case "radical":
-            return `\\sqrt${node.degree ? `[${row(node.degree)}]` : ""}${group(node.body)}`;
-          case "delimiter":
-            return `\\left${node.open === "{" ? "\\{" : node.open || "."}${row(node.body)}\\right${node.close === "}" ? "\\}" : node.close || "."}`;
-          case "nary":
-            return `${(LATEX_SYMBOLS[node.operator] ?? node.operator).trim()}${node.sub ? `_${group(node.sub)}` : ""}${node.sup ? `^${group(node.sup)}` : ""} ${row(node.body)}`;
-          case "function":
-            return `${row(node.name).replace(/\\text\{(\w)\}/g, "$1").replace(/^(sin|cos|tan|log|ln|exp|lim|max|min)$/, "\\$1")} ${row(node.body)}`;
-          case "accent":
-            return `${ACCENT_TEXT[node.accent] ?? "\\hat"}${group(node.body)}`;
-          case "limit":
-            return node.position === "lower" ? `${row(node.base)}_${group(node.limit)}` : `${row(node.base)}^${group(node.limit)}`;
-          case "matrix":
-            return `\\begin{matrix}${node.rows.map((cells) => cells.map(row).join(" & ")).join(" \\\\ ")}\\end{matrix}`;
-        }
-      })
-      .join("")
-      .replace(/\\text\{([^}]*)\}\\text\{/g, "\\text{$1");
+  const word = (nodes: MathRow) => (nodes.every((node) => node.kind === "char") ? nodes.map((node) => (node as { value: string }).value).join("") : undefined);
+  const operatorName = (nodes: MathRow) => {
+    const name = word(nodes);
+    if (name === undefined) return row(nodes);
+    return LATEX_FUNCTIONS.has(name) ? `\\${name}` : `\\operatorname{${name}}`;
+  };
+  const node = (value: MathNode): string => {
+    switch (value.kind) {
+      case "char": {
+        const symbol = LATEX_SYMBOLS[value.value];
+        return symbol ? `${symbol} ` : value.value;
+      }
+      case "fraction":
+        return `\\frac${group(value.num)}${group(value.den)}`;
+      case "script":
+        return value.pre
+          ? `{}${value.sub ? `_${group(value.sub)}` : ""}${value.sup ? `^${group(value.sup)}` : ""}${row(value.base)}`
+          : `${value.base.length === 1 ? row(value.base) : group(value.base)}${value.sub ? `_${group(value.sub)}` : ""}${value.sup ? `^${group(value.sup)}` : ""}`;
+      case "radical":
+        return `\\sqrt${value.degree ? `[${row(value.degree)}]` : ""}${group(value.body)}`;
+      case "delimiter":
+        return `\\left${value.open === "{" ? "\\{" : value.open || "."}${row(value.body)}\\right${value.close === "}" ? "\\}" : value.close || "."}`;
+      case "nary":
+        return `${(LATEX_SYMBOLS[value.operator] ?? value.operator).trim()}${value.sub ? `_${group(value.sub)}` : ""}${value.sup ? `^${group(value.sup)}` : ""} ${row(value.body)}`;
+      case "function": {
+        const limit = value.name.length === 1 && value.name[0]!.kind === "limit" ? value.name[0] : undefined;
+        const name = limit ? `${operatorName(limit.base)}${limit.position === "lower" ? "_" : "^"}${group(limit.limit)}` : operatorName(value.name);
+        return `${name} ${row(value.body)}`;
+      }
+      case "accent":
+        return `${ACCENT_TEXT[value.accent] ?? "\\hat"}${group(value.body)}`;
+      case "limit":
+        return value.position === "lower" ? `${row(value.base)}_${group(value.limit)}` : `${row(value.base)}^${group(value.limit)}`;
+      case "matrix":
+        return `\\begin{matrix}${value.rows.map((cells) => cells.map(row).join(" & ")).join(" \\\\ ")}\\end{matrix}`;
+    }
+  };
+  // Consecutive upright letters form one \text{} word.
+  const row = (nodes: MathRow): string => {
+    let latex = "";
+    let text = "";
+    for (const value of nodes) {
+      if (value.kind === "char" && value.normal && !LATEX_SYMBOLS[value.value]) {
+        text += value.value;
+        continue;
+      }
+      if (text) latex += `\\text{${text}}`;
+      text = "";
+      latex += node(value);
+    }
+    return text ? `${latex}\\text{${text}}` : latex;
+  };
   return row(equation.body).trim();
 }
 

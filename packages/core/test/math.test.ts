@@ -14,6 +14,7 @@ import {
   moveMathHorizontal,
   moveMathSlot,
   moveMathVertical,
+  rebaseMathEditor,
   setMathSelection,
   typeMathText,
   type MathEditorState,
@@ -44,6 +45,21 @@ describe("typing builds structures", () => {
     expect(text(typed("\\sqrt x"))).toBe("√x");
     expect(text(typed("x_1^2"))).toBe("x_1^2");
     expect(text(typed("a<=b"))).toBe("a≤b");
+  });
+
+  test("grouping parentheses are removed and close their slot", () => {
+    const latex = (input: string) => mathToLatex(typed(input).equation);
+    expect(latex("x=(-b\\pm \\sqrt (b^2 -4ac))/(2a)")).toBe("x=\\frac{- b\\pm \\sqrt{b^{2}- 4ac}}{2a}");
+    expect(latex("e^(i\\pi )+1=0")).toBe("e^{i\\pi }+1=0");
+    expect(latex("1/(1+x)+2")).toBe("\\frac{1}{1+x}+2");
+  });
+
+  test("operator limits and function arguments follow linear input", () => {
+    const latex = (input: string) => mathToLatex(typed(input).equation);
+    expect(latex("\\sum _(k=0)^n x")).toBe("\\sum_{k=0}^{n} x");
+    expect(latex("lim n->\\infty  1/n")).toBe("\\lim_{n\\to \\infty } \\frac{1}{n}");
+    expect(latex("sin \\alpha \\pm sin \\beta ")).toBe("\\sin \\alpha \\pm \\sin \\beta");
+    expect(latex("\\sqrt x+1")).toBe("\\sqrt{x}+1");
   });
 
   test("function names become functions with the caret in the argument", () => {
@@ -114,6 +130,12 @@ describe("navigation", () => {
     state = moveMathSlot(state, 1).state;
     expect(state.selection.focus.path.at(-1)?.slot).toBe("body");
   });
+});
+
+test("an external change keeps a caret that still exists", () => {
+  const state = typed("1/2");
+  expect(rebaseMathEditor(state, typed("1/23").equation).selection).toEqual(state.selection);
+  expect(rebaseMathEditor(state, typed("x").equation).selection.focus).toEqual({ path: [], offset: 1 });
 });
 
 describe("layout", () => {

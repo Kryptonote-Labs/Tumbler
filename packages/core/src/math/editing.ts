@@ -180,11 +180,52 @@ function collapsed(state: MathEditorState) {
   return isMathCollapsed(state.selection) ? state.selection.focus : undefined;
 }
 
-/** Move a collapsed caret out of its structure, after it. */
+/** Move a collapsed caret out of its structure, after it. Leaving `lim` under a function name enters its argument. */
 function leaveStructure(state: MathEditorState, position: MathPosition): MathEditorState {
   const parent = position.path.slice(0, -1);
+  const step = parent.at(-1);
+  if (step?.slot === "name") {
+    const fn = mathRowAt(state.equation.body, parent.slice(0, -1))[step.index];
+    if (fn?.kind === "function") return withBody(state, state.equation.body, mathCaret([...parent.slice(0, -1), { index: step.index, slot: "body" }], fn.body.length), [...parent.slice(0, -1), { index: step.index, slot: "body" }]);
+  }
   return withBody(state, state.equation.body, mathCaret(parent, position.path.at(-1)!.index + 1));
 }
+
+/** The structure that owns the slot a caret is in. */
+function owner(state: MathEditorState, position: MathPosition) {
+  const step = position.path.at(-1);
+  if (!step) return undefined;
+  const node = mathRowAt(state.equation.body, position.path.slice(0, -1))[step.index];
+  return node && { node, step };
+}
+
+/**
+ * `\sum_(i=0)^n`: script keys inside an operator's limits, or at the start of its empty body,
+ * move to that limit instead of nesting a script.
+ */
+function typeLimit(state: MathEditorState, position: MathPosition, slot: "sub" | "sup"): MathEditorState | undefined {
+  const parent = owner(state, position);
+  // `\\lim_(n→∞)`: the limit slot is already where the script key points.
+  if (parent?.node.kind === "limit" && parent.step.slot === "limit" && !mathRowAt(state.equation.body, position.path).length && (slot === "sub") === (parent.node.position === "lower")) return state;
+  if (parent?.node.kind !== "nary") return undefined;
+  const { node, step } = parent;
+  const inLimit = step.slot === "sub" || step.slot === "sup";
+  if (!inLimit && !(step.slot === "body" && !node.body.length)) return undefined;
+  const container = position.path.slice(0, -1);
+  const limit = node[slot] ?? [];
+  const body = node[slot] ? state.equation.body : updateMathRow(state.equation.body, container, (row) => row.map((value, index) => (index === step.index ? { ...node, [slot]: limit } : value)));
+  return withBody(state, body, mathCaret([...container, { index: step.index, slot }], limit.length));
+}
+
+/** Slots where parentheses only group input, as in `e^(iπ)` or `√(b²−4ac)`, and are removed. */
+const GROUPING_SLOTS: Readonly<Record<string, readonly string[]>> = {
+  fraction: ["num", "den"],
+  script: ["sub", "sup"],
+  radical: ["degree", "body"],
+  nary: ["sub", "sup"],
+  limit: ["limit"],
+  accent: ["body"],
+};
 
 function typeScript(state: MathEditorState, slot: "sub" | "sup"): MathEditorState {
   const range = mathSelectedRange(state.selection);
@@ -228,7 +269,11 @@ function completeCommand(state: MathEditorState, position: MathPosition): MathEd
   const selected = { ...state, selection: { anchor: { path: range.path, offset: range.start }, focus: { path: range.path, offset: range.end } } };
   if (symbol) return insertMathNodes(selected, [{ kind: "char", value: symbol }]);
   const template = MATH_COMMAND_TEMPLATES[name];
-  return template ? insertMathTemplate(insertMathNodes(selected, []), template) : undefined;
+  if (!template) return undefined;
+  const next = insertMathTemplate(insertMathNodes(selected, []), template);
+  // `\sqrt x+1` and `\hat a+b` and `\\sin x+1` take one operand, like a typed script.
+  const group = mathTemplate(template)?.group;
+  return group === "radical" || group === "accent" || group === "function" ? { ...next, typedSlot: next.selection.focus.path } : next;
 }
 
 /** Plain `sin`, `log` and friends become functions when followed by a space or parenthesis. */
@@ -241,8 +286,12 @@ function completeFunction(state: MathEditorState, position: MathPosition): MathE
   if (!FUNCTION_WORDS.has(name)) return undefined;
   const cleared = insertMathNodes({ ...state, selection: { anchor: { path: position.path, offset: start }, focus: position } }, []);
   const id = name === "lim" ? "limit" : mathTemplate(name) ? name : undefined;
-  if (id) return insertMathTemplate(cleared, id);
-  return insertMathStructure(cleared, { kind: "function", name: [...name].map((value) => ({ kind: "char", value, normal: true })), body: [] }, "body");
+  const next = id
+    ? insertMathTemplate(cleared, id)
+    : insertMathStructure(cleared, { kind: "function", name: [...name].map((value) => ({ kind: "char", value, normal: true })), body: [] }, "body");
+  // `sin α ± sin β`: an operator ends the argument unless parentheses are still open. A limit
+  // such as `n→∞` ends with a space instead.
+  return id === "limit" ? next : { ...next, typedSlot: next.selection.focus.path };
 }
 
 /** `)` closes the nearest unmatched `(` in the same row into a delimiter that grows with its contents. */
@@ -267,6 +316,30 @@ function closeDelimiter(state: MathEditorState, position: MathPosition, close: s
   return undefined;
 }
 
+/** Whether an unmatched `(` before the caret is still collecting input. */
+function openParenthesis(row: MathRow, offset: number) {
+  let depth = 0;
+  for (let index = offset - 1; index >= 0; index--) {
+    const value = charAt(row, index);
+    if (value === ")") depth++;
+    else if (value === "(" && !depth--) return true;
+  }
+  return false;
+}
+
+/** A grouping `( … )` that fills its slot is removed; outside an operator's limits the caret leaves. */
+function ungroup(state: MathEditorState): MathEditorState {
+  const position = collapsed(state);
+  const parent = position && owner(state, position);
+  const row = position && mathRowAt(state.equation.body, position.path);
+  const only = row?.length === 1 ? row[0] : undefined;
+  if (!position || !parent || only?.kind !== "delimiter" || only.open !== "(" || only.close !== ")") return state;
+  if (!GROUPING_SLOTS[parent.node.kind]?.includes(parent.step.slot)) return state;
+  const body = updateMathRow(state.equation.body, position.path, () => only.body);
+  const inside = withBody(state, body, mathCaret(position.path, only.body.length));
+  return parent.node.kind === "nary" ? inside : leaveStructure(inside, inside.selection.focus);
+}
+
 /** Type one character, applying the build-up shortcuts that make linear input feel natural. */
 export function typeMathCharacter(state: MathEditorState, character: string): MathEditorState {
   if (character === "/") return typeFraction(state);
@@ -279,6 +352,10 @@ export function typeMathCharacter(state: MathEditorState, character: string): Ma
       const parent = mathRowAt(state.equation.body, position.path.slice(0, -1))[step.index];
       if (parent?.kind === "script") return typeScript(leaveStructure(state, position), character === "^" ? "sup" : "sub");
     }
+  }
+  if (position && (character === "^" || character === "_")) {
+    const limit = typeLimit(state, position, character === "^" ? "sup" : "sub");
+    if (limit) return limit;
   }
   if (character === "^") return typeScript(state, "sup");
   if (character === "_") return typeScript(state, "sub");
@@ -294,14 +371,21 @@ export function typeMathCharacter(state: MathEditorState, character: string): Ma
   }
   const typed = state.typedSlot && samePath(state.typedSlot, position.path) && position.offset === row.length && row.length > 0;
   if (character === " ") {
-    // Space builds up: it finishes the current slot and continues after the structure.
+    // Space builds up: it finishes the current slot and continues after the structure, or from
+    // an operator's limits into its body.
+    const parent = owner(state, position);
+    if (parent?.node.kind === "nary" && parent.step.slot !== "body" && position.offset === row.length)
+      return withBody(state, state.equation.body, mathCaret([...position.path.slice(0, -1), { index: parent.step.index, slot: "body" }], parent.node.body.length));
     if (position.path.length && position.offset === row.length) return leaveStructure(state, position);
-    if (charAt(row, position.offset - 1) === " " || position.offset === 0) return state;
+    // Like linear math input, spaces only build up; upright text keeps them as words.
+    if (!state.normalText) return state;
   }
-  if (typed && (MATH_BINARY.has(character) || MATH_RELATIONS.has(character) || character === "-" || MATH_PUNCTUATION.has(character)))
+  if (typed && !openParenthesis(row, position.offset) && (MATH_BINARY.has(character) || MATH_RELATIONS.has(character) || character === "-" || MATH_PUNCTUATION.has(character)))
     return typeMathCharacter(leaveStructure(state, position), character);
   const close = closeDelimiter(state, position, character);
-  if (close) return close;
+  if (close) return ungroup(close);
+  // An unmatched `)` closes the slot it is typed in, so `√(x)` and `(a+√b)` both work.
+  if (CLOSERS[character] && position.path.length) return typeMathCharacter(leaveStructure(state, position), character);
   const previous = charAt(row, position.offset - 1);
   const digraph = previous && MATH_DIGRAPHS[(previous === "−" ? "-" : previous) + character];
   if (digraph) {
@@ -494,4 +578,21 @@ export function moveMathToEdge(state: MathEditorState, edge: "start" | "end", ex
 export function toggleMathNormalText(state: MathEditorState): MathEditorState {
   const { normalText, ...rest } = state;
   return normalText ? rest : { ...rest, normalText: true };
+}
+
+/**
+ * Adopt an equation changed outside the editor, such as by undo or a collaborator. The caret
+ * stays where it still exists; otherwise it moves to the end of the equation.
+ */
+export function rebaseMathEditor(state: MathEditorState, equation: MathEquation): MathEditorState {
+  const valid = ({ path, offset }: MathPosition) => {
+    try {
+      return offset <= mathRowAt(equation.body, path).length;
+    } catch {
+      return false;
+    }
+  };
+  const { typedSlot, ...rest } = state;
+  if (!valid(state.selection.anchor) || !valid(state.selection.focus)) return { equation, selection: mathCaret([], equation.body.length) };
+  return typedSlot && valid({ path: typedSlot, offset: 0 }) ? { ...state, equation } : { ...rest, equation };
 }

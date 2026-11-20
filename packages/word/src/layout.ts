@@ -53,6 +53,9 @@ export interface WordTextMeasurer {
   measure(text: string, format: ComputedWordTextFormat): WordTextMeasurement;
 }
 
+/** Like Word, an empty equation keeps an in-flow placeholder so it stays visible and clickable. */
+export const WORD_EQUATION_PROMPT = "Type equation here.";
+
 export interface WordLayoutOptions {
   /** Reflow into a single column of this width in points without changing saved page settings. */
   readonly reflowWidth?: number;
@@ -1210,6 +1213,7 @@ function* resolvedParagraphAtoms(
         const math = layoutMath(content.equation, {
           size: format.fontSizePoints,
           bold: format.bold,
+          prompt: WORD_EQUATION_PROMPT,
           measure: (text, style) => validMeasurement(measurer.measure(text, Object.freeze({ ...format, fontSizePoints: style.size, italic: style.italic, bold: style.bold }))).width,
         });
         yield Object.freeze({

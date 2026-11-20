@@ -39,6 +39,7 @@ export {
   layoutWordDocument,
   layoutWordDocumentProgressively,
   wordPointsToCssPixels,
+  WORD_EQUATION_PROMPT,
 } from "./layout.ts";
 export { paintWordPage, wordPageImages, wordPageChartPictures, wordPageInkBounds } from "./canvas-paint.ts";
 export { wordImagePaintBounds } from './image-paint.ts';
