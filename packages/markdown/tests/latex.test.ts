@@ -5,6 +5,7 @@ import { noteState, toggleLatexStyle, undo } from '../src/editor';
 import {
   latexBlockAtOffset,
   latexNumbering,
+  paginateLatex,
   parseLatex,
   replaceLatexSource,
   serializeLatex,
@@ -137,4 +138,16 @@ test('footnotes number like the class does and stop when the count is unknown', 
   expect(
     at(pre + 'A\\footnote{a}\n\n\\begin{figure}\\caption{x\\footnotemark}\\end{figure}\n\nB\\footnote{b}\n\\end{document}'),
   ).toEqual(['1']);
+});
+
+test('footnotes take room from the page of their mark', () => {
+  const line = (top: number, notes?: number[]) => ({ position: top, top, bottom: top + 10, notes });
+  // Three lines fit a 40-high body, but a 12-high footnote on the second pushes the third over.
+  const result = paginateLatex([line(0), line(10, [12]), line(20)], 40, 5, 2);
+  expect(result.breaks.map((item) => item.position)).toEqual([20]);
+  expect(result.footnotes).toEqual([0]);
+  expect(result.footHeights).toEqual([14, 0]);
+  // A mark whose note no longer fits moves to the next page with its note.
+  const moved = paginateLatex([line(0), line(10), line(20, [8])], 30, 5);
+  expect(moved.footnotes).toEqual([1]);
 });

@@ -261,32 +261,62 @@ export function latexPageLayout(prefix: string): LatexPageLayout {
   };
 }
 
-export type PageLine = { position: number; top: number; bottom: number };
+/**
+ * A line or unbreakable block in the continuous editor. `notes` are the heights of footnotes
+ * whose marks it holds; they print at the foot of the same page and take room from its body.
+ */
+export type PageLine = { position: number; top: number; bottom: number; notes?: number[] };
 export type PageBlock = PageLine & {
   split?: () => PageLine[];
   force?: boolean;
 };
 export type PageBreak = { position: number; height: number };
 
-/** Place spacers into the continuous editor while keeping page breaks out of document history. */
-export function paginateLatex(blocks: PageBlock[], bodyHeight: number, spacing: number) {
+/**
+ * Place spacers into the continuous editor while keeping page breaks out of document history.
+ * Footnotes go on the page of their mark, in order, after a separator of `noteGap`. `footnotes`
+ * lists the page index for each footnote and `footHeights` the room the notes use on each page.
+ */
+export function paginateLatex(
+  blocks: PageBlock[],
+  bodyHeight: number,
+  spacing: number,
+  noteGap = 0,
+) {
   const breaks: PageBreak[] = [];
+  const footnotes: number[] = [];
+  const footHeights: number[] = [0];
   let start = 0;
   let pages = 1;
   let occupied = false;
   let forced = false;
+  // Spacers carry the page's unused body, including the room its footnotes take.
+  let notes = 0;
+  const room = (line: PageLine) => {
+    const extra = (line.notes ?? []).reduce((sum, height) => sum + height, 0);
+    if (!extra) return notes;
+    return notes + extra + (notes ? 0 : noteGap);
+  };
+  const fits = (line: PageLine) => line.bottom - start + room(line) <= bodyHeight;
+  function place(line: PageLine) {
+    notes = room(line);
+    for (const _ of line.notes ?? []) footnotes.push(pages - 1);
+    footHeights[pages - 1] = notes;
+  }
   function advance(line: PageLine) {
     // The next page has the same body capacity, even after a short previous page.
     const stride = bodyHeight + spacing;
     const distance = line.top - start;
-    const advanceBy = Math.max(1, Math.floor(distance / stride) + 1);
+    const advanceBy = Math.max(1, Math.floor((distance + notes) / stride) + 1);
     breaks.push({
       position: line.position,
       height: advanceBy * stride - distance,
     });
     pages += advanceBy;
+    for (let page = footHeights.length; page < pages; page++) footHeights.push(0);
     start = line.top;
     occupied = false;
+    notes = 0;
   }
   for (const block of blocks) {
     if (block.force) {
@@ -297,22 +327,25 @@ export function paginateLatex(blocks: PageBlock[], bodyHeight: number, spacing: 
       advance(block);
       forced = false;
     }
-    if (block.bottom - start <= bodyHeight || (!occupied && !block.split)) {
+    if (fits(block) || (!occupied && !block.split)) {
       occupied = true;
+      place(block);
       continue;
     }
     const lines = block.split?.() ?? [];
     if (lines.length < 2) {
       if (occupied) advance(block);
       occupied = true;
+      place(block);
       continue;
     }
     for (const [index, line] of lines.entries()) {
       const next = lines[index + 1];
-      const orphans = index === 0 && next && next.bottom - start > bodyHeight;
-      if (occupied && (line.bottom - start > bodyHeight || orphans)) advance(line);
+      const orphans = index === 0 && next && !fits({ ...next, notes: [...(line.notes ?? []), ...(next.notes ?? [])] });
+      if (occupied && (!fits(line) || orphans)) advance(line);
       occupied = true;
+      place(line);
     }
   }
-  return { breaks, pages };
+  return { breaks, pages, footnotes, footHeights };
 }
