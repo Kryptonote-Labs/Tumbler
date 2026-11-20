@@ -342,21 +342,22 @@ function environmentBlock(source: string, position: number, before: string, dept
         end,
       };
   }
-  // Text environments edit as native blocks. The open and close source keep the environment.
+  // Text environments edit as native blocks. The open and close source keep the environment, and
+  // an empty one, such as a new abstract, gets an empty paragraph to type into.
   if (textEnvironments.has(name) && depth < 64) {
     const quote = blocks(content, depth + 1);
-    if (quote.nodes.length)
-      return {
-        node: schema.nodes.blockquote!.create(
-          {
-            before,
-            open,
-            close: quote.tail + close,
-          },
-          quote.nodes,
-        ),
-        end,
-      };
+    if (!quote.nodes.length) quote.nodes.push(schema.nodes.paragraph!.create({ before: '' }));
+    return {
+      node: schema.nodes.blockquote!.create(
+        {
+          before,
+          open,
+          close: quote.tail + close,
+        },
+        quote.nodes,
+      ),
+      end,
+    };
   }
   return {
     node: schema.nodes.latex_raw!.create({ before, source: source.slice(position, end) }),

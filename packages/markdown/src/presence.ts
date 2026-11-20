@@ -76,6 +76,8 @@ export function notePresencePlugin() {
                 },
               ),
             );
+          // A caret between blocks, as when a whole object is selected, would push the page apart.
+          if (!tr.doc.resolve(cursor.head).parent.inlineContent) continue;
           decorations.push(
             Decoration.widget(
               cursor.head,

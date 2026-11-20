@@ -25,6 +25,7 @@ import { noteSchema as schema } from './index';
 import { latexClipboard } from './latex-clipboard';
 import { latexHeadings, parseLatex, serializeLatex } from './latex';
 import { latexNumberingPlugin } from './latex-numbering-view';
+import { latexObjectSelection } from './latex-selection';
 export { latexNumberSpec, type LatexNumberSpec } from './latex-numbering-view';
 import { notePresencePlugin } from './presence';
 import { noteProofreadingPlugin } from './proofreading';
@@ -361,6 +362,7 @@ export function latexState(
       typedSpaces(),
       latexInputRules(),
       latexNumberingPlugin(),
+      latexObjectSelection(),
       notePresencePlugin(),
       noteProofreadingPlugin(),
       keymap({
