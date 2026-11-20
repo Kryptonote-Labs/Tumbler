@@ -120,10 +120,12 @@ export function insertLatexMath(display: boolean): Command {
 const mathSymbol =
   /(?<![\w\\$])(\\(?:infty|alpha|beta|gamma|delta|epsilon|theta|lambda|mu|pi|rho|sigma|phi|omega|Gamma|Delta|Theta|Lambda|Pi|Sigma|Phi|Omega|times|cdot|pm|leq|geq|neq|approx|to|rightarrow|leftarrow|sum|prod|int|partial|nabla)) $/;
 
-// Like Pandoc, `$` opens math only before a non-space and closes it only after a non-space,
-// so "costs $5 and $10" stays text. A digit-led span with no letters or operators is currency.
-const inlineDollars = /(?<![\\$\w])\$(?=[^\s$])([^$\n]*[^\s$\\])\$$/;
+// Like Pandoc, `$` opens math only before a non-space and closes it after non-space content,
+// so "costs $5 and $10" stays text. Typing allows padding before the closing delimiter.
+// A digit-led span with no letters or operators is currency.
+const inlineDollars = /(?<![\\$\w])\$(?=[^\s$])([^$\n]*[^\s$\\][ \t]*)\$$/;
 const currency = /^\d[\d.,]*(?:\s|[-–/]|$)(?![\s\S]*[A-Za-z\\^_=+*<>])/;
+const paddedAmount = /^\d[^\\^_=+*<>]*[ \t]$/;
 const unfinishedDollar = /(?<![\\$])\$(?=[^\s$\d])[^$]*$/;
 
 /**
@@ -249,7 +251,7 @@ function latexInputRules() {
       math(/^\\\[([^\n]+)\\\]$/, true, '\\[', '\\]'),
       math(/\\\(([^\n]+)\\\)$/, false, '\\(', '\\)'),
       new InputRule(inlineDollars, (state, match, start, end) =>
-        currency.test(match[1]!)
+        (currency.test(match[1]!) || paddedAmount.test(match[1]!))
           ? null
           : state.tr.replaceWith(
               start,

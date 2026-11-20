@@ -150,6 +150,7 @@ test('typing dollars keeps currency as text and turns delimited formulas into ma
   expect(typed('costs $5 and $10 ')).toBe('costs \\$5 and \\$10 ');
   expect(typed('from $5-$')).toBe('from \\$5-\\$');
   expect(typed('area $x^2$')).toBe('area $x^2$');
+  expect(typed('$x < \\infty $')).toBe('$x < \\infty $');
   expect(typed('price $5, then \\alpha x')).toBe('price \\$5, then \\(\\alpha\\) x');
   // Browsers type a trailing space as U+00A0 in collapsed whitespace. Shortcuts still see a
   // space, and the source always contains an ordinary space.
