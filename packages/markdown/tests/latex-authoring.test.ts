@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { TextSelection, type EditorState } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
-import { noteState } from '../src/editor';
+import { latexNumberSpec, noteState } from '../src/editor';
 import {
   blankLatex,
   latexFieldSource,
@@ -145,4 +145,28 @@ test('typing dollars keeps currency as text and turns delimited formulas into ma
   expect(typed('from $5-$')).toBe('from \\$5-\\$');
   expect(typed('area $x^2$')).toBe('area $x^2$');
   expect(typed('price $5, then \\alpha ')).toBe('price \\$5, then \\(\\alpha\\) ');
+});
+
+test('the editor decorates numbered equations, floats and resolvable references', () => {
+  const state = noteState(
+    '',
+    0,
+    'numbers',
+    parseLatex(String.raw`\documentclass{article}
+\begin{document}
+\section{Intro}
+\begin{equation}x\label{eq:x}\end{equation}
+See \eqref{eq:x}, \ref{missing} and \ref{eq:x}.
+\end{document}`),
+  );
+  const decorations = state.plugins
+    .map((plugin) => plugin.props.decorations?.call(plugin, state))
+    .find(Boolean)!;
+  const specs = decorations.find().map((decoration) => latexNumberSpec([decoration]));
+  expect(specs.filter(Boolean)).toEqual([
+    { latexEquation: ['1'] },
+    { latexReference: '(1)' },
+    { latexReference: undefined },
+    { latexReference: '1' },
+  ]);
 });

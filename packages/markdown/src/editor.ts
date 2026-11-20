@@ -1,6 +1,13 @@
 import { isLatex } from './latex';
 import { latexState } from './latex-editor';
-export { insertLatexMath, latexHeading, latexStyleActive, toggleLatexStyle } from './latex-editor';
+export {
+  insertLatexMath,
+  latexHeading,
+  latexNumberSpec,
+  latexStyleActive,
+  toggleLatexStyle,
+  type LatexNumberSpec,
+} from './latex-editor';
 import { noteCodeBlockView } from './code-block-view';
 import type { NoteEditorOptions } from './editor-options';
 export { NoteCopyFeedback, type NoteCopyStatus } from './copy-feedback';
@@ -167,7 +174,8 @@ export function noteState(
   document?: import('prosemirror-model').Node,
   options: NoteEditorOptions = {},
 ) {
-  if (document && isLatex(document)) return latexState(document, version, clientID, options.latexNodeViews);
+  if (document && isLatex(document))
+    return latexState(document, version, clientID, options.latexNodeViews);
   return EditorState.create({
     schema,
     doc: document ?? parseNote(markdown),
