@@ -35,9 +35,11 @@ export function readLatexFigure(source: string) {
         graphic.option.text,
       )
     : undefined;
+  const page = /(?:^|,)\s*page\s*=\s*(\d+)\s*(?:,|$)/.exec(graphic?.option?.text ?? '');
   return {
     graphic,
     path: graphic?.body.text.trim(),
+    page: page ? Number(page[1]) : 1,
     /** Undefined when the width is not a share of the line, such as `5cm`. */
     width: width ? Number(width[1] || 1) : graphic?.option ? undefined : 1,
     caption: readLatexCaption(source),

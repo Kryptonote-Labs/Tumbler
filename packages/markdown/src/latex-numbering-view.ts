@@ -16,6 +16,20 @@ export type LatexNumberSpec =
 
 const key = new PluginKey<DecorationSet>('latex-numbering');
 const reference = /^\\(eq)?ref\s*\{([^{}]+)\}$/;
+const label = /^\\label\s*\{[^{}]+\}$/;
+
+function isLabelParagraph(node: Node) {
+  if (node.type.name !== 'paragraph') return false;
+  let hasLabel = false;
+  for (let index = 0; index < node.childCount; index++) {
+    const child = node.child(index);
+    if (child.isText && !child.text?.trim()) continue;
+    if (child.type.name !== 'latex_inline' || !label.test(String(child.attrs.source).trim()))
+      return false;
+    hasLabel = true;
+  }
+  return hasLabel;
+}
 
 function headingNumber(number: string, command: string) {
   return (view: { dom: HTMLElement }) => {
@@ -51,6 +65,10 @@ function decorate(document: Node) {
     for (const [position, number] of numbers.footnotes) around(position, { latexFootnote: number });
   }
   document.descendants((node, position) => {
+    if (isLabelParagraph(node))
+      decorations.push(
+        Decoration.node(position, position + node.nodeSize, { 'data-latex-label-only': '' }),
+      );
     if (node.type.name !== 'latex_inline') return true;
     const match = reference.exec(String(node.attrs.source).trim());
     if (match) {

@@ -25,6 +25,12 @@ describe('figures', () => {
     expect(setLatexCaption(captioned, '', false, 0)).not.toContain('\\caption');
     expect(readLatexFigure(latexFigureSource('a.png'))?.path).toBe('a.png');
   });
+
+  test('reads the PDF page selected by includegraphics', () => {
+    const source = '\\begin{figure}\\includegraphics[page=3,width=.5\\linewidth]{plot.pdf}\\end{figure}';
+    expect(readLatexFigure(source)).toMatchObject({ path: 'plot.pdf', width: 0.5, page: 3 });
+    expect(readLatexFigure(latexFigureSource('plot.pdf'))?.page).toBe(1);
+  });
 });
 
 describe('tables', () => {
@@ -67,5 +73,15 @@ describe('tables', () => {
     const merged = '\\begin{tabular}{ll}\\multicolumn{2}{c}{Head}\\\\ a & b\\end{tabular}';
     expect(readLatexTabular(merged)!.grid).toBe(false);
     expect(insertLatexTableRow(merged, 0, true)).toBe(merged);
+  });
+
+  test('inserting after the header places the new row below the header rule', () => {
+    const inserted = insertLatexTableRow(source, 0, true);
+    const [head, newRow, formerFirstRow] = readLatexTabular(inserted)!.rows;
+    expect(head?.rules.trim()).toBe('\\toprule');
+    expect(newRow?.rules.trim()).toBe('\\midrule');
+    expect(newRow?.cells.map((cell) => cell.body)).toEqual(['', '']);
+    expect(formerFirstRow?.rules.trim()).toBe('');
+    expect(formerFirstRow?.cells[0]?.body).toBe('A');
   });
 });

@@ -181,3 +181,21 @@ See \eqref{eq:x}, \ref{missing} and \ref{eq:x}.
     { latexReference: '1' },
   ]);
 });
+
+test('a standalone heading label takes no paragraph space, without hiding text beside a label', () => {
+  const source = String.raw`\documentclass{article}
+\begin{document}
+\section{First}\label{sec:first}
+
+\section{Second}\label{sec:second}Visible prose.
+\end{document}`;
+  const state = noteState('', 0, 'labels', parseLatex(source));
+  const decorations = state.plugins
+    .map((plugin) => plugin.props.decorations?.call(plugin, state))
+    .find(Boolean)!;
+  const blocks = decorations.find().filter(({ from, to }) => from < to);
+  expect(blocks.map(({ from }) => state.doc.nodeAt(from)?.firstChild?.attrs.source)).toEqual([
+    '\\label{sec:first}',
+  ]);
+  expect(serializeLatex(state.doc)).toBe(source);
+});

@@ -183,11 +183,13 @@ export function insertLatexTableRow(source: string, row: number, after: boolean)
   // The last row may have no `\\`; give it one so the new row starts on a row of its own.
   const lastRow = table.rows.at(-1);
   if (lastRow && !lastRow.end) lastRow.end = ' \\\\';
-  table.rows.splice(
-    at,
-    0,
-    blankRow(table.spec.columns.length, end.startsWith(' ') ? end : ' ' + end),
-  );
+  const inserted = blankRow(table.spec.columns.length, end.startsWith(' ') ? end : ' ' + end);
+  const following = table.rows[at];
+  // Keep the opening rule above the grid and the header rule above the first body row.
+  if (following && (at === 0 || (at === 1 && after)) && following.rules.trim()) {
+    [inserted.rules, following.rules] = [following.rules, inserted.rules];
+  }
+  table.rows.splice(at, 0, inserted);
   return writeLatexTabular(source, table);
 }
 
