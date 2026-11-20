@@ -13,6 +13,7 @@ import { editPresentationTable } from "./table-edit.ts";
 import { pastePresentationObject } from "./clipboard.ts";
 import { openPresentationArtifact } from "./artifact.ts";
 import { z } from "zod";
+import { isMathEquation, type MathEquation } from "@tumblerjs/core/math";
 import { normalizeFormattingPatch, type FormattingPatch } from "@tumblerjs/core";
 import { type PresentationArtifact } from "./artifact.ts";
 import {
@@ -34,6 +35,7 @@ const number = z.number().finite();
 // DrawingML stores body insets as ST_Coordinate32 values in EMUs.
 const inset = number.nonnegative().max(2147483647 / EMUS_PER_PIXEL);
 const id = z.string().min(1);
+const equation = z.custom<MathEquation>(isMathEquation).describe('Structured equation {body:[nodes]} as in @tumblerjs/core/math.');
 const target = { slideId: id, objectKey: id };
 const range = { start: z.number().int().nonnegative(), end: z.number().int().nonnegative() };
 const cell = z
@@ -256,6 +258,8 @@ const singlePresentationCommand = z.discriminatedUnion("name", [
     })
     .strict(),
   z.object({ name: z.literal("format-text"), ...target, ...range, cell, patch }).strict(),
+  /** Replaces the range with an editable equation; a range holding one equation edits it in place. */
+  z.object({ name: z.literal("set-equation"), ...target, ...range, cell, equation }).strict(),
   z
     .object({
       name: z.literal("style-shape"),
@@ -371,6 +375,8 @@ export function applyPresentationCommand(
       return artifact.editText(command);
     case "format-text":
       return artifact.formatText(command);
+    case "set-equation":
+      return artifact.setEquation(command);
     case "style-shape":
       return artifact.styleShape(command);
     case "paragraph":

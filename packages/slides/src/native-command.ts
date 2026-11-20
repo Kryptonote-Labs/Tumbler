@@ -77,6 +77,7 @@ export function applyNativeModelCommand(
   switch (command.name) {
     case 'edit-text':
     case 'format-text':
+    case 'set-equation':
     case 'paragraph': {
       const object = presentationTextTarget(selected!, command.cell);
       if (!object.textEditable || !object.text) throw new Error('This text is read-only.');

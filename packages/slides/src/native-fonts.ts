@@ -4,7 +4,7 @@ import type { SlideTextRun, NativeTextFonts, SlideParagraph, SlideObject } from 
 /** Theme/script choices are compiled on import; typing new scripts never consults XML. */
 export function nativeScriptRuns(run: SlideTextRun): SlideTextRun[] {
   const context = run.nativeFonts;
-  if (!context || !run.text) return [run];
+  if (!context || !run.text || run.equation) return [run];
   const segments = /^[\x00-\x7f]*$/.test(run.text)
     ? [{ text: run.text, kind: 'latin' as const, script: 'Latn' }]
     : scriptSegments(run.text, context.language);

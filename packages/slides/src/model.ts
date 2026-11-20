@@ -3,6 +3,7 @@ import type { DrawingGeometry } from './drawing-geometry.ts';
 import type { ChartModel } from '@tumblerjs/charts';
 import type { LosslessXmlDocument } from '@tumblerjs/ooxml';
 import type { OpcPackage } from '@tumblerjs/opc';
+import type { MathEquation } from '@tumblerjs/core/math';
 
 export type Matrix = readonly [number, number, number, number, number, number];
 export interface SlideTransform {
@@ -46,9 +47,11 @@ export interface SlideTextRun {
   readonly spacing?: number;
   readonly capitals?: string;
   readonly hyperlink?: { readonly href?: string; readonly slidePart?: string } | undefined;
+  /** An Office Math zone held by this run's single object character (U+FFFC). */
+  readonly equation?: MathEquation | undefined;
 }
 export type NativeRunField = Exclude<keyof SlideTextRun,
-  'text' | 'nativeAuthored' | 'nativeOwnFonts' | 'nativeOwnLanguage' | 'nativeFonts' | 'nativeDefaults'>;
+  'text' | 'equation' | 'nativeAuthored' | 'nativeOwnFonts' | 'nativeOwnLanguage' | 'nativeFonts' | 'nativeDefaults'>;
 export interface SlideParagraph {
   readonly nativeBeforeScale?: number | undefined;
   readonly nativeAfterScale?: number | undefined;

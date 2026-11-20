@@ -12,6 +12,8 @@ import {
   type LosslessXmlElement,
 } from "@tumblerjs/ooxml";
 import { PresentationError, type SlideObject } from "./model.ts";
+import type { MathEquation } from "@tumblerjs/core/math";
+import { EQUATION_CHARACTER, EQUATION_FONT, equationMarkup, equationRunProperties, isEquationElement } from "./equations.ts";
 export interface PresentationTableCellAddress {
   readonly row: number;
   readonly column: number;
@@ -314,6 +316,8 @@ export function editPresentationText(
   range: PresentationTextRange,
   value: string | undefined,
   patch?: FormattingPatch,
+  /** With `value` set to the object character, inserts this equation in place of the range. */
+  equation?: MathEquation,
 ): Uint8Array {
   if (!object.textEditable)
     throw new PresentationError(
@@ -343,7 +347,8 @@ export function editPresentationText(
     throw new RangeError("Text ranges must follow grapheme boundaries.");
   if (
     value !== undefined &&
-    (!value.isWellFormed() || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\r\uFFFE\uFFFF]/u.test(value))
+    (!value.isWellFormed() || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\r\uFFFE\uFFFF]/u.test(value) ||
+      (value.includes(EQUATION_CHARACTER) && !(equation && value === EQUATION_CHARACTER)))
   )
     throw new RangeError("Invalid presentation text.");
   const normalized = presentationFormattingPatch(patch);
@@ -352,11 +357,12 @@ export function editPresentationText(
     const start = offset;
     let local = 0;
     const runs = elements(p)
-      .filter((e) => e.localName === "r" || e.localName === "br")
+      .filter((e) => e.localName === "r" || e.localName === "br" || isEquationElement(e))
       .map((r) => {
         const t = child(r, "t")!;
-        const text =
-          r.localName === "br"
+        const text = isEquationElement(r)
+          ? EQUATION_CHARACTER
+          : r.localName === "br"
             ? "\n"
             : t.children
                 .map((n) =>
@@ -377,6 +383,8 @@ export function editPresentationText(
     format?: FormattingPatch,
   ) => {
     const q = (n: string) => tag(p, n);
+    // Equations move whole; their math keeps its own run properties.
+    if (r && isEquationElement(r.element)) return text ? raw(source, r.element) : "";
     // New text in an empty paragraph takes the end mark's formatting, as in PowerPoint.
     const pr = r ? child(r.element, "rPr") : child(p, "endParaRPr");
     const props = (
@@ -470,16 +478,26 @@ export function editPresentationText(
   } else {
     const first = data.find((p) => range.start <= p.end)!,
       last = data.find((p) => range.end <= p.end)!;
+    const textRuns = first.runs.filter((r) => !isEquationElement(r.element));
     const donor =
-      first.runs.find(
+      textRuns.find(
         (r) => range.start - first.start <= r.start + r.text.length,
-      ) ?? first.runs.at(-1);
+      ) ?? textRuns.at(-1);
+    const piece = (text: string) => {
+      if (!equation) return renderRun(donor, first.element, text, normalized);
+      const pr = donor ? child(donor.element, "rPr") : child(first.element, "endParaRPr");
+      const props = properties(source, first.element, pr, "rPr", { text: { fontFamily: { set: EQUATION_FONT } } })
+        .replace(/^<((?:[\w.-]+:)?)endParaRPr\b/, "<$1rPr")
+        .replace(/<\/((?:[\w.-]+:)?)endParaRPr>$/, "</$1rPr>");
+      return equationMarkup(equation, props);
+    };
     // Ordinary typing changes one text node instead of creating a run per keystroke.
     if (
       first === last &&
       donor &&
       donor.element.localName === "r" &&
       !normalized &&
+      !equation &&
       !value.includes("\n") &&
       range.start >= first.start + donor.start &&
       range.end <= first.start + donor.start + donor.text.length
@@ -494,18 +512,18 @@ export function editPresentationText(
     }
     const pieces = value.split("\n");
     const result = pieces
-      .map((piece, i) => {
+      .map((part, i) => {
         const p = i === pieces.length - 1 && i > 0 ? last : first;
         return renderParagraph(
           p,
           (i === 0 ? slice(first, 0, range.start - first.start) : "") +
-            (piece ? renderRun(donor, first.element, piece, normalized) : "") +
+            (part ? piece(part) : "") +
             (i === pieces.length - 1
               ? slice(last, range.end - last.start, last.end - last.start)
               : ""),
           undefined,
           // Empty paragraphs use their end mark as the donor for subsequent typing.
-          i > 0 && !piece && range.end === last.end
+          i > 0 && !part && range.end === last.end
             ? properties(source, first.element,
                 donor ? child(donor.element, "rPr") : child(first.element, "endParaRPr"),
                 "endParaRPr", normalized ?? {})
@@ -635,4 +653,32 @@ export function editPresentationShape(
     ),
   );
   return editor.commit().bytes;
+}
+
+/** Replaces a range with an equation, or rewrites the equation the range holds, keeping its typography. */
+export function setPresentationEquation(
+  source: LosslessXmlDocument,
+  object: SlideObject,
+  range: PresentationTextRange,
+  equation: MathEquation,
+): Uint8Array {
+  if (!object.textEditable)
+    throw new PresentationError("unsupported_edit", "This text contains unsupported editing features.");
+  const shape = source.element(object.elementId)!;
+  const body = elements(shape).find((e) => e.localName === "txBody");
+  let offset = 0;
+  for (const p of body ? elements(body).filter((e) => e.localName === "p") : []) {
+    for (const r of elements(p).filter((e) => e.localName === "r" || e.localName === "br" || isEquationElement(e))) {
+      if (isEquationElement(r) && offset === range.start && range.end === range.start + 1) {
+        const pr = equationRunProperties(r);
+        const editor = beginLosslessXmlEdit(source);
+        editor.replaceElementMarkup(r, equationMarkup(equation, pr ? raw(source, pr) : ""));
+        return editor.commit().bytes;
+      }
+      offset += isEquationElement(r) || r.localName === "br" ? 1 : (child(r, "t")?.children ?? [])
+        .map((n) => (n.kind === "text" || n.kind === "cdata" ? n.value : "")).join("").length;
+    }
+    offset++;
+  }
+  return editPresentationText(source, object, range, EQUATION_CHARACTER, undefined, equation);
 }
