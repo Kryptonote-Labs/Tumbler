@@ -8,6 +8,7 @@ export {
   toggleLatexStyle,
   type LatexNumberSpec,
 } from './latex-editor';
+export { LatexRangeSelection, latexRangeSelection } from './latex-selection';
 import { noteCodeBlockView } from './code-block-view';
 import type { NoteEditorOptions } from './editor-options';
 export { NoteCopyFeedback, type NoteCopyStatus } from './copy-feedback';

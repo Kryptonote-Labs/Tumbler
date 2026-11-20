@@ -186,6 +186,20 @@
 .note-content .ProseMirror-hideselection *::selection {
   background: transparent;
 }
+/* Objects inside a text selection are selected whole. The browser's own highlight never reaches
+   the fields inside objects, which would disagree with the selection, unless one is being edited. */
+.note-content .latex-in-selection {
+  background: color-mix(in srgb, Highlight 35%, transparent);
+  border-radius: 3px;
+}
+.note-content [contenteditable='false'] *::selection {
+  background: transparent;
+}
+.note-content [contenteditable='false'] :focus::selection,
+.note-content [contenteditable='false'] :focus *::selection {
+  background: Highlight;
+  color: HighlightText;
+}
 
 /* Token colours follow the app theme; code remains ordinary selectable, editable text. */
 .note-content pre {
