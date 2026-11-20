@@ -10,6 +10,8 @@ export type LatexNumbering = {
   floats: Map<number, { kind: 'figure' | 'table'; number: string }>;
   /** Label keys and the text `\ref` prints for them. */
   labels: Map<string, string>;
+  /** Inline `\footnote` positions and the mark LaTeX prints, while the count is known. */
+  footnotes: Map<number, string>;
 };
 
 // Commands and environments whose effect on counters the editor does not model.
@@ -89,7 +91,11 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
     equations: new Map(),
     floats: new Map(),
     labels: new Map(),
+    footnotes: new Map(),
   };
+  let footnote = 0;
+  // A footnote the editor cannot see, such as one in a caption, makes later marks unknown.
+  let footnotesKnown = true;
 
   const value = (name: string): string => {
     const count = counters.get(name) ?? 0;
@@ -119,6 +125,7 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
       if (name !== 'part') for (const lower of levels.slice(level + 1)) counters.set(lower, 0);
       if (name === 'chapter') {
         equation = 0;
+        footnote = 0;
         floatCount.figure = floatCount.table = 0;
       }
       current = value(name);
@@ -146,6 +153,12 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
     }
     if (type === 'latex_raw' || type === 'latex_inline') {
       const source = String(node.attrs.source);
+      if (type === 'latex_inline' && /^\\footnote\s*\{/.test(source)) {
+        if (footnotesKnown) result.footnotes.set(position, String(++footnote));
+        if (/\\footnote(?:mark|text)?\b/.test(source.slice(9))) footnotesKnown = false;
+        return false;
+      }
+      if (/\\footnote(?:mark|text)?\b/.test(source)) footnotesKnown = false;
       if (opaqueCounters.test(source)) {
         opaque = true;
         return false;

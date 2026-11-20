@@ -2,7 +2,14 @@ import { expect, test } from 'bun:test';
 import { TextSelection } from 'prosemirror-state';
 import { Step } from 'prosemirror-transform';
 import { noteState, toggleLatexStyle, undo } from '../src/editor';
-import { parseLatex, replaceLatexSource, serializeLatex } from '../src/latex';
+import {
+  latexBlockAtOffset,
+  latexNumbering,
+  parseLatex,
+  replaceLatexSource,
+  serializeLatex,
+} from '../src/latex';
+import { pastedLatexText } from '../src/latex-editor';
 
 const article = String.raw`% \\begin{document}
 \documentclass[11pt]{article}
@@ -90,4 +97,44 @@ test('reloading the LaTeX editor keeps preamble changes readable by ProseMirror'
   const restored = Step.fromJSON(document.type.schema, step!.toJSON()).apply(document);
   expect(restored.failed).toBeNull();
   expect(serializeLatex(restored.doc!)).toBe(rewritten);
+});
+
+test('pasted prose keeps amounts as text and pasted math as math', () => {
+  expect(pastedLatexText('costs $5 and $10 per seat')).toBe('costs \\$5 and \\$10 per seat');
+  expect(pastedLatexText('pay $5 now')).toBe('pay \\$5 now');
+  expect(pastedLatexText('area $x^2$ grows')).toBe('area $x^2$ grows');
+  expect(pastedLatexText('$$a$$ and \\$3')).toBe('$$a$$ and \\$3');
+});
+
+test('abstracts edit as native blocks and keep their environment source', () => {
+  const source =
+    '\\documentclass{article}\n\\begin{document}\n\\begin{abstract}\nWe study \\emph{growth}.\n\\end{abstract}\n\nBody.\n\\end{document}\n';
+  const document = parseLatex(source);
+  expect(document.firstChild!.type.name).toBe('blockquote');
+  expect(document.firstChild!.attrs.open).toBe('\\begin{abstract}');
+  expect(serializeLatex(document)).toBe(source);
+});
+
+test('source offsets resolve to the innermost block for error reports', () => {
+  const source =
+    '\\documentclass{article}\n\\begin{document}\nFirst.\n\n\\begin{itemize}\n\\item One\n\\item Two\n\\end{itemize}\n\\end{document}\n';
+  const document = parseLatex(source);
+  expect(latexBlockAtOffset(document, 5)).toBeUndefined();
+  const first = latexBlockAtOffset(document, source.indexOf('First'))!;
+  expect(first.node.textContent).toBe('First.');
+  const two = latexBlockAtOffset(document, source.indexOf('Two'))!;
+  expect(two.node.textContent).toBe('Two');
+  expect(document.resolve(two.position + 1).parent.textContent).toBe('Two');
+});
+
+test('footnotes number like the class does and stop when the count is unknown', () => {
+  const at = (source: string) =>
+    [...latexNumbering(parseLatex(source))!.footnotes.values()];
+  const pre = '\\documentclass{report}\n\\begin{document}\n';
+  expect(at(pre + 'A\\footnote{a} B\\footnote{b}\n\\chapter{Two}\nC\\footnote{c}\n\\end{document}')).toEqual(
+    ['1', '2', '1'],
+  );
+  expect(
+    at(pre + 'A\\footnote{a}\n\n\\begin{figure}\\caption{x\\footnotemark}\\end{figure}\n\nB\\footnote{b}\n\\end{document}'),
+  ).toEqual(['1']);
 });

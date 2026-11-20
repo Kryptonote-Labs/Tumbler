@@ -44,6 +44,7 @@ const displayEnvironments = new Set([
   'gather',
   'gather*',
 ]);
+const textEnvironments = new Set(['quote', 'quotation', 'abstract']);
 const escaped = new Map([
   ['\\%', '%'],
   ['\\$', '$'],
@@ -286,7 +287,8 @@ function environmentBlock(source: string, position: number, before: string, dept
         end,
       };
   }
-  if (name === 'quote' && depth < 64) {
+  // Text environments edit as native blocks. The open and close source keep the environment.
+  if (textEnvironments.has(name) && depth < 64) {
     const quote = blocks(content, depth + 1);
     if (quote.nodes.length)
       return {
@@ -529,4 +531,52 @@ export function replaceLatexSource(document: Node, source: string): Transform {
   const replacement: Node[] = [];
   for (let index = left; index < nextRight; index++) replacement.push(next.child(index));
   return transform.replaceWith(start, stop, Fragment.fromArray(replacement));
+}
+
+const containerDefaults: Record<string, string> = {
+  bullet_list: '\\begin{itemize}\n',
+  ordered_list: '\\begin{enumerate}\n',
+  blockquote: '\\begin{quote}\n',
+  list_item: '\\item ',
+};
+
+/**
+ * The innermost block whose source contains `offset` in `serializeLatex(document)`, with its
+ * document position. Undefined for the preamble and the text after `\end{document}`. Error
+ * reports from TeX use this to select the block a line belongs to.
+ */
+export function latexBlockAtOffset(
+  document: Node,
+  offset: number,
+): { position: number; node: Node } | undefined {
+  const locate = (
+    parent: Node,
+    contentStart: number,
+    at: number,
+  ): { position: number; node: Node } | undefined => {
+    let cursor = 0;
+    let found: { position: number; node: Node } | undefined;
+    parent.forEach((child, childOffset, index) => {
+      if (found) return;
+      const before =
+        child.attrs.before ??
+        (index === 0 ? '' : child.type.name === 'list_item' ? '\n' : '\n\n');
+      const start = cursor + before.length;
+      const end = start + blockSource(child).length;
+      cursor = end;
+      if (at < start || at >= end) return;
+      const position = contentStart + childOffset;
+      const open = child.attrs.open ?? containerDefaults[child.type.name];
+      if (!child.isTextblock && !child.isAtom && open !== undefined && child.childCount) {
+        const inner = locate(child, position + 1, at - start - open.length);
+        if (inner) {
+          found = inner;
+          return;
+        }
+      }
+      found = { position, node: child };
+    });
+    return found;
+  };
+  return locate(document, 0, offset - String(document.attrs.prefix).length);
 }

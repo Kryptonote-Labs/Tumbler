@@ -125,6 +125,45 @@ const inlineDollars = /(?<![\\$\w])\$(?=[^\s$])([^$\n]*[^\s$\\])\$$/;
 const currency = /^\d[\d.,]*(?:\s|[-–/]|$)(?![\s\S]*[A-Za-z\\^_=+*<>])/;
 const unfinishedDollar = /(?<![\\$])\$(?=[^\s$\d])[^$]*$/;
 
+/**
+ * Escape the dollars in pasted prose that typing would also keep as text. A pair is math only
+ * when it opens before a non-space, closes after one, is not followed by a digit and does not
+ * read as an amount. A whole document pastes as written.
+ */
+export function pastedLatexText(text: string) {
+  if (/\\(?:documentclass|begin\s*\{document\})/.test(text)) return text;
+  let result = '';
+  let position = 0;
+  while (position < text.length) {
+    const open = text.indexOf('$', position);
+    if (open < 0) break;
+    if (text[open - 1] === '\\' || text[open + 1] === '$') {
+      const skip = text[open + 1] === '$' ? text.indexOf('$$', open + 2) : open;
+      const end = skip < 0 ? text.length : skip + (text[open + 1] === '$' ? 2 : 1);
+      result += text.slice(position, end);
+      position = end;
+      continue;
+    }
+    let close = -1;
+    for (let next = text.indexOf('$', open + 1); next >= 0; next = text.indexOf('$', next + 1)) {
+      if (text[next - 1] === '\\') continue;
+      if (/\s/.test(text[next - 1]!) || /\d/.test(text[next + 1] ?? '')) continue;
+      close = next;
+      break;
+    }
+    const content = close < 0 ? '' : text.slice(open + 1, close);
+    const math = close > open + 1 && !/^\s/.test(content) && !content.includes('\n') && !currency.test(content);
+    if (math) {
+      result += text.slice(position, close + 1);
+      position = close + 1;
+    } else {
+      result += text.slice(position, open) + '\\$';
+      position = open + 1;
+    }
+  }
+  return result + text.slice(position);
+}
+
 function latexInputRules() {
   const formatting = (pattern: RegExp, style: Style) =>
     new InputRule(pattern, (state, match, start, end) => {
@@ -355,7 +394,7 @@ export function latexState(
                       ),
                   ),
                 )
-              : Slice.maxOpen(parseLatex(text).content),
+              : Slice.maxOpen(parseLatex(pastedLatexText(text)).content),
         },
       }),
     ],

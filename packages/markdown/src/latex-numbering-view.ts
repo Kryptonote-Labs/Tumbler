@@ -11,7 +11,8 @@ import { latexNumbering } from './latex-numbering';
 export type LatexNumberSpec =
   | { latexEquation: (string | null)[] }
   | { latexFloat: string }
-  | { latexReference: string | undefined };
+  | { latexReference: string | undefined }
+  | { latexFootnote: string };
 
 const key = new PluginKey<DecorationSet>('latex-numbering');
 const reference = /^\\(eq)?ref\s*\{([^{}]+)\}$/;
@@ -47,6 +48,7 @@ function decorate(document: Node) {
     for (const [position, rows] of numbers.equations) around(position, { latexEquation: rows });
     for (const [position, { kind, number }] of numbers.floats)
       around(position, { latexFloat: (kind === 'figure' ? 'Figure ' : 'Table ') + number });
+    for (const [position, number] of numbers.footnotes) around(position, { latexFootnote: number });
   }
   document.descendants((node, position) => {
     if (node.type.name !== 'latex_inline') return true;
@@ -76,7 +78,12 @@ export function latexNumberingPlugin() {
 export function latexNumberSpec(decorations: readonly Decoration[]) {
   for (const decoration of decorations) {
     const spec = decoration.spec as Partial<Record<string, unknown>>;
-    if ('latexEquation' in spec || 'latexFloat' in spec || 'latexReference' in spec)
+    if (
+      'latexEquation' in spec ||
+      'latexFloat' in spec ||
+      'latexReference' in spec ||
+      'latexFootnote' in spec
+    )
       return spec as LatexNumberSpec;
   }
 }
