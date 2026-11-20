@@ -6,7 +6,8 @@ import { readPresentationMedia } from "./media.ts";
 import { embeddedFontBytes } from "./embedded-fonts.ts";
 import { scriptSegments } from "./text-fonts.ts";
 import type { MathEquation } from "@tumblerjs/core/math";
-import { DRAWING_2010, EQUATION_CHARACTER, equationFromElement, equationRunProperties, isEquationElement } from "./equations.ts";
+import { DRAWING_2010_NAMESPACE, drawingEquation, drawingEquationRunProperties, isDrawingEquation } from "@tumblerjs/core/math";
+import { EQUATION_CHARACTER } from "./equations.ts";
 import { formatAutoNumber } from "./text-numbering.ts";
 import { builtinTableStyles } from "./builtin-table-styles.ts";
 import type {
@@ -323,7 +324,7 @@ class Reader {
         this.ns.presentation,
         DIAGRAM_DRAWING,
         this.ns.drawing,
-        DRAWING_2010,
+        DRAWING_2010_NAMESPACE,
         this.ns.chart,
         this.rel,
       ]),
@@ -2031,9 +2032,9 @@ class Reader {
           });
           continue;
         }
-        if (isEquationElement(run)) {
+        if (isDrawingEquation(run)) {
           this.characters += 1;
-          runs.push(...runStyle(equationRunProperties(run), EQUATION_CHARACTER, true, equationFromElement(run)));
+          runs.push(...runStyle(drawingEquationRunProperties(run), EQUATION_CHARACTER, true, drawingEquation(run)));
           continue;
         }
         if (!["r", "fld"].includes(run.localName)) continue;
@@ -2202,7 +2203,7 @@ class Reader {
           this.children(paragraph).every(
             (item) =>
               ["pPr", "endParaRPr", "br"].includes(item.localName) ||
-              isEquationElement(item) ||
+              isDrawingEquation(item) ||
               (item.localName === "r" &&
                 this.children(item).every((runChild) =>
                   ["rPr", "t"].includes(runChild.localName),

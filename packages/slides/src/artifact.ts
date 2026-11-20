@@ -2,7 +2,7 @@ import { isPresentationBlock } from './native-block.ts';
 import { readNativePresentation } from './native-open.ts';
 import { refreshPresentationInkFallback } from "./ink-authoring.ts";
 import { refreshModificationId } from "./modification-id.ts";
-import { reconcileEquationShape } from "./equations.ts";
+import { reconcileDrawingEquationShape } from "@tumblerjs/core/math";
 import type { MathEquation } from "@tumblerjs/core/math";
 import {
   editPresentationText,
@@ -113,7 +113,7 @@ export class PresentationArtifact {
     /** The shape holds or held Office Math, so its alternate representation follows the edit. */
     equations = this.document.slides.some((slide) => slide.objects.some((object) => object.sourcePart === part && object.shapeId === shapeId && hasEquations(object))),
   ): PresentationArtifact {
-    if (equations) bytes = reconcileEquationShape(bytes, shapeId);
+    if (equations) bytes = reconcileDrawingEquationShape(bytes, shapeId);
     const original = readPresentationPart(this.document, part);
     if (
       original.length === bytes.length &&

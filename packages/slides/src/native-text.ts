@@ -6,7 +6,8 @@ import type { FormattingPatch } from '@tumblerjs/core';
 import type { SlideText, SlideTextRun, SlideParagraph } from './model.ts';
 import type { PresentationCommand } from './commands.ts';
 import type { MathEquation } from '@tumblerjs/core/math';
-import { EQUATION_CHARACTER, EQUATION_FONT } from './equations.ts';
+import { EQUATION_FONT } from '@tumblerjs/core/math';
+import { EQUATION_CHARACTER } from './equations.ts';
 
 type TextCommand = Extract<
   PresentationCommand,

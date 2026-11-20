@@ -19,3 +19,4 @@ export {
 } from "./layout.ts";
 export * from "./serialize.ts";
 export * from "./omml.ts";
+export * from "./drawing.ts";

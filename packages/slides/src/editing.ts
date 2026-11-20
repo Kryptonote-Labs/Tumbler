@@ -13,7 +13,8 @@ import {
 } from "@tumblerjs/ooxml";
 import { PresentationError, type SlideObject } from "./model.ts";
 import type { MathEquation } from "@tumblerjs/core/math";
-import { EQUATION_CHARACTER, EQUATION_FONT, equationMarkup, equationRunProperties, isEquationElement } from "./equations.ts";
+import { drawingEquationMarkup, drawingEquationParagraph, drawingEquationRunProperties, EQUATION_FONT, isDrawingEquation } from "@tumblerjs/core/math";
+import { EQUATION_CHARACTER } from "./equations.ts";
 export interface PresentationTableCellAddress {
   readonly row: number;
   readonly column: number;
@@ -357,10 +358,10 @@ export function editPresentationText(
     const start = offset;
     let local = 0;
     const runs = elements(p)
-      .filter((e) => e.localName === "r" || e.localName === "br" || isEquationElement(e))
+      .filter((e) => e.localName === "r" || e.localName === "br" || isDrawingEquation(e))
       .map((r) => {
         const t = child(r, "t")!;
-        const text = isEquationElement(r)
+        const text = isDrawingEquation(r)
           ? EQUATION_CHARACTER
           : r.localName === "br"
             ? "\n"
@@ -384,7 +385,7 @@ export function editPresentationText(
   ) => {
     const q = (n: string) => tag(p, n);
     // Equations move whole; their math keeps its own run properties.
-    if (r && isEquationElement(r.element)) return text ? raw(source, r.element) : "";
+    if (r && isDrawingEquation(r.element)) return text ? raw(source, r.element) : "";
     // New text in an empty paragraph takes the end mark's formatting, as in PowerPoint.
     const pr = r ? child(r.element, "rPr") : child(p, "endParaRPr");
     const props = (
@@ -478,7 +479,7 @@ export function editPresentationText(
   } else {
     const first = data.find((p) => range.start <= p.end)!,
       last = data.find((p) => range.end <= p.end)!;
-    const textRuns = first.runs.filter((r) => !isEquationElement(r.element));
+    const textRuns = first.runs.filter((r) => !isDrawingEquation(r.element));
     const donor =
       textRuns.find(
         (r) => range.start - first.start <= r.start + r.text.length,
@@ -489,7 +490,7 @@ export function editPresentationText(
       const props = properties(source, first.element, pr, "rPr", { text: { fontFamily: { set: EQUATION_FONT } } })
         .replace(/^<((?:[\w.-]+:)?)endParaRPr\b/, "<$1rPr")
         .replace(/<\/((?:[\w.-]+:)?)endParaRPr>$/, "</$1rPr>");
-      return equationMarkup(equation, props);
+      return drawingEquationMarkup(equation, props);
     };
     // Ordinary typing changes one text node instead of creating a run per keystroke.
     if (
@@ -668,15 +669,16 @@ export function setPresentationEquation(
   const body = elements(shape).find((e) => e.localName === "txBody");
   let offset = 0;
   for (const p of body ? elements(body).filter((e) => e.localName === "p") : []) {
-    for (const r of elements(p).filter((e) => e.localName === "r" || e.localName === "br" || isEquationElement(e))) {
+    for (const r of elements(p).filter((e) => e.localName === "r" || e.localName === "br" || isDrawingEquation(e))) {
       // An equation keeps its math run typography; an empty one has none, so it takes the text's.
-      const pr = isEquationElement(r) && offset === range.start && range.end === range.start + 1 && equationRunProperties(r);
+      const pr = isDrawingEquation(r) && offset === range.start && range.end === range.start + 1 && drawingEquationRunProperties(r);
       if (pr) {
         const editor = beginLosslessXmlEdit(source);
-        editor.replaceElementMarkup(r, equationMarkup(equation, raw(source, pr)));
+        // Display equations stay display equations.
+        editor.replaceElementMarkup(r, drawingEquationMarkup(equation, raw(source, pr), drawingEquationParagraph(source, r)));
         return editor.commit().bytes;
       }
-      offset += isEquationElement(r) || r.localName === "br" ? 1 : (child(r, "t")?.children ?? [])
+      offset += isDrawingEquation(r) || r.localName === "br" ? 1 : (child(r, "t")?.children ?? [])
         .map((n) => (n.kind === "text" || n.kind === "cdata" ? n.value : "")).join("").length;
     }
     offset++;
