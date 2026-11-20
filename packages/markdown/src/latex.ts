@@ -1,7 +1,7 @@
 import { Fragment, type Mark, type Node } from 'prosemirror-model';
 import { Transform } from 'prosemirror-transform';
-import { updateLatexBoundary } from './latex-boundary-step';
-export { updateLatexBoundary } from './latex-boundary-step';
+import { updateLatexBoundary, updateLatexNodeSource } from './latex-boundary-step';
+export { updateLatexBoundary, updateLatexNodeSource } from './latex-boundary-step';
 import { noteSchema as schema } from './index';
 import {
   argumentAt,
@@ -557,6 +557,16 @@ export function replaceLatexSource(document: Node, source: string): Transform {
 
   const from = document.content.findDiffStart(next.content);
   if (from === null) return transform;
+  const original = document.nodeAt(from);
+  const edited = next.nodeAt(from);
+  if (original?.type === edited?.type && edited?.type.name.startsWith('latex_') &&
+      typeof original?.attrs.source === 'string' && typeof edited.attrs.source === 'string') {
+    const sourceEdit = updateLatexNodeSource(new Transform(transform.doc), from, edited.attrs.source);
+    if (sourceEdit.doc.eq(next)) {
+      for (const step of sourceEdit.steps) transform.step(step);
+      return transform;
+    }
+  }
   const end = document.content.findDiffEnd(next.content)!;
   const overlap = from - Math.min(end.a, end.b);
   if (overlap > 0) {

@@ -1,5 +1,5 @@
 import type { Node, Schema } from 'prosemirror-model';
-import { Step, StepResult, type Transform } from 'prosemirror-transform';
+import { AttrStep, Step, StepResult, type Mappable, type Transform } from 'prosemirror-transform';
 
 type Boundary = 'prefix' | 'suffix';
 const stepType = 'tumblerLatexBoundary';
@@ -22,7 +22,8 @@ function rebase(base: string, value: string, current: string) {
   const edit = change(base, value);
   const remote = change(base, current);
   const offset = remote.end <= edit.start ? remote.text.length - (remote.end - remote.start) : 0;
-  if (edit.end > remote.start && remote.end > edit.start) return;
+  const sameInsertion = edit.start === edit.end && remote.start === remote.end && edit.start === remote.start;
+  if (sameInsertion || (edit.end > remote.start && remote.end > edit.start)) return;
   return current.slice(0, edit.start + offset) + edit.text + current.slice(edit.end + offset);
 }
 
@@ -101,5 +102,65 @@ export function updateLatexBoundary<T extends Transform>(
 ): T {
   const base: string = transform.doc.attrs[boundary];
   if (base !== value) transform.step(new LatexBoundaryStep(boundary, base, value));
+  return transform;
+}
+
+
+const sourceStepType = 'tumblerLatexNodeSource';
+
+class LatexNodeSourceStep extends Step {
+  constructor(readonly position: number, readonly base: string, readonly value: string) {
+    super();
+  }
+
+  apply(document: Node) {
+    if (document.attrs.format !== 'latex' || this.position >= document.content.size)
+      return StepResult.fail('Expected a LaTeX source node.');
+    const node = document.nodeAt(this.position);
+    if (!node || !node.type.name.startsWith('latex_') || typeof node.attrs.source !== 'string')
+      return StepResult.fail('Expected a LaTeX source node.');
+    const merged = rebase(this.base, this.value, node.attrs.source);
+    if (merged === undefined) return StepResult.fail('The same LaTeX source changed concurrently.');
+    return new AttrStep(this.position, 'source', merged).apply(document);
+  }
+
+  invert(document: Node) {
+    const original: string = document.nodeAt(this.position)?.attrs.source ?? this.base;
+    return new LatexNodeSourceStep(this.position, rebase(this.base, this.value, original) ?? original, original);
+  }
+
+  map(mapping: Mappable) {
+    const position = mapping.mapResult(this.position, 1);
+    return position.deletedAfter ? null : new LatexNodeSourceStep(position.pos, this.base, this.value);
+  }
+
+  toJSON() {
+    return { stepType: sourceStepType, position: this.position, base: this.base, value: this.value };
+  }
+
+  static override fromJSON(_schema: Schema, value: unknown) {
+    if (!value || typeof value !== 'object' || !('position' in value) ||
+        typeof value.position !== 'number' || !Number.isSafeInteger(value.position) || value.position < 0 ||
+        !('base' in value) || typeof value.base !== 'string' ||
+        !('value' in value) || typeof value.value !== 'string')
+      throw new RangeError('Invalid LaTeX node source change.');
+    return new LatexNodeSourceStep(value.position, value.base, value.value);
+  }
+}
+
+const nodeRegistration = Symbol.for('@tumblerjs/markdown/latex-node-source-step');
+const nodeRegistry: typeof Step & { [nodeRegistration]?: typeof LatexNodeSourceStep } = Step;
+const existing = nodeRegistry[nodeRegistration];
+if (existing) existing.fromJSON = LatexNodeSourceStep.fromJSON;
+else {
+  Step.jsonID(sourceStepType, LatexNodeSourceStep);
+  nodeRegistry[nodeRegistration] = LatexNodeSourceStep;
+}
+
+/** Edit the source of a LaTeX node without overwriting separate concurrent edits to it. */
+export function updateLatexNodeSource<T extends Transform>(transform: T, position: number, value: string): T {
+  const base: unknown = transform.doc.nodeAt(position)?.attrs.source;
+  if (typeof base !== 'string') throw new RangeError('Expected a LaTeX source node.');
+  if (base !== value) transform.step(new LatexNodeSourceStep(position, base, value));
   return transform;
 }

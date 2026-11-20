@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { TextSelection } from 'prosemirror-state';
 import { Step } from 'prosemirror-transform';
-import { noteState, toggleLatexStyle, undo } from '../src/editor';
+import { noteState, receiveTransaction, sendableSteps, toggleLatexStyle, undo } from '../src/editor';
 import {
   latexBlockAtOffset,
   latexNumbering,
@@ -9,6 +9,7 @@ import {
   parseLatex,
   replaceLatexSource,
   serializeLatex,
+  updateLatexNodeSource,
 } from '../src/latex';
 import { pastedLatexText } from '../src/latex-editor';
 
@@ -104,6 +105,7 @@ test('pasted prose keeps amounts as text and pasted math as math', () => {
   expect(pastedLatexText('costs $5 and $10 per seat')).toBe('costs \\$5 and \\$10 per seat');
   expect(pastedLatexText('pay $5 now')).toBe('pay \\$5 now');
   expect(pastedLatexText('area $x^2$ grows')).toBe('area $x^2$ grows');
+  expect(pastedLatexText('Pay $12 and get $x$.')).toBe('Pay \\$12 and get $x$.');
   expect(pastedLatexText('use $2$ here')).toBe('use $2$ here');
   expect(pastedLatexText('\\begin{verbatim}\n$PATH\n\\end{verbatim}')).toBe(
     '\\begin{verbatim}\n$PATH\n\\end{verbatim}',
@@ -154,4 +156,22 @@ test('footnotes take room from the page of their mark', () => {
   // A mark whose note no longer fits moves to the next page with its note.
   const moved = paginateLatex([line(0), line(10), line(20, [8])], 30, 5);
   expect(moved.footnotes).toEqual([1]);
+});
+
+test('simultaneous edits to separate cells survive collaboration and undo', () => {
+  const source = String.raw`\begin{table}\begin{tabular}{ll} A & B \\ \end{tabular}\end{table}`;
+  const document = parseLatex(source);
+  let left = noteState('', 0, 'left', document);
+  let right = noteState('', 0, 'right', document);
+  const sourceEdit = replaceLatexSource(document, source.replace(' A &', ' Left &'));
+  const leftEdit = left.tr;
+  for (const step of sourceEdit.steps) leftEdit.step(step);
+  left = left.apply(leftEdit);
+  right = right.apply(updateLatexNodeSource(right.tr, 0, source.replace('& B ', '& Right ')));
+  const remote = sendableSteps(left)!;
+  const steps = remote.steps.map((step) => Step.fromJSON(document.type.schema, step.toJSON()));
+  right = right.apply(receiveTransaction(right, steps, ['left']));
+  expect(serializeLatex(right.doc)).toContain('Left & Right');
+  undo(right, (transaction) => { right = right.apply(transaction); });
+  expect(serializeLatex(right.doc)).toContain('Left & B');
 });

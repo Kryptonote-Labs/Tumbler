@@ -162,8 +162,9 @@ export function pastedLatexText(text: string) {
     }
     let close = -1;
     for (let next = text.indexOf('$', open + 1); next >= 0; next = text.indexOf('$', next + 1)) {
-      if (text[next - 1] === '\\' || literal.some(({ from }) => from > open && from < next)) continue;
-      if (/\s/.test(text[next - 1]!) || /\d/.test(text[next + 1] ?? '')) continue;
+      if (text[next - 1] === '\\') continue;
+      if (literal.some(({ from }) => from > open && from < next) ||
+          /\s/.test(text[next - 1]!) || /\d/.test(text[next + 1] ?? '')) break;
       close = next;
       break;
     }
