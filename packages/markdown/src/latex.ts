@@ -176,6 +176,24 @@ const blockCommands = new Set([
   '\\clearpage',
 ]);
 
+// Bibliography commands set the reference list where they stand, so they are blocks. A style
+// and the database list written together form one block.
+const bibliographyCommands = new Set(['\\bibliographystyle', '\\bibliography', '\\printbibliography']);
+
+function bibliographyAt(source: string, position: number) {
+  let end = position;
+  for (let count = 0; count < 2; count++) {
+    const start = count ? whitespaceEnd(source, end) : end;
+    if (count && /\n[^\S\n]*\n/.test(source.slice(end, start))) break;
+    const name = source.slice(start, commandEnd(source, start));
+    if (!bibliographyCommands.has(name)) break;
+    const group = name === '\\printbibliography' ? undefined : groupAt(source, whitespaceEnd(source, start + name.length));
+    if (!group && name !== '\\printbibliography') break;
+    end = group?.end ?? start + name.length;
+  }
+  return end > position ? end : undefined;
+}
+
 function headingLevel(command: string) {
   return command === 'part' || command === 'chapter' ? 1 : latexHeadings.indexOf(command) + 1;
 }
@@ -192,7 +210,12 @@ function blockStart(source: string, position: number) {
   if (source.startsWith('$$', position) || source.startsWith('\\[', position)) return true;
   if (source[position] !== '\\') return false;
   const command = source.slice(position, commandEnd(source, position));
-  return command === '\\begin' || blockCommands.has(command) || headingLevel(command.slice(1)) > 0;
+  return (
+    command === '\\begin' ||
+    blockCommands.has(command) ||
+    bibliographyCommands.has(command) ||
+    headingLevel(command.slice(1)) > 0
+  );
 }
 
 function paragraphEnd(source: string, position: number) {
@@ -331,6 +354,12 @@ function blocks(source: string, depth = 0): { nodes: Node[]; tail: string } {
     if (blockCommands.has(command)) {
       nodes.push(schema.nodes.latex_raw!.create({ before, source: command }));
       position = start + command.length;
+      continue;
+    }
+    const bibliography = bibliographyCommands.has(command) ? bibliographyAt(source, start) : undefined;
+    if (bibliography) {
+      nodes.push(schema.nodes.latex_raw!.create({ before, source: source.slice(start, bibliography) }));
+      position = bibliography;
       continue;
     }
     const heading = source[start] === '\\' ? headingAt(source, start) : undefined;

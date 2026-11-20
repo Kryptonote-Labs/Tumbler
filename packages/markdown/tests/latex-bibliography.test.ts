@@ -61,3 +61,16 @@ test('a preamble database round trips through the document', () => {
   const updated = setLatexBibliographyEntries(written, 'references.bib', entries.slice(0, 1));
   expect(latexBibliographyDatabases(updated)[0]?.entries.map((entry) => entry.key)).toEqual(['knuth84']);
 });
+
+test('the bibliography commands form one block where the reference list prints', () => {
+  const body = 'Text \\cite{a}.\n\n\\bibliographystyle{plain}\n\\bibliography{refs,more}\nAfter.\n';
+  const document = parseLatex(body);
+  const blocks: [string, string][] = [];
+  document.forEach((node) => blocks.push([node.type.name, node.textContent]));
+  expect(blocks).toEqual([
+    ['paragraph', 'Text \\cite{a}.'],
+    ['latex_raw', '\\bibliographystyle{plain}\n\\bibliography{refs,more}'],
+    ['paragraph', 'After.'],
+  ]);
+  expect(serializeLatex(document)).toBe(body);
+});
