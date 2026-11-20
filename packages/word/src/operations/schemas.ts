@@ -5,6 +5,7 @@ import { isWordAuthoredInk } from '../authored-ink.ts';
 import { isWordInkTraceOverrides } from '../ink-overrides.ts';
 import { isShapeTextBody } from '../shape-text.ts';
 import * as z from 'zod';
+import { isMathEquation, type MathEquation } from '@tumblerjs/core/math';
 import { TEXT_FORMATS, isFontSize } from '../collaboration/formatting.ts';
 import { isWordColour } from '../theme-colours.ts';
 import { WORD_HIGHLIGHTS } from '../text-properties.ts';
@@ -118,8 +119,10 @@ export const ink = z
   );
 export const chart = z.custom<import('../authored-chart.ts').WordAuthoredChart>(isWordAuthoredChart).describe('Native chart with width/height in points, content:{xml,workbook?:base64 XLSX}, and optional drawing placement.');
 export const chartContent = z.custom<import('@tumblerjs/charts').ChartContent>(isWordChartContent).describe('Complete chart XML plus optional embedded XLSX base64; chart and data save together.');
+export const equation = z.custom<MathEquation>(isMathEquation).describe('Structured equation {body:[nodes]}: char {kind,value,normal?}, fraction {num,den}, script {base,sub?,sup?}, radical {degree?,body}, delimiter {open,close,body}, nary {operator,sub?,sup?,body}, function {name,body}, accent {accent,body}, limit {position,base,limit}, matrix {rows}.');
 export const objectPatch = z
   .object({
+    equation: equation.optional(),
     shape: shape.optional(),
     image: image.optional(),
     drawing: drawing.optional(),

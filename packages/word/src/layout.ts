@@ -1,4 +1,5 @@
 import { wordVerticalTextMetrics } from './vertical-align.ts';
+import { layoutMath, type MathEquation, type MathLayout } from '@tumblerjs/core/math';
 import { CachedLineSequence, PreparedLineSequence } from './paragraph-lines.ts';
 import { wordShapeGroups } from './shape-groups.ts';
 import { wordFontKerning } from './font-kerning.ts';
@@ -169,8 +170,10 @@ export interface WordLayoutMarker {
 export interface WordLayoutFragment {
   /** Additional advance in points for an isolated justified ordinary space. */
   readonly wordSpacing?: number;
-  readonly kind: "text" | "tab" | "drawing" | "note";
+  readonly kind: "text" | "tab" | "drawing" | "note" | "math";
   readonly field?: WordPageField;
+  /** An inline equation laid out in its run's typography. Paint items are relative to `baseline`. */
+  readonly math?: { readonly equation: MathEquation; readonly layout: MathLayout };
   readonly runElementId: number;
   readonly contentElementId: number;
   readonly text: string;
@@ -310,7 +313,16 @@ export class WordLayoutCache {
   preparedTables = 0;
 }
 
-type ParagraphAtom = GlyphAtom | TabAtom | DrawingAtom | NoteAtom | BreakAtom;
+interface MathAtom extends AtomBase {
+  readonly kind: "math";
+  readonly width: number;
+  readonly ascent: number;
+  readonly descent: number;
+  readonly equation: MathEquation;
+  readonly math: MathLayout;
+}
+
+type ParagraphAtom = GlyphAtom | TabAtom | DrawingAtom | NoteAtom | MathAtom | BreakAtom;
 
 interface AtomBase {
   readonly baselineShift?: number;
@@ -1194,6 +1206,22 @@ function* resolvedParagraphAtoms(
           breakType: content.breakType,
         });
         logicalOffset += 1;
+      } else if (content.kind === "math") {
+        const math = layoutMath(content.equation, {
+          size: format.fontSizePoints,
+          bold: format.bold,
+          measure: (text, style) => validMeasurement(measurer.measure(text, Object.freeze({ ...format, fontSizePoints: style.size, italic: style.italic, bold: style.bold }))).width,
+        });
+        yield Object.freeze({
+          ...controlAtom("math", run, content.elementId, logicalOffset, format, hyperlink),
+          width: math.width,
+          ascent: math.ascent - baselineShift,
+          descent: math.descent + baselineShift,
+          baselineShift,
+          equation: content.equation,
+          math,
+        });
+        logicalOffset += 1;
       } else if (content.kind === "drawing") {
         const drawing = drawings.get(content.elementId);
         const width = drawing?.widthPoints ?? format.fontSizePoints;
@@ -1450,6 +1478,7 @@ function placeLine(
         hyperlink: atom.hyperlink,
         drawing: atom.kind === "drawing" ? atom.drawing : undefined,
         note: atom.kind === "note" ? Object.freeze({ kind: atom.noteKind, id: atom.noteId }) : undefined,
+        ...(atom.kind === "math" ? { math: Object.freeze({ equation: atom.equation, layout: atom.math }) } : {}),
       }));
     }
     cursorX += atomWidth;
@@ -1800,7 +1829,7 @@ function tabAdvance(tab: TabAtom, followingAtoms: () => Iterable<ParagraphAtom>,
   return target - absoluteX - shift;
 }
 
-function controlAtom<K extends "tab" | "drawing" | "break" | "note">(
+function controlAtom<K extends "tab" | "drawing" | "break" | "note" | "math">(
   kind: K,
   run: WordRun,
   contentElementId: number,

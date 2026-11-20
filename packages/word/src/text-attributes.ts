@@ -32,6 +32,8 @@ export type TextAttributes = Partial<Record<TextFormat, boolean>> & {
   characterSpacingPoints?: number;
   breakType?: import("./breaks.ts").WordBreakType;
   shape?: WordAuthoredShape;
+  /** A structured equation on one object character. */
+  equation?: import('@tumblerjs/core/math').MathEquation;
   drawing?: WordDrawingGeometry;
   ink?: WordAuthoredInk;
   inkTraces?: readonly WordInkTraceOverride[];

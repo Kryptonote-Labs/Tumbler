@@ -161,7 +161,7 @@ export function wordParagraphRenderer(
   const runMarkup = (run: WordTextRun, generatedRun: string | undefined, resetStyle = false) => {
     const scope = copies.scopes.get(run) ?? 0;
     ({ emitted, remaining } = stateFor(scope));
-    if ((run.ink || run.shape || run.chart) && run.source === undefined) return remap(generatedRun ?? '');
+    if ((run.ink || run.shape || run.chart || run.equation) && run.source === undefined) return remap(generatedRun ?? '');
     if (run.image && !document.drawings.has(run.source!)) return remap(generatedRun ?? '');
     const original = run.source === undefined ? undefined : originalRuns.get(run.source);
     if (run.source !== undefined && !original) throw new Error('Invalid run source reference.');
@@ -344,7 +344,10 @@ export function wordParagraphRenderer(
           : '<w:numPr><w:numId w:val="0"/></w:numPr>',
       );
     }
-    const generatedRuns = generatedP.inlines.filter((inline) => inline.kind === 'run' || inline.kind === 'hyperlink');
+    // Authored equations export as `m:oMath` siblings, which parse as unsupported inlines.
+    const generatedRuns = generatedP.inlines.filter(
+      (inline) => inline.kind === 'run' || inline.kind === 'hyperlink' || (inline.kind === 'unsupported' && inline.localName === 'oMath'),
+    );
     let content = paragraph.runs
       .map((run, index) =>
         runMarkup(

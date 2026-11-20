@@ -570,7 +570,10 @@ export class NativeWordDocument implements WordLayoutSource {
               validateBreakRun(authoredRun);
               const inherited = compiled?.leaves.get(authoredRun.source!);
               const contents: WordRunContent[] = [];
-              if (authoredRun.chart) {
+              if (authoredRun.equation) {
+                if (authoredRun.text !== '\uFFFC') throw new TypeError('Equations occupy one object character.');
+                contents.push({ kind: 'math', elementId: allocate(), equation: authoredRun.equation });
+              } else if (authoredRun.chart) {
                 if (authoredRun.text !== '\uFFFC') throw new TypeError('Charts occupy one object character.');
                 const id = allocate(); contents.push({ kind: 'drawing', elementId: id });
                 const chart = nativeChartDrawing(id, { ...authoredRun.chart, content: authoredChartContent(authoredRun, this.themeColours, this.namedStyles.themeFonts)! }, width);

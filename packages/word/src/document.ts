@@ -211,7 +211,15 @@ export interface WordPageFieldContent {
   readonly replacedElementIds?: readonly number[];
 }
 
+/** An Office Math zone authored in Tumbler. It exports as `m:oMath` beside its run. */
+export interface WordMathContent {
+  readonly kind: "math";
+  readonly elementId: number;
+  readonly equation: import("@tumblerjs/core/math").MathEquation;
+}
+
 export type WordRunContent =
+  | WordMathContent
   | WordSymbol
   | WordPageFieldContent
   | WordText
