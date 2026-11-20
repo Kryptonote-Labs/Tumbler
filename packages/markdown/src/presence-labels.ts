@@ -2,12 +2,16 @@ import type { EditorView } from 'prosemirror-view';
 
 type Bounds = Pick<DOMRect, 'left' | 'top' | 'right' | 'bottom'>;
 
-/** Names live outside the editor's scrollers; carets and selections stay in the document. */
+/** Names share the document's scroll container while escaping nested code scrollers. */
 export function notePresenceLabels(view: EditorView) {
   const document = view.dom.ownerDocument;
   const window = document.defaultView!;
+  const layer = document.createElement('div');
+  layer.className = 'note-peer-labels';
+  layer.setAttribute('aria-hidden', 'true');
   const labels = new Map<HTMLElement, HTMLSpanElement>();
   let frame: number | undefined;
+  let documentZoom = 1;
 
   function clip(node: HTMLElement | null, bounds: Bounds, stop: HTMLElement | null = null) {
     let { left, top, right, bottom } = bounds;
@@ -29,8 +33,26 @@ export function notePresenceLabels(view: EditorView) {
     }
     return { left, top, right, bottom };
   }
+  function effectiveZoom(node: HTMLElement) {
+    if (node.currentCSSZoom !== undefined) return node.currentCSSZoom;
+    let zoom = 1;
+    for (let ancestor: HTMLElement | null = node; ancestor; ancestor = ancestor.parentElement) {
+      const value = window.getComputedStyle(ancestor).zoom;
+      const factor = value?.endsWith('%') ? Number.parseFloat(value) / 100 : Number(value);
+      zoom *= factor || 1;
+    }
+    return zoom;
+  }
   function position() {
     frame = undefined;
+    if (!layer.isConnected || !layer.parentElement) return;
+    const zoom = effectiveZoom(layer.parentElement);
+    if (zoom !== documentZoom) {
+      documentZoom = zoom;
+      // Keep names in viewport pixels even when the document is zoomed.
+      layer.style.zoom = String(1 / zoom);
+    }
+    const origin = layer.getBoundingClientRect();
     const bounds = clip(view.dom.parentElement, {
       left: 0,
       top: 0,
@@ -71,8 +93,8 @@ export function notePresenceLabels(view: EditorView) {
       };
     });
     for (const { label, left, top, width, visible } of positions) {
-      label.style.left = `${left}px`;
-      label.style.top = `${top}px`;
+      label.style.left = `${left - origin.left}px`;
+      label.style.top = `${top - origin.top}px`;
       label.style.maxWidth = `${width}px`;
       label.style.visibility = visible ? 'visible' : 'hidden';
     }
@@ -99,10 +121,11 @@ export function notePresenceLabels(view: EditorView) {
         caret.style.getPropertyValue('--note-peer-color'),
       );
       label.style.visibility = 'hidden';
-      label.setAttribute('aria-hidden', 'true');
-      document.body.append(label);
+      layer.append(label);
       labels.set(caret, label);
     }
+    if (!labels.size) layer.remove();
+    else if (layer.parentNode !== view.dom.parentNode) view.dom.after(layer);
     schedule();
   }
   const resize = new window.ResizeObserver(schedule);
@@ -125,7 +148,7 @@ export function notePresenceLabels(view: EditorView) {
       resize.disconnect();
       mutation.disconnect();
       if (frame !== undefined) window.cancelAnimationFrame(frame);
-      for (const label of labels.values()) label.remove();
+      layer.remove();
       labels.clear();
     },
   };
