@@ -11,7 +11,14 @@ import { InputRule, inputRules, undoInputRule, wrappingInputRule } from 'prosemi
 import { keymap } from 'prosemirror-keymap';
 import { Fragment, Slice, type Mark, type Node } from 'prosemirror-model';
 import { liftListItem, sinkListItem, splitListItem } from 'prosemirror-schema-list';
-import { EditorState, Plugin, TextSelection, type Command } from 'prosemirror-state';
+import {
+  EditorState,
+  Plugin,
+  PluginKey,
+  TextSelection,
+  type Command,
+  type Transaction,
+} from 'prosemirror-state';
 import type { EditorView, NodeViewConstructor } from 'prosemirror-view';
 import { noteSchema as schema } from './index';
 import { latexClipboard } from './latex-clipboard';
@@ -177,9 +184,10 @@ function latexInputRules() {
         // followed by a space or digit is currency, not an opening delimiter.
         if (unfinishedDollar.test(before) || before.lastIndexOf('\\(') > before.lastIndexOf('\\)'))
           return null;
-        return state.tr
-          .replaceWith(start, end, schema.nodes.latex_math!.create({ source: match[1] }))
-          .insertText(' ', start + 1);
+        return spaceAfter(
+          state.tr.replaceWith(start, end, schema.nodes.latex_math!.create({ source: match[1] })),
+          start + 1,
+        );
       }),
       math(/^\$\$([^$]+)\$\$$/, true, '$$', '$$'),
       math(/^\\\[([^\n]+)\\\]$/, true, '\\[', '\\]'),
@@ -201,6 +209,62 @@ function latexInputRules() {
       wrappingInputRule(/^1\. $/, schema.nodes.ordered_list!),
     ],
   });
+}
+
+// LaTeX paragraphs collapse whitespace like TeX, so a browser types a space at the end of a
+// paragraph as U+00A0 to keep it visible. Keep that character only while the caret follows it,
+// then store an ordinary space. A tie (~) written in source is never changed.
+const typedSpaceKey = new PluginKey<number | null>('latex-typed-space');
+
+function typedSpaces() {
+  let normalizing = false;
+  return new Plugin<number | null>({
+    key: typedSpaceKey,
+    state: {
+      init: () => null,
+      apply(tr, position) {
+        const typed = tr.getMeta(typedSpaceKey) as number | null | undefined;
+        if (typed !== undefined) return typed;
+        if (position === null) return null;
+        const mapped = tr.mapping.mapResult(position, 1);
+        return mapped.deleted ? null : mapped.pos;
+      },
+    },
+    props: {
+      handleTextInput(view, from, to, text) {
+        if (normalizing || !text.endsWith('\u00a0')) return false;
+        const plain = text.slice(0, -1) + ' ';
+        // Typing shortcuts such as \alpha followed by a space see an ordinary space.
+        normalizing = true;
+        try {
+          const handled = view.someProp('handleTextInput', (handle) =>
+            handle(view, from, to, plain, () => view.state.tr.insertText(plain, from, to)),
+          );
+          if (handled) return true;
+        } finally {
+          normalizing = false;
+        }
+        const tr = view.state.tr.insertText(text, from, to);
+        view.dispatch(tr.setMeta(typedSpaceKey, from + text.length - 1));
+        return true;
+      },
+    },
+    appendTransaction(_transactions, _old, state) {
+      const position = typedSpaceKey.getState(state);
+      if (position === null || position === undefined) return;
+      const typedSpace = state.doc.textBetween(position, position + 1) === '\u00a0';
+      if (typedSpace && state.selection.empty && state.selection.head === position + 1) return;
+      const tr = state.tr.setMeta(typedSpaceKey, null).setMeta('addToHistory', false);
+      return typedSpace ? tr.insertText(' ', position, position + 1) : tr;
+    },
+  });
+}
+
+/** A space after a typing shortcut, kept visible when it ends the paragraph. */
+function spaceAfter(tr: Transaction, position: number) {
+  const $position = tr.doc.resolve(position);
+  if (position < $position.end()) return tr.insertText(' ', position);
+  return tr.insertText('\u00a0', position).setMeta(typedSpaceKey, position);
 }
 
 function continueAfterLatexBlock(view: EditorView, event: MouseEvent) {
@@ -242,6 +306,7 @@ export function latexState(
     schema,
     doc: document,
     plugins: [
+      typedSpaces(),
       latexInputRules(),
       latexNumberingPlugin(),
       notePresencePlugin(),

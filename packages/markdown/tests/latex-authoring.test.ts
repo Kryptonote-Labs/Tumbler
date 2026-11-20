@@ -126,16 +126,21 @@ test('typing dollars keeps currency as text and turns delimited formulas into ma
         return state;
       },
       composing: false,
+      someProp<T>(name: 'handleTextInput', apply: (handle: never) => T) {
+        for (const plugin of state.plugins) {
+          const handle = plugin.props[name];
+          const result = handle && apply(handle.bind(plugin) as never);
+          if (result) return result;
+        }
+      },
       dispatch: (tr: Parameters<EditorState['apply']>[0]) => {
         state = state.apply(tr);
       },
     } as unknown as EditorView;
     for (const character of text) {
       const { from, to } = state.selection;
-      const handled = state.plugins.some((plugin) =>
-        plugin.props.handleTextInput?.call(plugin, view, from, to, character, () =>
-          state.tr.insertText(character, from, to),
-        ),
+      const handled = view.someProp('handleTextInput', (handle) =>
+        handle(view, from, to, character, () => state.tr.insertText(character, from, to)),
       );
       if (!handled) view.dispatch(state.tr.insertText(character, from, to));
     }
@@ -144,7 +149,12 @@ test('typing dollars keeps currency as text and turns delimited formulas into ma
   expect(typed('costs $5 and $10 ')).toBe('costs \\$5 and \\$10 ');
   expect(typed('from $5-$')).toBe('from \\$5-\\$');
   expect(typed('area $x^2$')).toBe('area $x^2$');
-  expect(typed('price $5, then \\alpha ')).toBe('price \\$5, then \\(\\alpha\\) ');
+  expect(typed('price $5, then \\alpha x')).toBe('price \\$5, then \\(\\alpha\\) x');
+  // Browsers type a trailing space as U+00A0 in collapsed whitespace. Shortcuts still see a
+  // space, and the character becomes a space once typing continues.
+  expect(typed('Ratio \\alpha\u00a0')).toBe('Ratio \\(\\alpha\\)~');
+  expect(typed('Ratio \\alpha\u00a0x')).toBe('Ratio \\(\\alpha\\) x');
+  expect(typed('one\u00a0two\u00a0')).toBe('one two~');
 });
 
 test('the editor decorates numbered equations, floats and resolvable references', () => {
