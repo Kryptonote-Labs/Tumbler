@@ -41,7 +41,32 @@
   );
   const highlighted = $derived(selection ? mathSelectionRects(layout, selection) : []);
   let svg = $state<SVGSVGElement>();
-  let dragging = false;
+
+  // Native listeners, not delegated ones: hosts such as editable text stop propagation before
+  // a press would reach the document root.
+  function press(node: SVGSVGElement) {
+    let dragging = false;
+    const down = (event: PointerEvent) => {
+      if (!onposition || event.button !== 0) return;
+      dragging = true;
+      node.setPointerCapture(event.pointerId);
+      onposition(position(event), event.shiftKey, event);
+    };
+    const move = (event: PointerEvent) => {
+      if (dragging) onposition?.(position(event), true, event);
+    };
+    const up = () => (dragging = false);
+    node.addEventListener('pointerdown', down);
+    node.addEventListener('pointermove', move);
+    node.addEventListener('pointerup', up);
+    node.addEventListener('pointercancel', up);
+    return () => {
+      node.removeEventListener('pointerdown', down);
+      node.removeEventListener('pointermove', move);
+      node.removeEventListener('pointerup', up);
+      node.removeEventListener('pointercancel', up);
+    };
+  }
 
   function position(event: PointerEvent) {
     const box = svg!.getBoundingClientRect();
@@ -62,17 +87,7 @@
   aria-hidden="true"
   style:color
   style:font-family={fontFamily}
-  onpointerdown={(event) => {
-    if (!onposition || event.button !== 0) return;
-    dragging = true;
-    svg?.setPointerCapture(event.pointerId);
-    onposition(position(event), event.shiftKey, event);
-  }}
-  onpointermove={(event) => {
-    if (dragging) onposition?.(position(event), true, event);
-  }}
-  onpointerup={() => (dragging = false)}
-  onpointercancel={() => (dragging = false)}
+  {@attach press}
 >
   {#each highlighted as rect}
     <rect class="selection" x={rect.x} y={rect.y} width={rect.width} height={rect.height} />
