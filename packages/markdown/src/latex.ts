@@ -37,6 +37,27 @@ export {
 } from './latex-bibliography';
 export type { BibEntry, LatexBibliographyDatabase } from './latex-bibliography';
 export type { LatexNumbering } from './latex-numbering';
+export { findLatexCommand } from './latex-scan';
+export {
+  latexFigureSource,
+  readLatexCaption,
+  readLatexFigure,
+  setLatexCaption,
+  setLatexFigureImage,
+  setLatexFigureWidth,
+} from './latex-figures';
+export {
+  deleteLatexTableColumn,
+  deleteLatexTableRow,
+  insertLatexTableColumn,
+  insertLatexTableRow,
+  latexTableCellText,
+  latexTableSource,
+  readLatexTabular,
+  setLatexTableCell,
+  writeLatexTabular,
+} from './latex-tables';
+export type { LatexTabular } from './latex-tables';
 
 export const blankLatex =
   '\\documentclass{article}\n\\usepackage{amsmath}\n\\setlength{\\parindent}{0pt}\n\\setlength{\\parskip}{0.5\\baselineskip plus 2pt}\n\n\\begin{document}\n\n\\end{document}\n';
