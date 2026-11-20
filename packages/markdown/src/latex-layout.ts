@@ -75,7 +75,15 @@ function readOptions(prefix: string) {
     if (value === 'landscape' || value === 'portrait') orientation = value;
     if (/^(10|11|12)pt$/.test(value)) fontSize = Number.parseFloat(value);
   }
-  return { source, geometry, geometryOptions, paperSize, orientation, fontSize, classOptions };
+  return {
+    source,
+    geometry,
+    geometryOptions,
+    paperSize,
+    orientation,
+    fontSize,
+    classOptions,
+  };
 }
 
 export function latexPaperSettings(prefix: string) {
@@ -88,9 +96,28 @@ export function latexPaperSettings(prefix: string) {
   return { paperSize, orientation, margin };
 }
 
-function paragraphLengths(source: string, quad: number, defaultIndent: number) {
+/** A literal TeX length, also accepting multiples of `\\baselineskip`. */
+function length(value: string | undefined, quad: number, leading: number) {
+  const measure = value
+    ?.trim()
+    .split(/\s+(?:plus|minus)\s+/)[0]
+    ?.trim();
+  const skip = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+)?)\s*\\baselineskip$/.exec(measure ?? '');
+  if (skip) return (skip[1] === '' || skip[1] === undefined ? 1 : Number(skip[1])) * leading;
+  return dimension(measure, quad);
+}
+
+function packageOptions(source: string, position: number, name: string) {
+  const match = /\\usepackage\s*(?:\[([^\]]*)\])?\s*\{([^{}]*)\}/y;
+  match.lastIndex = position;
+  const found = match.exec(source);
+  if (!found || !found[2]!.split(',').some((entry) => entry.trim() === name)) return;
+  return { options: found[1] ?? '', end: match.lastIndex };
+}
+
+function paragraphLengths(source: string, quad: number, defaultIndent: number, leading: number) {
   const lengths = { parindent: defaultIndent, parskip: 0 };
-  // Apply literal TeX registers and LaTeX length commands in source order.
+  // Apply literal TeX registers, LaTeX length commands and the parskip package in source order.
   const assignments =
     /\\(?:(setlength|addtolength)\s*(?:\{\s*\\(parindent|parskip)\s*\}|\\(parindent|parskip)\b)\s*\{([^{}]*)\}|(parindent|parskip)\s*(?:=\s*)?([+-]?(?:\d+(?:\.\d*)?|\.\d+)\s*(?:in|cm|mm|pt|bp|pc|sp|dd|cc|em))\b)/y;
   for (let position = 0; position < source.length;) {
@@ -102,6 +129,22 @@ function paragraphLengths(source: string, quad: number, defaultIndent: number) {
       position++;
       continue;
     }
+    const parskip = packageOptions(source, position, 'parskip');
+    if (parskip) {
+      // parskip 2: no indent and half a line between paragraphs, unless options say otherwise.
+      const options = new Map(
+        parskip.options.split(',').map((option) => {
+          const [key = '', value] = option.split('=');
+          return [key.trim(), value?.trim()] as const;
+        }),
+      );
+      lengths.parskip = length(options.get('skip'), quad, leading) ?? leading / 2;
+      lengths.parindent = options.has('indent')
+        ? (length(options.get('indent'), quad, leading) ?? quad)
+        : 0;
+      position = parskip.end;
+      continue;
+    }
     assignments.lastIndex = position;
     const assignment = assignments.exec(source);
     position = assignment ? assignments.lastIndex : commandEnd(source, position);
@@ -109,10 +152,9 @@ function paragraphLengths(source: string, quad: number, defaultIndent: number) {
     const [, operation, grouped, bare, argument, register, literal] = assignment;
     const name = grouped ?? bare ?? register;
     if (name !== 'parindent' && name !== 'parskip') continue;
-    const measure = (argument ?? literal)?.trim().split(/\s+(?:plus|minus)\s+/)[0];
-    const length = dimension(measure, quad);
-    if (length === undefined) continue;
-    lengths[name] = operation === 'addtolength' ? lengths[name] + length : length;
+    const value = length(argument ?? literal, quad, leading);
+    if (value === undefined) continue;
+    lengths[name] = operation === 'addtolength' ? lengths[name] + value : value;
   }
   return lengths;
 }
@@ -137,7 +179,7 @@ export function latexPageLayout(prefix: string): LatexPageLayout {
     : fontSize === 12
       ? 1.5 * quad
       : (fontSize === 11 ? 17 : 15) * texPoint;
-  const paragraphs = paragraphLengths(source, quad, defaultIndent);
+  const paragraphs = paragraphLengths(source, quad, defaultIndent, leading);
 
   const sizes = new Map(
     geometryOptions.map((option) => {
@@ -220,7 +262,10 @@ export function latexPageLayout(prefix: string): LatexPageLayout {
 }
 
 export type PageLine = { position: number; top: number; bottom: number };
-export type PageBlock = PageLine & { split?: () => PageLine[]; force?: boolean };
+export type PageBlock = PageLine & {
+  split?: () => PageLine[];
+  force?: boolean;
+};
 export type PageBreak = { position: number; height: number };
 
 /** Place spacers into the continuous editor while keeping page breaks out of document history. */
@@ -235,7 +280,10 @@ export function paginateLatex(blocks: PageBlock[], bodyHeight: number, spacing: 
     const stride = bodyHeight + spacing;
     const distance = line.top - start;
     const advanceBy = Math.max(1, Math.floor(distance / stride) + 1);
-    breaks.push({ position: line.position, height: advanceBy * stride - distance });
+    breaks.push({
+      position: line.position,
+      height: advanceBy * stride - distance,
+    });
     pages += advanceBy;
     start = line.top;
     occupied = false;

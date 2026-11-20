@@ -110,6 +110,12 @@ export function insertLatexMath(display: boolean): Command {
 const mathSymbol =
   /(?<![\w\\$])(\\(?:infty|alpha|beta|gamma|delta|epsilon|theta|lambda|mu|pi|rho|sigma|phi|omega|Gamma|Delta|Theta|Lambda|Pi|Sigma|Phi|Omega|times|cdot|pm|leq|geq|neq|approx|to|rightarrow|leftarrow|sum|prod|int|partial|nabla)) $/;
 
+// Like Pandoc, `$` opens math only before a non-space and closes it only after a non-space,
+// so "costs $5 and $10" stays text. A digit-led span with no letters or operators is currency.
+const inlineDollars = /(?<![\\$\w])\$(?=[^\s$])([^$\n]*[^\s$\\])\$$/;
+const currency = /^\d[\d.,]*(?:\s|[-–/]|$)(?![\s\S]*[A-Za-z\\^_=+*<>])/;
+const unfinishedDollar = /(?<![\\$])\$(?=[^\s$\d])[^$]*$/;
+
 function latexInputRules() {
   const formatting = (pattern: RegExp, style: Style) =>
     new InputRule(pattern, (state, match, start, end) => {
@@ -165,11 +171,9 @@ function latexInputRules() {
       new InputRule(mathSymbol, (state, match, start, end) => {
         const position = state.doc.resolve(start);
         const before = position.parent.textBetween(0, position.parentOffset);
-        // Leave unfinished explicit math alone until its closing delimiter arrives.
-        if (
-          (before.match(/(?<!\\)\$\$?/g)?.length ?? 0) % 2 ||
-          before.lastIndexOf('\\(') > before.lastIndexOf('\\)')
-        )
+        // Leave unfinished explicit math alone until its closing delimiter arrives. A dollar
+        // followed by a space or digit is currency, not an opening delimiter.
+        if (unfinishedDollar.test(before) || before.lastIndexOf('\\(') > before.lastIndexOf('\\)'))
           return null;
         return state.tr
           .replaceWith(start, end, schema.nodes.latex_math!.create({ source: match[1] }))
@@ -178,7 +182,19 @@ function latexInputRules() {
       math(/^\$\$([^$]+)\$\$$/, true, '$$', '$$'),
       math(/^\\\[([^\n]+)\\\]$/, true, '\\[', '\\]'),
       math(/\\\(([^\n]+)\\\)$/, false, '\\(', '\\)'),
-      math(/(?<![\\$])\$([^$\n]+)\$$/, false, '$', '$'),
+      new InputRule(inlineDollars, (state, match, start, end) =>
+        currency.test(match[1]!)
+          ? null
+          : state.tr.replaceWith(
+              start,
+              end,
+              schema.nodes.latex_math!.create({
+                source: match[1],
+                open: '$',
+                close: '$',
+              }),
+            ),
+      ),
       wrappingInputRule(/^[-*] $/, schema.nodes.bullet_list!),
       wrappingInputRule(/^1\. $/, schema.nodes.ordered_list!),
     ],
