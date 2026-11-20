@@ -87,3 +87,6 @@ export { chartDataHighlights } from './chart-data-highlights.ts';
 export { parseSpreadsheetClipboard } from './spreadsheet-clipboard.ts';
 
 export type { ChartDesignControls } from './chart-design-controls.ts';
+
+export { default as MathGraphic } from "./MathGraphic.svelte";
+export { browserMathMeasure } from "./math-measure.ts";
