@@ -669,10 +669,11 @@ export function setPresentationEquation(
   let offset = 0;
   for (const p of body ? elements(body).filter((e) => e.localName === "p") : []) {
     for (const r of elements(p).filter((e) => e.localName === "r" || e.localName === "br" || isEquationElement(e))) {
-      if (isEquationElement(r) && offset === range.start && range.end === range.start + 1) {
-        const pr = equationRunProperties(r);
+      // An equation keeps its math run typography; an empty one has none, so it takes the text's.
+      const pr = isEquationElement(r) && offset === range.start && range.end === range.start + 1 && equationRunProperties(r);
+      if (pr) {
         const editor = beginLosslessXmlEdit(source);
-        editor.replaceElementMarkup(r, equationMarkup(equation, pr ? raw(source, pr) : ""));
+        editor.replaceElementMarkup(r, equationMarkup(equation, raw(source, pr)));
         return editor.commit().bytes;
       }
       offset += isEquationElement(r) || r.localName === "br" ? 1 : (child(r, "t")?.children ?? [])
