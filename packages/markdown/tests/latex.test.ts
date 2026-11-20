@@ -104,6 +104,10 @@ test('pasted prose keeps amounts as text and pasted math as math', () => {
   expect(pastedLatexText('costs $5 and $10 per seat')).toBe('costs \\$5 and \\$10 per seat');
   expect(pastedLatexText('pay $5 now')).toBe('pay \\$5 now');
   expect(pastedLatexText('area $x^2$ grows')).toBe('area $x^2$ grows');
+  expect(pastedLatexText('use $2$ here')).toBe('use $2$ here');
+  expect(pastedLatexText('\\begin{verbatim}\n$PATH\n\\end{verbatim}')).toBe(
+    '\\begin{verbatim}\n$PATH\n\\end{verbatim}',
+  );
   expect(pastedLatexText('$$a$$ and \\$3')).toBe('$$a$$ and \\$3');
 });
 

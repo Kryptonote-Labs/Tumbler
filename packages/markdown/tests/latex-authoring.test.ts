@@ -152,10 +152,10 @@ test('typing dollars keeps currency as text and turns delimited formulas into ma
   expect(typed('area $x^2$')).toBe('area $x^2$');
   expect(typed('price $5, then \\alpha x')).toBe('price \\$5, then \\(\\alpha\\) x');
   // Browsers type a trailing space as U+00A0 in collapsed whitespace. Shortcuts still see a
-  // space, and the character becomes a space once typing continues.
-  expect(typed('Ratio \\alpha\u00a0')).toBe('Ratio \\(\\alpha\\)~');
+  // space, and the source always contains an ordinary space.
+  expect(typed('Ratio \\alpha\u00a0')).toBe('Ratio \\(\\alpha\\) ');
   expect(typed('Ratio \\alpha\u00a0x')).toBe('Ratio \\(\\alpha\\) x');
-  expect(typed('one\u00a0two\u00a0')).toBe('one two~');
+  expect(typed('one\u00a0two\u00a0')).toBe('one two ');
 });
 
 test('the editor decorates numbered equations, floats and resolvable references', () => {

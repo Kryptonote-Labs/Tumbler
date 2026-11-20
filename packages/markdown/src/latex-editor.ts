@@ -19,7 +19,8 @@ import {
   type Command,
   type Transaction,
 } from 'prosemirror-state';
-import type { EditorView, NodeViewConstructor } from 'prosemirror-view';
+import { Decoration, DecorationSet, type EditorView, type NodeViewConstructor } from 'prosemirror-view';
+import { environmentAt, verbatimEnd } from './latex-syntax';
 import { noteSchema as schema } from './index';
 import { latexClipboard } from './latex-clipboard';
 import { latexHeadings, parseLatex, serializeLatex } from './latex';
@@ -132,11 +133,26 @@ const unfinishedDollar = /(?<![\\$])\$(?=[^\s$\d])[^$]*$/;
  */
 export function pastedLatexText(text: string) {
   if (/\\(?:documentclass|begin\s*\{document\})/.test(text)) return text;
+  const literal: { from: number; to: number }[] = [];
+  for (const match of text.matchAll(/(?<!\\)\\(?:begin\s*\{(?:verbatim\*?|Verbatim|lstlisting|minted)\}|verb\*?(?![A-Za-z]))/g)) {
+    const from = match.index;
+    if (from < (literal.at(-1)?.to ?? 0)) continue;
+    const to = match[0].startsWith('\\begin')
+      ? environmentAt(text, from)?.end ?? text.length
+      : verbatimEnd(text, from + match[0].length);
+    literal.push({ from, to });
+  }
   let result = '';
   let position = 0;
   while (position < text.length) {
     const open = text.indexOf('$', position);
     if (open < 0) break;
+    const protectedText = literal.find(({ from, to }) => from <= open && open < to);
+    if (protectedText) {
+      result += text.slice(position, protectedText.to);
+      position = protectedText.to;
+      continue;
+    }
     if (text[open - 1] === '\\' || text[open + 1] === '$') {
       const skip = text[open + 1] === '$' ? text.indexOf('$$', open + 2) : open;
       const end = skip < 0 ? text.length : skip + (text[open + 1] === '$' ? 2 : 1);
@@ -146,13 +162,13 @@ export function pastedLatexText(text: string) {
     }
     let close = -1;
     for (let next = text.indexOf('$', open + 1); next >= 0; next = text.indexOf('$', next + 1)) {
-      if (text[next - 1] === '\\') continue;
+      if (text[next - 1] === '\\' || literal.some(({ from }) => from > open && from < next)) continue;
       if (/\s/.test(text[next - 1]!) || /\d/.test(text[next + 1] ?? '')) continue;
       close = next;
       break;
     }
     const content = close < 0 ? '' : text.slice(open + 1, close);
-    const math = close > open + 1 && !/^\s/.test(content) && !content.includes('\n') && !currency.test(content);
+    const math = close > open + 1 && !/^\s/.test(content) && !content.includes('\n') && (!currency.test(content) || /^\d+(?:[.,]\d+)?$/.test(content));
     if (math) {
       result += text.slice(position, close + 1);
       position = close + 1;
@@ -250,9 +266,7 @@ function latexInputRules() {
   });
 }
 
-// LaTeX paragraphs collapse whitespace like TeX, so a browser types a space at the end of a
-// paragraph as U+00A0 to keep it visible. Keep that character only while the caret follows it,
-// then store an ordinary space. A tie (~) written in source is never changed.
+// A trailing space needs to be visible to the caret, but must stay an ordinary space in TeX.
 const typedSpaceKey = new PluginKey<number | null>('latex-typed-space');
 
 function typedSpaces() {
@@ -262,18 +276,25 @@ function typedSpaces() {
     state: {
       init: () => null,
       apply(tr, position) {
-        const typed = tr.getMeta(typedSpaceKey) as number | null | undefined;
+        const typed = tr.getMeta(typedSpaceKey) as number | undefined;
         if (typed !== undefined) return typed;
         if (position === null) return null;
         const mapped = tr.mapping.mapResult(position, 1);
-        return mapped.deleted ? null : mapped.pos;
+        return mapped.deleted || !tr.selection.empty || tr.selection.head !== mapped.pos + 1
+          ? null : mapped.pos;
       },
     },
     props: {
+      decorations(state) {
+        const position = typedSpaceKey.getState(state);
+        if (position === null || position === undefined) return;
+        return DecorationSet.create(state.doc, [
+          Decoration.inline(position, position + 1, { class: 'latex-typed-space' }),
+        ]);
+      },
       handleTextInput(view, from, to, text) {
         if (normalizing || !text.endsWith('\u00a0')) return false;
         const plain = text.slice(0, -1) + ' ';
-        // Typing shortcuts such as \alpha followed by a space see an ordinary space.
         normalizing = true;
         try {
           const handled = view.someProp('handleTextInput', (handle) =>
@@ -283,27 +304,16 @@ function typedSpaces() {
         } finally {
           normalizing = false;
         }
-        const tr = view.state.tr.insertText(text, from, to);
+        const tr = view.state.tr.insertText(plain, from, to);
         view.dispatch(tr.setMeta(typedSpaceKey, from + text.length - 1));
         return true;
       },
     },
-    appendTransaction(_transactions, _old, state) {
-      const position = typedSpaceKey.getState(state);
-      if (position === null || position === undefined) return;
-      const typedSpace = state.doc.textBetween(position, position + 1) === '\u00a0';
-      if (typedSpace && state.selection.empty && state.selection.head === position + 1) return;
-      const tr = state.tr.setMeta(typedSpaceKey, null).setMeta('addToHistory', false);
-      return typedSpace ? tr.insertText(' ', position, position + 1) : tr;
-    },
   });
 }
 
-/** A space after a typing shortcut, kept visible when it ends the paragraph. */
 function spaceAfter(tr: Transaction, position: number) {
-  const $position = tr.doc.resolve(position);
-  if (position < $position.end()) return tr.insertText(' ', position);
-  return tr.insertText('\u00a0', position).setMeta(typedSpaceKey, position);
+  return tr.insertText(' ', position).setMeta(typedSpaceKey, position);
 }
 
 function continueAfterLatexBlock(view: EditorView, event: MouseEvent) {
