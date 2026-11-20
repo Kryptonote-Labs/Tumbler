@@ -2,7 +2,8 @@
   import type { SpreadsheetDrawingObject } from '@tumblerjs/sheets';
   import type { MathPosition } from '@tumblerjs/core/math';
   import SpreadsheetDrawingImage from './SpreadsheetDrawingImage.svelte';
-  import SpreadsheetEquation, { type SpreadsheetEquationEditing } from './SpreadsheetEquation.svelte';
+  import SpreadsheetEquation from './SpreadsheetEquation.svelte';
+  import type { SpreadsheetEquationEditing } from './spreadsheet-equation.ts';
   let {
     object,
     equation,

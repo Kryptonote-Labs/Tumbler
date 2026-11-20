@@ -42,7 +42,7 @@
   import { spreadsheetSelectionRects, spreadsheetSelectionRanges } from "./spreadsheet-selection.ts";
   import { spreadsheetCellLayer } from "./spreadsheet-cell-layer.ts";
   import SpreadsheetDrawingObject from "./SpreadsheetDrawingObject.svelte";
-  import type { SpreadsheetEquationEditing } from "./SpreadsheetEquation.svelte";
+  import type { SpreadsheetEquationEditing } from "./spreadsheet-equation.ts";
   import type { MathPosition } from "@tumblerjs/core/math";
   import SpreadsheetChart from "./SpreadsheetChart.svelte";
   import { resizeDrawingBounds } from "./spreadsheet-drawing-handles.ts";

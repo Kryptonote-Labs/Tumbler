@@ -2,7 +2,7 @@ export { default as WordInkPageLayer } from "./WordInkPageLayer.svelte";
 /** Replaceable Svelte heads for Tumbler's format packages. */
 /** Owned Svelte heads for Tumbler's format-neutral document models. */
 export { default as SpreadsheetGrid } from "./SpreadsheetGrid.svelte";
-export type { SpreadsheetEquationEditing } from "./SpreadsheetEquation.svelte";
+export type { SpreadsheetEquationEditing } from "./spreadsheet-equation.ts";
 export { default as SpreadsheetFormulaBar } from "./SpreadsheetFormulaBar.svelte";
 export { default as FormattingToolbar } from "./FormattingToolbar.svelte";
 export { default as OoxmlChart } from "./OoxmlChart.svelte";

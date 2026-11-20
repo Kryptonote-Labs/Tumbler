@@ -1,21 +1,10 @@
-<script lang="ts" module>
-  import type { MathEquation, MathPosition, MathSelection } from "@tumblerjs/core/math";
-
-  /** The equation text box a host is editing; `math` shows edits the host has yet to commit. */
-  export interface SpreadsheetEquationEditing {
-    objectId: number;
-    math: MathEquation;
-    selection: MathSelection;
-    focused: boolean;
-  }
-</script>
-
 <script lang="ts">
-  import { EQUATION_FONT, layoutMath, mathCaretRect } from "@tumblerjs/core/math";
+  import { EQUATION_FONT, layoutMath, mathCaretRect, type MathPosition } from "@tumblerjs/core/math";
   import type { SpreadsheetDrawingEquation } from "@tumblerjs/sheets";
   import MathGraphic from "./MathGraphic.svelte";
   import { cssFontFamily } from "./font-family.ts";
   import { browserMathMeasure } from "./math-measure.ts";
+  import type { SpreadsheetEquationEditing } from "./spreadsheet-equation.ts";
 
   // An Excel equation text box's math, drawn in the drawing's own pixel space.
   let {
