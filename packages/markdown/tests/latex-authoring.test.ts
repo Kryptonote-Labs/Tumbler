@@ -101,10 +101,11 @@ test('numbering follows the standard classes and resolves labels to printed numb
   ).toBeUndefined();
 });
 
-test('new documents use spaced, unindented paragraphs from the parskip package', () => {
+test('new documents use spaced, unindented paragraphs and parskip is understood', () => {
   const pixelsPerPoint = 96 / 72.27;
   const blank = latexPageLayout(parseLatex(blankLatex).attrs.prefix);
-  expect(blankLatex).toContain('\\usepackage{parskip}');
+  // Plain lengths, so the file compiles without the optional parskip package.
+  expect(blankLatex).toContain('\\setlength{\\parskip}{0.5\\baselineskip plus 2pt}');
   expect(blank.paragraphIndent).toBe(0);
   expect(blank.paragraphSpacing).toBeCloseTo(blank.leading / 2);
   const options = latexPageLayout('\\usepackage[skip=10pt,indent]{parskip}');

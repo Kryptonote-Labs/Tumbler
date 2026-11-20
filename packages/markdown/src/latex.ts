@@ -28,7 +28,7 @@ export { latexEquationRows, latexNumbering } from './latex-numbering';
 export type { LatexNumbering } from './latex-numbering';
 
 export const blankLatex =
-  '\\documentclass{article}\n\\usepackage{amsmath}\n\\usepackage{parskip}\n\n\\begin{document}\n\n\\end{document}\n';
+  '\\documentclass{article}\n\\usepackage{amsmath}\n\\setlength{\\parindent}{0pt}\n\\setlength{\\parskip}{0.5\\baselineskip plus 2pt}\n\n\\begin{document}\n\n\\end{document}\n';
 export const latexHeadings = [
   'section',
   'subsection',
