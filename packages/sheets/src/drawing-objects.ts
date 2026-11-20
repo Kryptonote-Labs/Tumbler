@@ -4,6 +4,7 @@ import { readSpreadsheetStyles } from './styles.ts';
 import { spreadsheetDrawingBounds } from './drawings.ts';
 import type { SpreadsheetWorksheet } from './worksheet.ts';
 import type { SpreadsheetWorkbook } from './workbook.ts';
+import { drawingContent, readDrawingEquation, type SpreadsheetDrawingEquation } from './drawing-equations.ts';
 
 /** Read-only drawing projection. Source XML and relationships remain in the package. */
 export interface SpreadsheetDrawingObject {
@@ -23,6 +24,8 @@ export interface SpreadsheetDrawingObject {
   readonly stroke: string;
   readonly strokeWidth: number;
   readonly text: string;
+  /** Set when the shape is an Office Math text box; `text` is then empty. */
+  readonly equation: SpreadsheetDrawingEquation | undefined;
   readonly image: { readonly bytes: Uint8Array; readonly contentType: string } | undefined;
   readonly children: readonly SpreadsheetDrawingObject[];
   /** Group child space: children are offset by -child and scaled into the group's extent. */
@@ -36,6 +39,7 @@ export interface SpreadsheetDrawingObjectFrame {
 export function readSpreadsheetDrawingObjects(workbook: SpreadsheetWorkbook, drawing: SpreadsheetDrawing, worksheet?: SpreadsheetWorksheet): readonly SpreadsheetDrawingObjectFrame[] {
   const ns = OOXML_NAMESPACES[workbook.conformance];
   const relNs = workbook.conformance === 'strict' ? 'http://purl.oclc.org/ooxml/officeDocument/relationships' : 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+  const content = (e: LosslessXmlElement) => drawingContent(e).filter(n => n.namespaceUri === ns.drawing || n.namespaceUri === ns.spreadsheetDrawing);
   const children = (e: LosslessXmlElement | undefined, name?: string) => e?.children.filter((n): n is LosslessXmlElement => n.kind === 'element' && (n.namespaceUri === ns.drawing || n.namespaceUri === ns.spreadsheetDrawing) && (name === undefined || n.localName === name)) ?? [];
   const child = (e: LosslessXmlElement | undefined, name: string) => children(e, name)[0];
   const attr = (e: LosslessXmlElement | undefined, name: string) => e?.attributes.find(a => a.localName === name && a.namespaceUri === '')?.value;
@@ -62,6 +66,7 @@ export function readSpreadsheetDrawingObjects(workbook: SpreadsheetWorkbook, dra
     const geometry = child(properties, 'prstGeom') ?? child(properties, 'custGeom');
     const line = child(properties, 'ln');
     const body = child(e, 'txBody');
+    const equation = body && readDrawingEquation(e);
     let image: SpreadsheetDrawingObject['image'];
     const blip = child(child(e, 'blipFill'), 'blip');
     const rid = blip?.attributes.find(a => a.namespaceUri === relNs && a.localName === 'embed')?.value;
@@ -81,8 +86,8 @@ export function readSpreadsheetDrawingObjects(workbook: SpreadsheetWorkbook, dra
       rotation: number(transform, 'rot') / 60000, flipX: attr(transform, 'flipH') === '1', flipY: attr(transform, 'flipV') === '1',
       geometry: resolveDrawingGeometry(attr(geometry, 'prst') ?? (e.localName === 'cxnSp' ? 'line' : 'rect'), geometry, width, height),
       fill: color(properties, child(child(e, 'style'), 'fillRef')), stroke: color(line, child(child(e, 'style'), 'lnRef')), strokeWidth: Math.max(1, number(line, 'w', 9525) / 9525),
-      text: body ? children(body, 'p').map(text).join('\n') : '', image,
-      children: group ? children(e).flatMap(e => { const result = object(e); return result ? [result] : []; }) : [],
+      text: body && !equation ? children(body, 'p').map(text).join('\n') : '', equation, image,
+      children: group ? content(e).flatMap(e => { const result = object(e); return result ? [result] : []; }) : [],
       groupChild: { scaleX: Number.isFinite(sx) ? sx : 1, scaleY: Number.isFinite(sy) ? sy : 1, x: number(chOff, 'x') / 9525, y: number(chOff, 'y') / 9525 },
     };
   }
@@ -90,6 +95,6 @@ export function readSpreadsheetDrawingObjects(workbook: SpreadsheetWorkbook, dra
   const columns = worksheet?.columnGeometry();
   return drawing.anchors.flatMap(anchor => {
     const e = drawing.document.element(anchor.elementId);
-    return children(e).flatMap(e => { const bounds = rows && columns ? spreadsheetDrawingBounds(anchor, rows, columns) : anchor.kind !== 'two-cell' ? { width: anchor.widthEmu / 9525, height: anchor.heightEmu / 9525 } : undefined; const result = object(e, bounds); return result ? [{ anchor, object: result }] : []; });
+    return (e ? content(e) : []).flatMap(e => { const bounds = rows && columns ? spreadsheetDrawingBounds(anchor, rows, columns) : anchor.kind !== 'two-cell' ? { width: anchor.widthEmu / 9525, height: anchor.heightEmu / 9525 } : undefined; const result = object(e, bounds); return result ? [{ anchor, object: result }] : []; });
   });
 }

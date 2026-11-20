@@ -180,6 +180,7 @@ export { translateSpreadsheetFormula } from './formula-translation.ts';
 
 export { readSpreadsheetDrawingObjects } from './drawing-objects.ts';
 export type { SpreadsheetDrawingObject, SpreadsheetDrawingObjectFrame } from './drawing-objects.ts';
+export type { SpreadsheetDrawingEquation } from './drawing-equations.ts';
 
 export { spreadsheetDrawingCommand, applySpreadsheetDrawingCommand } from './drawing-commands.ts';
 export type { SpreadsheetDrawingCommand } from './drawing-commands.ts';
