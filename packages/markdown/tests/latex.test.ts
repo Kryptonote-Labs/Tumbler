@@ -1,8 +1,17 @@
 import { expect, test } from 'bun:test';
 import { TextSelection } from 'prosemirror-state';
 import { Step } from 'prosemirror-transform';
-import { noteState, toggleLatexStyle, undo } from '../src/editor';
-import { parseLatex, replaceLatexSource, serializeLatex } from '../src/latex';
+import { noteState, receiveTransaction, sendableSteps, toggleLatexStyle, undo } from '../src/editor';
+import {
+  latexBlockAtOffset,
+  latexNumbering,
+  paginateLatex,
+  parseLatex,
+  replaceLatexSource,
+  serializeLatex,
+  updateLatexNodeSource,
+} from '../src/latex';
+import { pastedLatexText } from '../src/latex-editor';
 
 const article = String.raw`% \\begin{document}
 \documentclass[11pt]{article}
@@ -90,4 +99,79 @@ test('reloading the LaTeX editor keeps preamble changes readable by ProseMirror'
   const restored = Step.fromJSON(document.type.schema, step!.toJSON()).apply(document);
   expect(restored.failed).toBeNull();
   expect(serializeLatex(restored.doc!)).toBe(rewritten);
+});
+
+test('pasted prose keeps amounts as text and pasted math as math', () => {
+  expect(pastedLatexText('costs $5 and $10 per seat')).toBe('costs \\$5 and \\$10 per seat');
+  expect(pastedLatexText('pay $5 now')).toBe('pay \\$5 now');
+  expect(pastedLatexText('area $x^2$ grows')).toBe('area $x^2$ grows');
+  expect(pastedLatexText('Pay $12 and get $x$.')).toBe('Pay \\$12 and get $x$.');
+  expect(pastedLatexText('use $2$ here')).toBe('use $2$ here');
+  expect(pastedLatexText('\\begin{verbatim}\n$PATH\n\\end{verbatim}')).toBe(
+    '\\begin{verbatim}\n$PATH\n\\end{verbatim}',
+  );
+  expect(pastedLatexText('$$a$$ and \\$3')).toBe('$$a$$ and \\$3');
+});
+
+test('abstracts edit as native blocks and keep their environment source', () => {
+  const source =
+    '\\documentclass{article}\n\\begin{document}\n\\begin{abstract}\nWe study \\emph{growth}.\n\\end{abstract}\n\nBody.\n\\end{document}\n';
+  const document = parseLatex(source);
+  expect(document.firstChild!.type.name).toBe('blockquote');
+  expect(document.firstChild!.attrs.open).toBe('\\begin{abstract}');
+  expect(serializeLatex(document)).toBe(source);
+});
+
+test('source offsets resolve to the innermost block for error reports', () => {
+  const source =
+    '\\documentclass{article}\n\\begin{document}\nFirst.\n\n\\begin{itemize}\n\\item One\n\\item Two\n\\end{itemize}\n\\end{document}\n';
+  const document = parseLatex(source);
+  expect(latexBlockAtOffset(document, 5)).toBeUndefined();
+  const first = latexBlockAtOffset(document, source.indexOf('First'))!;
+  expect(first.node.textContent).toBe('First.');
+  const two = latexBlockAtOffset(document, source.indexOf('Two'))!;
+  expect(two.node.textContent).toBe('Two');
+  expect(document.resolve(two.position + 1).parent.textContent).toBe('Two');
+});
+
+test('footnotes number like the class does and stop when the count is unknown', () => {
+  const at = (source: string) =>
+    [...latexNumbering(parseLatex(source))!.footnotes.values()];
+  const pre = '\\documentclass{report}\n\\begin{document}\n';
+  expect(at(pre + 'A\\footnote{a} B\\footnote{b}\n\\chapter{Two}\nC\\footnote{c}\n\\end{document}')).toEqual(
+    ['1', '2', '1'],
+  );
+  expect(
+    at(pre + 'A\\footnote{a}\n\n\\begin{figure}\\caption{x\\footnotemark}\\end{figure}\n\nB\\footnote{b}\n\\end{document}'),
+  ).toEqual(['1']);
+});
+
+test('footnotes take room from the page of their mark', () => {
+  const line = (top: number, notes?: number[]) => ({ position: top, top, bottom: top + 10, notes });
+  // Three lines fit a 40-high body, but a 12-high footnote on the second pushes the third over.
+  const result = paginateLatex([line(0), line(10, [12]), line(20)], 40, 5, 2);
+  expect(result.breaks.map((item) => item.position)).toEqual([20]);
+  expect(result.footnotes).toEqual([0]);
+  expect(result.footHeights).toEqual([14, 0]);
+  // A mark whose note no longer fits moves to the next page with its note.
+  const moved = paginateLatex([line(0), line(10), line(20, [8])], 30, 5);
+  expect(moved.footnotes).toEqual([1]);
+});
+
+test('simultaneous edits to separate cells survive collaboration and undo', () => {
+  const source = String.raw`\begin{table}\begin{tabular}{ll} A & B \\ \end{tabular}\end{table}`;
+  const document = parseLatex(source);
+  let left = noteState('', 0, 'left', document);
+  let right = noteState('', 0, 'right', document);
+  const sourceEdit = replaceLatexSource(document, source.replace(' A &', ' Left &'));
+  const leftEdit = left.tr;
+  for (const step of sourceEdit.steps) leftEdit.step(step);
+  left = left.apply(leftEdit);
+  right = right.apply(updateLatexNodeSource(right.tr, 0, source.replace('& B ', '& Right ')));
+  const remote = sendableSteps(left)!;
+  const steps = remote.steps.map((step) => Step.fromJSON(document.type.schema, step.toJSON()));
+  right = right.apply(receiveTransaction(right, steps, ['left']));
+  expect(serializeLatex(right.doc)).toContain('Left & Right');
+  undo(right, (transaction) => { right = right.apply(transaction); });
+  expect(serializeLatex(right.doc)).toContain('Left & B');
 });

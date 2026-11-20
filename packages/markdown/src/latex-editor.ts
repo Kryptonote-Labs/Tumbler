@@ -11,11 +11,21 @@ import { InputRule, inputRules, undoInputRule, wrappingInputRule } from 'prosemi
 import { keymap } from 'prosemirror-keymap';
 import { Fragment, Slice, type Mark, type Node } from 'prosemirror-model';
 import { liftListItem, sinkListItem, splitListItem } from 'prosemirror-schema-list';
-import { EditorState, Plugin, TextSelection, type Command } from 'prosemirror-state';
-import type { EditorView, NodeViewConstructor } from 'prosemirror-view';
+import {
+  EditorState,
+  Plugin,
+  PluginKey,
+  TextSelection,
+  type Command,
+  type Transaction,
+} from 'prosemirror-state';
+import { Decoration, DecorationSet, type EditorView, type NodeViewConstructor } from 'prosemirror-view';
+import { environmentAt, verbatimEnd } from './latex-syntax';
 import { noteSchema as schema } from './index';
 import { latexClipboard } from './latex-clipboard';
 import { latexHeadings, parseLatex, serializeLatex } from './latex';
+import { latexNumberingPlugin } from './latex-numbering-view';
+export { latexNumberSpec, type LatexNumberSpec } from './latex-numbering-view';
 import { notePresencePlugin } from './presence';
 import { noteProofreadingPlugin } from './proofreading';
 
@@ -110,6 +120,69 @@ export function insertLatexMath(display: boolean): Command {
 const mathSymbol =
   /(?<![\w\\$])(\\(?:infty|alpha|beta|gamma|delta|epsilon|theta|lambda|mu|pi|rho|sigma|phi|omega|Gamma|Delta|Theta|Lambda|Pi|Sigma|Phi|Omega|times|cdot|pm|leq|geq|neq|approx|to|rightarrow|leftarrow|sum|prod|int|partial|nabla)) $/;
 
+// Like Pandoc, `$` opens math only before a non-space and closes it after non-space content,
+// so "costs $5 and $10" stays text. Typing allows padding before the closing delimiter.
+// A digit-led span with no letters or operators is currency.
+const inlineDollars = /(?<![\\$\w])\$(?=[^\s$])([^$\n]*[^\s$\\][ \t]*)\$$/;
+const currency = /^\d[\d.,]*(?:\s|[-–/]|$)(?![\s\S]*[A-Za-z\\^_=+*<>])/;
+const paddedAmount = /^\d[^\\^_=+*<>]*[ \t]$/;
+const unfinishedDollar = /(?<![\\$])\$(?=[^\s$\d])[^$]*$/;
+
+/**
+ * Escape the dollars in pasted prose that typing would also keep as text. A pair is math only
+ * when it opens before a non-space, closes after one, is not followed by a digit and does not
+ * read as an amount. A whole document pastes as written.
+ */
+export function pastedLatexText(text: string) {
+  if (/\\(?:documentclass|begin\s*\{document\})/.test(text)) return text;
+  const literal: { from: number; to: number }[] = [];
+  for (const match of text.matchAll(/(?<!\\)\\(?:begin\s*\{(?:verbatim\*?|Verbatim|lstlisting|minted)\}|verb\*?(?![A-Za-z]))/g)) {
+    const from = match.index;
+    if (from < (literal.at(-1)?.to ?? 0)) continue;
+    const to = match[0].startsWith('\\begin')
+      ? environmentAt(text, from)?.end ?? text.length
+      : verbatimEnd(text, from + match[0].length);
+    literal.push({ from, to });
+  }
+  let result = '';
+  let position = 0;
+  while (position < text.length) {
+    const open = text.indexOf('$', position);
+    if (open < 0) break;
+    const protectedText = literal.find(({ from, to }) => from <= open && open < to);
+    if (protectedText) {
+      result += text.slice(position, protectedText.to);
+      position = protectedText.to;
+      continue;
+    }
+    if (text[open - 1] === '\\' || text[open + 1] === '$') {
+      const skip = text[open + 1] === '$' ? text.indexOf('$$', open + 2) : open;
+      const end = skip < 0 ? text.length : skip + (text[open + 1] === '$' ? 2 : 1);
+      result += text.slice(position, end);
+      position = end;
+      continue;
+    }
+    let close = -1;
+    for (let next = text.indexOf('$', open + 1); next >= 0; next = text.indexOf('$', next + 1)) {
+      if (text[next - 1] === '\\') continue;
+      if (literal.some(({ from }) => from > open && from < next) ||
+          /\s/.test(text[next - 1]!) || /\d/.test(text[next + 1] ?? '')) break;
+      close = next;
+      break;
+    }
+    const content = close < 0 ? '' : text.slice(open + 1, close);
+    const math = close > open + 1 && !/^\s/.test(content) && !content.includes('\n') && (!currency.test(content) || /^\d+(?:[.,]\d+)?$/.test(content));
+    if (math) {
+      result += text.slice(position, close + 1);
+      position = close + 1;
+    } else {
+      result += text.slice(position, open) + '\\$';
+      position = open + 1;
+    }
+  }
+  return result + text.slice(position);
+}
+
 function latexInputRules() {
   const formatting = (pattern: RegExp, style: Style) =>
     new InputRule(pattern, (state, match, start, end) => {
@@ -165,24 +238,85 @@ function latexInputRules() {
       new InputRule(mathSymbol, (state, match, start, end) => {
         const position = state.doc.resolve(start);
         const before = position.parent.textBetween(0, position.parentOffset);
-        // Leave unfinished explicit math alone until its closing delimiter arrives.
-        if (
-          (before.match(/(?<!\\)\$\$?/g)?.length ?? 0) % 2 ||
-          before.lastIndexOf('\\(') > before.lastIndexOf('\\)')
-        )
+        // Leave unfinished explicit math alone until its closing delimiter arrives. A dollar
+        // followed by a space or digit is currency, not an opening delimiter.
+        if (unfinishedDollar.test(before) || before.lastIndexOf('\\(') > before.lastIndexOf('\\)'))
           return null;
-        return state.tr
-          .replaceWith(start, end, schema.nodes.latex_math!.create({ source: match[1] }))
-          .insertText(' ', start + 1);
+        return spaceAfter(
+          state.tr.replaceWith(start, end, schema.nodes.latex_math!.create({ source: match[1] })),
+          start + 1,
+        );
       }),
       math(/^\$\$([^$]+)\$\$$/, true, '$$', '$$'),
       math(/^\\\[([^\n]+)\\\]$/, true, '\\[', '\\]'),
       math(/\\\(([^\n]+)\\\)$/, false, '\\(', '\\)'),
-      math(/(?<![\\$])\$([^$\n]+)\$$/, false, '$', '$'),
+      new InputRule(inlineDollars, (state, match, start, end) =>
+        (currency.test(match[1]!) || paddedAmount.test(match[1]!))
+          ? null
+          : state.tr.replaceWith(
+              start,
+              end,
+              schema.nodes.latex_math!.create({
+                source: match[1],
+                open: '$',
+                close: '$',
+              }),
+            ),
+      ),
       wrappingInputRule(/^[-*] $/, schema.nodes.bullet_list!),
       wrappingInputRule(/^1\. $/, schema.nodes.ordered_list!),
     ],
   });
+}
+
+// A trailing space needs to be visible to the caret, but must stay an ordinary space in TeX.
+const typedSpaceKey = new PluginKey<number | null>('latex-typed-space');
+
+function typedSpaces() {
+  let normalizing = false;
+  return new Plugin<number | null>({
+    key: typedSpaceKey,
+    state: {
+      init: () => null,
+      apply(tr, position) {
+        const typed = tr.getMeta(typedSpaceKey) as number | undefined;
+        if (typed !== undefined) return typed;
+        if (position === null) return null;
+        const mapped = tr.mapping.mapResult(position, 1);
+        return mapped.deleted || !tr.selection.empty || tr.selection.head !== mapped.pos + 1
+          ? null : mapped.pos;
+      },
+    },
+    props: {
+      decorations(state) {
+        const position = typedSpaceKey.getState(state);
+        if (position === null || position === undefined) return;
+        return DecorationSet.create(state.doc, [
+          Decoration.inline(position, position + 1, { class: 'latex-typed-space' }),
+        ]);
+      },
+      handleTextInput(view, from, to, text) {
+        if (normalizing || !text.endsWith('\u00a0')) return false;
+        const plain = text.slice(0, -1) + ' ';
+        normalizing = true;
+        try {
+          const handled = view.someProp('handleTextInput', (handle) =>
+            handle(view, from, to, plain, () => view.state.tr.insertText(plain, from, to)),
+          );
+          if (handled) return true;
+        } finally {
+          normalizing = false;
+        }
+        const tr = view.state.tr.insertText(plain, from, to);
+        view.dispatch(tr.setMeta(typedSpaceKey, from + text.length - 1));
+        return true;
+      },
+    },
+  });
+}
+
+function spaceAfter(tr: Transaction, position: number) {
+  return tr.insertText(' ', position).setMeta(typedSpaceKey, position);
 }
 
 function continueAfterLatexBlock(view: EditorView, event: MouseEvent) {
@@ -224,7 +358,9 @@ export function latexState(
     schema,
     doc: document,
     plugins: [
+      typedSpaces(),
       latexInputRules(),
+      latexNumberingPlugin(),
       notePresencePlugin(),
       noteProofreadingPlugin(),
       keymap({
@@ -271,7 +407,7 @@ export function latexState(
                       ),
                   ),
                 )
-              : Slice.maxOpen(parseLatex(text).content),
+              : Slice.maxOpen(parseLatex(pastedLatexText(text)).content),
         },
       }),
     ],

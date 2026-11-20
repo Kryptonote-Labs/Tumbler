@@ -1,7 +1,7 @@
 import { Fragment, type Mark, type Node } from 'prosemirror-model';
 import { Transform } from 'prosemirror-transform';
-import { updateLatexBoundary } from './latex-boundary-step';
-export { updateLatexBoundary } from './latex-boundary-step';
+import { updateLatexBoundary, updateLatexNodeSource } from './latex-boundary-step';
+export { updateLatexBoundary, updateLatexNodeSource } from './latex-boundary-step';
 import { noteSchema as schema } from './index';
 import {
   argumentAt,
@@ -15,8 +15,52 @@ import {
   whitespaceEnd,
 } from './latex-syntax';
 
+export { latexPageLayout, latexPaperSettings, paginateLatex } from './latex-layout';
+export type { LatexPageLayout, PageBlock, PageBreak, PageLine } from './latex-layout';
+export {
+  latexFieldSource,
+  latexFieldText,
+  latexPreambleCommand,
+  setLatexPreambleCommand,
+} from './latex-metadata';
+export type { LatexCommandArgument } from './latex-metadata';
+export { latexEquationRows, latexNumbering } from './latex-numbering';
+export {
+  bibEntryName,
+  latexBibliographyDatabases,
+  latexBibliographyFiles,
+  latexCitationKeys,
+  latexCitationNumbers,
+  parseBibtex,
+  setLatexBibliographyEntries,
+  writeBibEntry,
+} from './latex-bibliography';
+export type { BibEntry, LatexBibliographyDatabase } from './latex-bibliography';
+export type { LatexNumbering } from './latex-numbering';
+export { findLatexCommand } from './latex-scan';
+export {
+  latexFigureSource,
+  readLatexCaption,
+  readLatexFigure,
+  setLatexCaption,
+  setLatexFigureImage,
+  setLatexFigureWidth,
+} from './latex-figures';
+export {
+  deleteLatexTableColumn,
+  deleteLatexTableRow,
+  insertLatexTableColumn,
+  insertLatexTableRow,
+  latexTableCellText,
+  latexTableSource,
+  readLatexTabular,
+  setLatexTableCell,
+  writeLatexTabular,
+} from './latex-tables';
+export type { LatexTabular } from './latex-tables';
+
 export const blankLatex =
-  '\\documentclass{article}\n\\usepackage{amsmath}\n\n\\begin{document}\n\n\\end{document}\n';
+  '\\documentclass{article}\n\\usepackage{amsmath}\n\\setlength{\\parindent}{0pt}\n\\setlength{\\parskip}{0.5\\baselineskip plus 2pt}\n\n\\begin{document}\n\n\\end{document}\n';
 export const latexHeadings = [
   'section',
   'subsection',
@@ -32,6 +76,7 @@ const displayEnvironments = new Set([
   'gather',
   'gather*',
 ]);
+const textEnvironments = new Set(['quote', 'quotation', 'abstract']);
 const escaped = new Map([
   ['\\%', '%'],
   ['\\$', '$'],
@@ -152,6 +197,24 @@ const blockCommands = new Set([
   '\\clearpage',
 ]);
 
+// Bibliography commands set the reference list where they stand, so they are blocks. A style
+// and the database list written together form one block.
+const bibliographyCommands = new Set(['\\bibliographystyle', '\\bibliography', '\\printbibliography']);
+
+function bibliographyAt(source: string, position: number) {
+  let end = position;
+  for (let count = 0; count < 2; count++) {
+    const start = count ? whitespaceEnd(source, end) : end;
+    if (count && /\n[^\S\n]*\n/.test(source.slice(end, start))) break;
+    const name = source.slice(start, commandEnd(source, start));
+    if (!bibliographyCommands.has(name)) break;
+    const group = name === '\\printbibliography' ? undefined : groupAt(source, whitespaceEnd(source, start + name.length));
+    if (!group && name !== '\\printbibliography') break;
+    end = group?.end ?? start + name.length;
+  }
+  return end > position ? end : undefined;
+}
+
 function headingLevel(command: string) {
   return command === 'part' || command === 'chapter' ? 1 : latexHeadings.indexOf(command) + 1;
 }
@@ -168,7 +231,12 @@ function blockStart(source: string, position: number) {
   if (source.startsWith('$$', position) || source.startsWith('\\[', position)) return true;
   if (source[position] !== '\\') return false;
   const command = source.slice(position, commandEnd(source, position));
-  return command === '\\begin' || blockCommands.has(command) || headingLevel(command.slice(1)) > 0;
+  return (
+    command === '\\begin' ||
+    blockCommands.has(command) ||
+    bibliographyCommands.has(command) ||
+    headingLevel(command.slice(1)) > 0
+  );
 }
 
 function paragraphEnd(source: string, position: number) {
@@ -274,7 +342,8 @@ function environmentBlock(source: string, position: number, before: string, dept
         end,
       };
   }
-  if (name === 'quote' && depth < 64) {
+  // Text environments edit as native blocks. The open and close source keep the environment.
+  if (textEnvironments.has(name) && depth < 64) {
     const quote = blocks(content, depth + 1);
     if (quote.nodes.length)
       return {
@@ -306,6 +375,12 @@ function blocks(source: string, depth = 0): { nodes: Node[]; tail: string } {
     if (blockCommands.has(command)) {
       nodes.push(schema.nodes.latex_raw!.create({ before, source: command }));
       position = start + command.length;
+      continue;
+    }
+    const bibliography = bibliographyCommands.has(command) ? bibliographyAt(source, start) : undefined;
+    if (bibliography) {
+      nodes.push(schema.nodes.latex_raw!.create({ before, source: source.slice(start, bibliography) }));
+      position = bibliography;
       continue;
     }
     const heading = source[start] === '\\' ? headingAt(source, start) : undefined;
@@ -482,6 +557,16 @@ export function replaceLatexSource(document: Node, source: string): Transform {
 
   const from = document.content.findDiffStart(next.content);
   if (from === null) return transform;
+  const original = document.nodeAt(from);
+  const edited = next.nodeAt(from);
+  if (original?.type === edited?.type && edited?.type.name.startsWith('latex_') &&
+      typeof original?.attrs.source === 'string' && typeof edited.attrs.source === 'string') {
+    const sourceEdit = updateLatexNodeSource(new Transform(transform.doc), from, edited.attrs.source);
+    if (sourceEdit.doc.eq(next)) {
+      for (const step of sourceEdit.steps) transform.step(step);
+      return transform;
+    }
+  }
   const end = document.content.findDiffEnd(next.content)!;
   const overlap = from - Math.min(end.a, end.b);
   if (overlap > 0) {
@@ -517,4 +602,52 @@ export function replaceLatexSource(document: Node, source: string): Transform {
   const replacement: Node[] = [];
   for (let index = left; index < nextRight; index++) replacement.push(next.child(index));
   return transform.replaceWith(start, stop, Fragment.fromArray(replacement));
+}
+
+const containerDefaults: Record<string, string> = {
+  bullet_list: '\\begin{itemize}\n',
+  ordered_list: '\\begin{enumerate}\n',
+  blockquote: '\\begin{quote}\n',
+  list_item: '\\item ',
+};
+
+/**
+ * The innermost block whose source contains `offset` in `serializeLatex(document)`, with its
+ * document position. Undefined for the preamble and the text after `\end{document}`. Error
+ * reports from TeX use this to select the block a line belongs to.
+ */
+export function latexBlockAtOffset(
+  document: Node,
+  offset: number,
+): { position: number; node: Node } | undefined {
+  const locate = (
+    parent: Node,
+    contentStart: number,
+    at: number,
+  ): { position: number; node: Node } | undefined => {
+    let cursor = 0;
+    let found: { position: number; node: Node } | undefined;
+    parent.forEach((child, childOffset, index) => {
+      if (found) return;
+      const before =
+        child.attrs.before ??
+        (index === 0 ? '' : child.type.name === 'list_item' ? '\n' : '\n\n');
+      const start = cursor + before.length;
+      const end = start + blockSource(child).length;
+      cursor = end;
+      if (at < start || at >= end) return;
+      const position = contentStart + childOffset;
+      const open = child.attrs.open ?? containerDefaults[child.type.name];
+      if (!child.isTextblock && !child.isAtom && open !== undefined && child.childCount) {
+        const inner = locate(child, position + 1, at - start - open.length);
+        if (inner) {
+          found = inner;
+          return;
+        }
+      }
+      found = { position, node: child };
+    });
+    return found;
+  };
+  return locate(document, 0, offset - String(document.attrs.prefix).length);
 }
