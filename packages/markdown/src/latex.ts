@@ -19,7 +19,7 @@ export { latexPageLayout, latexPaperSettings, paginateLatex } from './latex-layo
 export type { LatexPageLayout, PageBlock, PageBreak, PageLine } from './latex-layout';
 
 export const blankLatex =
-  '\\documentclass{article}\n\\usepackage{amsmath}\n\n\\begin{document}\n\n\\end{document}\n';
+  '\\documentclass{article}\n\\usepackage{amsmath}\n\\setlength{\\parindent}{0pt}\n\n\\begin{document}\n\n\\end{document}\n';
 export const latexHeadings = [
   'section',
   'subsection',
