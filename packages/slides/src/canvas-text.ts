@@ -1,3 +1,4 @@
+import { layoutMath, type MathLayout } from '@tumblerjs/core/math';
 import type { SlideText, SlideTextRun } from './model.ts';
 import { slideLineBox, slideParagraphFontSize } from './text-line-box.ts';
 import type { SlideCanvasContext, SlideCanvasOptions } from './canvas-types.ts';
@@ -9,13 +10,26 @@ type Fragment = {
   font: string;
   justifyGap?: true;
   box: ReturnType<typeof slideLineBox>;
+  /** An equation run's layout, drawn in place of its object character. */
+  math?: MathLayout;
 };
 type Token = { kind: 'word' | 'space' | 'break'; fragments: Fragment[] };
 
 // An inline style change within a word or a space sequence isn't a wrap opportunity.
-function* textTokens(runs: readonly SlideTextRun[], measure: (text: string, run: SlideTextRun) => Fragment) {
+// An equation is one word of its own.
+function* textTokens(
+  runs: readonly SlideTextRun[],
+  measure: (text: string, run: SlideTextRun) => Fragment,
+  equation: (run: SlideTextRun) => Fragment,
+) {
   let pending: Token | undefined;
   for (const run of runs) {
+    if (run.equation) {
+      if (pending) yield pending;
+      pending = undefined;
+      yield { kind: 'word', fragments: [equation(run)] };
+      continue;
+    }
     for (const value of run.text.match(/\r\n?|\n|[ \t]+|[^ \t\r\n]+/gu) ?? []) {
       const kind = value[0] === '\n' || value[0] === '\r' ? 'break' : /^[ \t]/u.test(value) ? 'space' : 'word';
       if (pending && (pending.kind !== kind || kind === 'break')) {
@@ -105,6 +119,27 @@ export function layoutSlideText(
       ctx.font = cssFont;
       return { text: value, run, width: ctx.measureText(value).width, font: cssFont, box: box(cssFont, run.fontSize) };
     };
+    const equation = (run: SlideTextRun): Fragment => {
+      const math = layoutMath(run.equation!, {
+        size: run.fontSize,
+        bold: run.bold,
+        measure: (value, style) => {
+          ctx.font = font(style.size, { ...run, italic: style.italic, bold: style.bold });
+          return ctx.measureText(value).width;
+        },
+      });
+      const cssFont = font(run.fontSize, run);
+      ctx.font = cssFont;
+      const line = box(cssFont, run.fontSize);
+      return {
+        text: '',
+        run,
+        width: math.width,
+        font: cssFont,
+        box: { ascent: Math.max(line.ascent, math.ascent), descent: Math.max(line.descent, math.descent) },
+        math,
+      };
+    };
     const append = (fragment: Fragment) => {
       line.fragments.push(fragment);
       line.width += fragment.width;
@@ -129,7 +164,7 @@ export function layoutSlideText(
       line = makeLine();
     };
     let spaces: Fragment[] = [];
-    for (const token of textTokens(paragraph.runs, measure)) {
+    for (const token of textTokens(paragraph.runs, measure, equation)) {
       if (token.kind === 'break') {
         if (!text.wrap) spaces.forEach(append);
         flush(false);
@@ -153,7 +188,7 @@ export function layoutSlideText(
         spaces.forEach(append);
       }
       spaces = [];
-      if (text.wrap && wordWidth > line.limit) {
+      if (text.wrap && wordWidth > line.limit && !token.fragments[0]?.math) {
         for (const fragment of token.fragments) {
           for (const character of fragment.text) {
             const glyph = measure(character, fragment.run);
@@ -225,7 +260,8 @@ export function paintSlideText<Path, Image>(
       ctx.font = fragment.font;
       ctx.fillStyle = run.color;
       const baseline = y - (run.baseline ?? 0) * run.fontSize;
-      ctx.fillText(fragment.text, x, baseline);
+      if (fragment.math) paintMath(ctx, fragment, x, baseline, options);
+      else ctx.fillText(fragment.text, x, baseline);
       if (run.underline || run.strike) {
         ctx.beginPath();
         ctx.lineWidth = Math.max(0.7, run.fontSize / 16);
@@ -240,4 +276,37 @@ export function paintSlideText<Path, Image>(
     y += line.descent + line.after;
   }
   ctx.restore();
+}
+
+/** Equations paint their glyphs, rules and radical strokes in the run's font and colour. */
+function paintMath<Path, Image>(
+  ctx: SlideCanvasContext<Path, Image>,
+  { math, run }: Fragment,
+  x: number,
+  y: number,
+  options: SlideCanvasOptions<Path, Image>,
+) {
+  if (!math) return;
+  const family = options.fontFamily?.(run.fontFamily) ?? JSON.stringify(options.prepareFont?.(run.fontFamily) ?? run.fontFamily);
+  ctx.strokeStyle = run.color;
+  for (const item of math.items) {
+    if (item.kind === 'glyph') {
+      ctx.font = `${item.italic ? 'italic ' : ''}${item.bold ? 'bold ' : ''}${item.size}px ${family}`;
+      if (item.scaleY) {
+        ctx.save();
+        ctx.translate(x + item.x, y + item.y);
+        ctx.scale(1, item.scaleY);
+        ctx.fillText(item.text, 0, 0);
+        ctx.restore();
+      } else ctx.fillText(item.text, x + item.x, y + item.y);
+    } else if (item.kind === 'rule') ctx.fillRect(x + item.x, y + item.y, item.width, item.height);
+    else if (item.kind === 'path') {
+      ctx.lineWidth = item.width;
+      ctx.setLineDash([]);
+      ctx.beginPath();
+      item.points.forEach(([px, py], index) => (index ? ctx.lineTo(x + px, y + py) : ctx.moveTo(x + px, y + py)));
+      ctx.stroke();
+    }
+    // Empty slots and prompts are editing affordances; they do not print.
+  }
 }

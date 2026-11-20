@@ -1,10 +1,12 @@
 import { expect, test } from 'bun:test';
+import { createCanvas, Path2D } from '@napi-rs/canvas';
 import { createMathEditor, emptyEquation, typeMathText } from '@tumblerjs/core/math';
 import {
   applyPresentationCommand,
   createPresentation,
   importNativePresentation,
   openPresentationArtifact,
+  paintPresentationSlide,
   slideTextValue,
   type PresentationArtifact,
 } from '../src/index.ts';
@@ -32,9 +34,11 @@ const slideXml = (artifact: PresentationArtifact) =>
 
 test('an inserted equation saves as PowerPoint Office Math and reopens editable', () => {
   const { artifact, slideId, objectKey } = fixture();
-  const native = importNativePresentation(artifact);
-  const command = { name: 'set-equation', slideId, objectKey, start: 5, end: 5, equation } as const;
-  const after = applyPresentationCommand(native, command);
+  // Hosts insert an empty equation, then edit it in place as the user types.
+  const after = ([
+    { name: 'set-equation', slideId, objectKey, start: 5, end: 5, equation: { body: [] } },
+    { name: 'set-equation', slideId, objectKey, start: 5, end: 6, equation },
+  ] as const).reduce<PresentationArtifact>((current, command) => applyPresentationCommand(current, command), importNativePresentation(artifact));
   expect(slideTextValue(object(after))).toBe('Area ￼ here');
   expect(runs(after).find((run) => run.equation)?.equation).toEqual(equation);
 
@@ -43,7 +47,7 @@ test('an inserted equation saves as PowerPoint Office Math and reopens editable'
   expect(xml).toMatch(/<mc:AlternateContent[^>]*><mc:Choice Requires="a14"><p:sp[ >][^]*<a14:m [^>]*><m:oMath [^>]*><m:sSup>/);
   // Readers without a14 see the equation's linear format in the same shape.
   expect(xml).toMatch(/<mc:Fallback[^>]*><p:sp[ >][^]*<a:t>x\^2\+1\/n<\/a:t>[^]*<\/mc:Fallback>/);
-  expect(xml).toContain('typeface="Cambria Math"');
+  expect(xml).toMatch(/<m:r><a:rPr[^>]*>[^]*?<a:latin typeface="Cambria Math"/);
   expect(slideTextValue(object(reopened))).toBe('Area ￼ here');
   expect(object(reopened).textEditable).toBe(true);
   expect(runs(reopened).find((run) => run.equation)?.equation).toEqual(equation);
@@ -77,4 +81,19 @@ test('typed text cannot forge an equation character', () => {
   expect(() =>
     applyPresentationCommand(artifact, { name: 'edit-text', slideId, objectKey, start: 0, end: 0, value: '￼' }),
   ).toThrow();
+});
+
+test('painted slides draw the equation instead of its object character', () => {
+  const { artifact, slideId, objectKey } = fixture();
+  const after = applyPresentationCommand(artifact, { name: 'set-equation', slideId, objectKey, start: 5, end: 5, equation });
+  const context = createCanvas(960, 540).getContext('2d');
+  const painted: string[] = [];
+  const fillText = context.fillText.bind(context);
+  context.fillText = (text: string, x: number, y: number) => {
+    painted.push(text);
+    fillText(text, x, y);
+  };
+  paintPresentationSlide(context, after.document, after.document.slides[0]!, { path: (d) => new Path2D(d), image: () => undefined });
+  expect(painted.join('')).not.toContain('￼');
+  expect(painted).toEqual(expect.arrayContaining(['Area', 'x', '2', 'n', 'here']));
 });
