@@ -16,7 +16,7 @@ export type LatexNumbering = {
 
 // Commands and environments whose effect on counters the editor does not model.
 const opaqueCounters =
-  /\\(?:setcounter|addtocounter|stepcounter|refstepcounter|numberwithin|counterwithin|counterwithout|frontmatter|mainmatter|backmatter|(?:re)?newcommand\s*\{?\\the[a-z]+)\b|\\begin\s*\{(?:multline|flalign|alignat|eqnarray|subequations|xalignat)\*?\}/;
+  /\\(?:setcounter(?!\s*\{tocdepth\})|addtocounter|stepcounter|refstepcounter|numberwithin|counterwithin|counterwithout|frontmatter|mainmatter|backmatter|(?:re)?newcommand\s*\{?\\the[a-z]+)\b|\\begin\s*\{(?:multline|flalign|alignat|eqnarray|subequations|xalignat)\*?\}/;
 const rawCounters =
   /\\(?:part|chapter|section|subsection|subsubsection|caption|captionof)\b|\\begin\s*\{(?:equation|align|gather|figure|table)\*?\}/;
 const latexHeadings = ['section', 'subsection', 'subsubsection', 'paragraph', 'subparagraph'];
