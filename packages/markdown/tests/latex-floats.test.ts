@@ -85,3 +85,9 @@ describe('tables', () => {
     expect(formerFirstRow?.cells[0]?.body).toBe('A');
   });
 });
+
+test('a cell edit keeps an unexpanded column specification byte for byte', () => {
+  const source = String.raw`\begin{tabular}{*{2}{ l }} A & B \\ \end{tabular}`;
+  expect(setLatexTableCell(source, 0, 0, 'New & old', false))
+    .toBe(source.replace(' A &', String.raw` New \& old &`));
+});

@@ -160,7 +160,7 @@ export function setLatexTableCell(source: string, row: number, column: number, v
     cell.trail = ' ';
   }
   cell.body = tex ? value : latexFieldSource(value);
-  return writeLatexTabular(source, table);
+  return splice(source, table.start, table.end, table.rows.map(rowSource).join('') + table.tail);
 }
 
 const blankRow = (columns: number, end: string): Row => ({

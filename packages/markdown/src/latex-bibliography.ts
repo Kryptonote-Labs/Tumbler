@@ -16,7 +16,11 @@ export type LatexBibliographyDatabase = {
 
 /** Read BibTeX entries. Comments, `@string` and `@preamble` blocks are skipped. */
 export function parseBibtex(text: string): BibEntry[] {
-  const entries: BibEntry[] = [];
+  return bibtexSpans(text).map(({ entry }) => entry);
+}
+
+function bibtexSpans(text: string) {
+  const entries: { entry: BibEntry; from: number; to: number; values: Record<string, string> }[] = [];
   const start = /@([A-Za-z]+)\s*([{(])/g;
   for (let match = start.exec(text); match; match = start.exec(text)) {
     const type = match[1]!.toLowerCase();
@@ -30,12 +34,18 @@ export function parseBibtex(text: string): BibEntry[] {
     const comma = body.indexOf(',');
     const key = (comma < 0 ? body : body.slice(0, comma)).trim();
     if (!key) continue;
-    entries.push({ type, key, fields: comma < 0 ? {} : bibFields(body.slice(comma + 1)) });
+    const values: Record<string, string> = {};
+    entries.push({
+      entry: { type, key, fields: comma < 0 ? {} : bibFields(body.slice(comma + 1), values) },
+      values,
+      from: match.index,
+      to: group.end,
+    });
   }
   return entries;
 }
 
-function bibFields(body: string) {
+function bibFields(body: string, values: Record<string, string>) {
   const fields: Record<string, string> = {};
   let position = 0;
   while (position < body.length) {
@@ -44,6 +54,7 @@ function bibFields(body: string) {
     const match = name.exec(body);
     if (!match) break;
     position = name.lastIndex;
+    const valueStart = position;
     let value = '';
     // A value is a braced group, a quoted string, or a bare number or macro, joined with #.
     for (;;) {
@@ -77,24 +88,26 @@ function bibFields(body: string) {
       if (body[position] !== '#') break;
       position++;
     }
-    fields[match[1]!.toLowerCase()] = value.replace(/\s+/g, ' ').trim();
+    const field = match[1]!.toLowerCase();
+    fields[field] = value.replace(/\s+/g, ' ').trim();
+    values[field] = body.slice(valueStart, position).trim();
   }
   return fields;
 }
 
 /** Write an entry as BibTeX, one field per line. */
 export function writeBibEntry(entry: BibEntry) {
+  return formatBibEntry(entry);
+}
+
+function formatBibEntry(entry: BibEntry, original?: { entry: BibEntry; values: Record<string, string> }) {
   const fields = Object.entries(entry.fields).filter(([, value]) => value.trim());
-  return (
-    '@' +
-    entry.type +
-    '{' +
-    entry.key +
-    (fields.length ? ',\n' : '\n') +
-    fields.map(([name, value]) => '  ' + name + ' = {' + value.trim() + '}').join(',\n') +
-    (fields.length ? '\n' : '') +
-    '}'
-  );
+  const lines = fields.map(([name, value]) => {
+    const existing = original?.entry.fields[name] === value ? original.values[name] : undefined;
+    return '  ' + name + ' = ' + (existing ?? '{' + value.trim() + '}');
+  });
+  return '@' + entry.type + '{' + entry.key +
+    (lines.length ? ',\n' + lines.join(',\n') + '\n' : '\n') + '}';
 }
 
 const databaseStart = /\\begin\s*\{filecontents\*?\}/g;
@@ -129,11 +142,31 @@ export function latexBibliographyDatabases(prefix: string): LatexBibliographyDat
  * Replace the entries of the named database, or add one before `\begin{document}`. The
  * environment overwrites the file on every run, so the source stays the only copy.
  */
-export function setLatexBibliographyEntries(prefix: string, name: string, entries: BibEntry[]) {
+export function setLatexBibliographyEntries(
+  prefix: string,
+  name: string,
+  entries: BibEntry[],
+  rename?: { from: string; to: string },
+) {
   const text = entries.map(writeBibEntry).join('\n\n') + '\n';
   const database = latexBibliographyDatabases(prefix).find((entry) => entry.name === name);
-  if (database)
-    return prefix.slice(0, database.content.from) + text + prefix.slice(database.content.to);
+  if (database) {
+    const original = prefix.slice(database.content.from, database.content.to);
+    const pending = new Map(entries.map((entry) => [entry.key, entry]));
+    let changed = original;
+    for (const current of bibtexSpans(original).reverse()) {
+      const { entry, from, to } = current;
+      const key = rename?.from === entry.key ? rename.to : entry.key;
+      const next = pending.get(key);
+      pending.delete(key);
+      if (!next) changed = changed.slice(0, from) + changed.slice(to);
+      else if (JSON.stringify(entry) !== JSON.stringify(next)) {
+        changed = changed.slice(0, from) + formatBibEntry(next, current) + changed.slice(to);
+      }
+    }
+    if (pending.size) changed += '\n' + Array.from(pending.values(), writeBibEntry).join('\n\n') + '\n';
+    return prefix.slice(0, database.content.from) + changed + prefix.slice(database.content.to);
+  }
   const block = '\\begin{filecontents*}[overwrite]{' + name + '}\n' + text + '\\end{filecontents*}\n';
   const begin = /^[ \t]*\\begin\s*\{document\}/m.exec(prefix);
   if (!begin) throw new RangeError('This file has no preamble.');
