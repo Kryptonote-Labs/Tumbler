@@ -58,7 +58,7 @@ describe("typing builds structures", () => {
     const latex = (input: string) => mathToLatex(typed(input).equation);
     expect(latex("\\sum _(k=0)^n x")).toBe("\\sum_{k=0}^{n} x");
     expect(latex("lim n->\\infty  1/n")).toBe("\\lim_{n\\to \\infty } \\frac{1}{n}");
-    expect(latex("sin \\alpha \\pm sin \\beta ")).toBe("\\sin \\alpha \\pm \\sin \\beta");
+    expect(latex("sin \\alpha \\pm sin \\beta ")).toBe("\\sin{\\alpha \\pm \\sin \\beta }");
     expect(latex("\\sqrt x+1")).toBe("\\sqrt{x}+1");
   });
 
