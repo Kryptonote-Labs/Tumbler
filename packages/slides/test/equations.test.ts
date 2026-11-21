@@ -83,6 +83,18 @@ test('typed text cannot forge an equation character', () => {
   ).toThrow();
 });
 
+test('the same equation can be inserted twice into native slide text', () => {
+  const { artifact, slideId, objectKey } = fixture();
+  const first = applyPresentationCommand(importNativePresentation(artifact), {
+    name: 'set-equation', slideId, objectKey, start: 0, end: 0, equation,
+  });
+  const second = applyPresentationCommand(first, {
+    name: 'set-equation', slideId, objectKey, start: 11, end: 11, equation,
+  });
+  expect(slideTextValue(object(second))).toBe('￼Area  here￼');
+  expect(slideTextValue(object(openPresentationArtifact(second.bytes())))).toBe('￼Area  here￼');
+});
+
 test('painted slides draw the equation instead of its object character', () => {
   const { artifact, slideId, objectKey } = fixture();
   const after = applyPresentationCommand(artifact, { name: 'set-equation', slideId, objectKey, start: 5, end: 5, equation });

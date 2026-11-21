@@ -361,19 +361,20 @@ function setNativeEquation(
       if (command.start < start || command.start > start + length) return paragraph;
       let at = start;
       const runs: SlideTextRun[] = [];
-      let donor = paragraph.endRun ?? paragraph.runs[0];
+      const donor = paragraph.endRun ?? paragraph.runs[0];
+      let inserted = false;
       for (const run of paragraph.runs) {
         const local = command.start - at;
         if (existing && local === 0 && run.equation) runs.push({ ...run, equation: command.equation });
-        else if (!existing && local >= 0 && local <= run.text.length && !runs.some((r) => r.equation === command.equation)) {
-          donor = run;
+        else if (!existing && !inserted && local >= 0 && local <= run.text.length) {
           if (local) runs.push({ ...run, text: run.text.slice(0, local) });
           runs.push(equationRun(run, command.equation));
           if (local < run.text.length) runs.push({ ...run, text: run.text.slice(local) });
+          inserted = true;
         } else runs.push(run);
         at += run.text.length;
       }
-      if (!existing && !runs.some((r) => r.equation === command.equation))
+      if (!existing && !inserted)
         runs.push(equationRun(donor ?? { text: '', fontFamily: 'Aptos', fontSize: 32, color: '#000000', bold: false, italic: false, underline: false }, command.equation));
       return nativeParagraphMetrics({ ...paragraph, runs, endRun: undefined });
     }),
