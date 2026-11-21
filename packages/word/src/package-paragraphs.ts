@@ -179,11 +179,17 @@ export function wordParagraphRenderer(
       }
       return copies.markers(content, scope);
     }
-    // Imported Office Math zones are siblings of runs. Unchanged ones keep their source markup.
+    // Imported Office Math zones are siblings of runs. Unchanged ones keep their source markup;
+    // an edited display equation keeps its math paragraph and justification.
     if (run.equation && original?.equation) {
-      let content = element && JSON.stringify(run.equation) === JSON.stringify(original.equation) && JSON.stringify(run.format) === JSON.stringify(original.format)
+      const unchanged = JSON.stringify(run.equation) === JSON.stringify(original.equation) && JSON.stringify(run.format) === JSON.stringify(original.format);
+      const zones = element?.localName === 'oMathPara' ? markup.children(element, 'oMath') : [];
+      let content = element && unchanged
         ? markup.raw(element)
-        : remap(generatedRun ?? '');
+        : element && zones.length
+          ? markup.document.source.source.slice(element.span.start, zones[0]!.span.start) + remap(generatedRun ?? '') +
+            markup.document.source.source.slice(zones.at(-1)!.span.end, element.span.end)
+          : remap(generatedRun ?? '');
       if (!emitted.has(run.source!)) { content = (before.get(run.source!) ?? []).join('') + content; emitted.add(run.source!); }
       const owner = owners.get(run.source!);
       if (owner?.source !== undefined) {

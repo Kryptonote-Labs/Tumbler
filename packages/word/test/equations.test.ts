@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import * as Y from "yjs";
+import { beginPackageTransaction } from "@tumblerjs/opc";
 import { typeMathText, createMathEditor, emptyEquation } from "@tumblerjs/core/math";
 import { createWordArtifact, importWordContent, NativeWordDocument, openWordArtifact } from "../src/index.ts";
 import { prepareWordOperation } from "../src/operations/index.ts";
@@ -67,6 +68,31 @@ test("Office Math in an opened package is editable and round-trips", () => {
     const saved = runs(reopen(session.artifact().bytes()));
     expect(saved.map((run) => run.text).join("")).toBe("Let ￼ true.");
     expect(saved.find((run) => run.equation)?.equation).toEqual(next);
+  } finally {
+    session.destroy();
+  }
+});
+
+test("editing an imported display equation keeps its math paragraph layout", () => {
+  const source = createWordArtifact({ paragraphs: [{ runs: [{ text: "\uFFFC", equation }] }] });
+  const xml = source.document.source.source;
+  const zone = xml.match(/<m:oMath\b[^]*<\/m:oMath>/)![0];
+  // As Word writes a left-justified display equation.
+  const display = `<m:oMathPara xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"><m:oMathParaPr><m:jc m:val="left"/></m:oMathParaPr>${zone}</m:oMathPara>`;
+  const transaction = beginPackageTransaction(source.document.package);
+  transaction.replacePart(source.document.part.name, new TextEncoder().encode(xml.replace(zone, display)));
+  const opened = openWordArtifact(transaction.commit());
+
+  const session = openWordOperationDocument(opened);
+  try {
+    const next = typeMathText(createMathEditor(emptyEquation), "a+b").equation;
+    const edit: { delta: Parameters<Y.Text["applyDelta"]>[0]; update?: Uint8Array } = prepareWordOperation(session.text, { start: 0, end: 1 }, { name: "edit-object", input: { equation: next } });
+    if (edit.update) Y.applyUpdate(session.text.doc!, edit.update);
+    else session.text.applyDelta(edit.delta);
+    const saved = openWordArtifact(session.artifact().bytes());
+    expect(saved.document.source.source).toMatch(/<m:oMathPara [^>]*><m:oMathParaPr><m:jc m:val="left"\/><\/m:oMathParaPr><m:oMath\b[^]*<\/m:oMath><\/m:oMathPara>/);
+    const runs = (importWordContent(saved)[0] as { runs: readonly { equation?: unknown }[] }).runs;
+    expect(runs.find((run) => run.equation)?.equation).toEqual(next);
   } finally {
     session.destroy();
   }
