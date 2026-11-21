@@ -400,4 +400,3 @@ export function mathPositionAt(layout: MathLayout, x: number, y: number): MathPo
   for (const [index, caret] of best.row.carets.entries()) if (Math.abs(caret - x) < Math.abs(best.row.carets[offset]! - x)) offset = index;
   return { path: best.row.path, offset };
 }
-
