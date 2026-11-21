@@ -15,6 +15,11 @@ import {
   whitespaceEnd,
 } from './latex-syntax';
 
+export { composeLatexParagraph, type LatexLine, type LatexTextMetrics } from './latex-lines';
+export { latexInlineFlow, latexParagraphText, type LatexParagraphSegment } from './latex-paragraph';
+export { measureLatexRoman, type LatexRomanFont } from './latex-font-metrics';
+export { hyphenateLatexEnglish } from './latex-hyphenation';
+export type { LatexTypography } from './latex-typography';
 export { latexPageLayout, latexPaperSettings, paginateLatex } from './latex-layout';
 export type { LatexPageLayout, PageBlock, PageBreak, PageLine } from './latex-layout';
 export { latexBreakCommand, latexFlow, latexPageNumbers, readLatexClass } from './latex-flow';
@@ -94,6 +99,17 @@ const escaped = new Map([
   ['\\textasciitilde{}', '~'],
   ['~', '\u00a0'],
 ]);
+const textLiterals = [
+  // The browser's DOM parser normalizes carriage returns even when it preserves newlines.
+  ['\r\n', ' '],
+  ['\r', ' '],
+  // Computer Modern interprets these spellings as single glyphs.
+  ['---', '—'],
+  ['--', '–'],
+  ['``', '“'],
+  ["''", '”'],
+] as const;
+
 const escapeText = new Map([...escaped].map(([source, value]) => [value, source]));
 
 export function isLatex(document: Node) {
@@ -115,6 +131,17 @@ function inline(
   };
   for (let position = 0; position < source.length; position++) {
     const character = source[position]!;
+    const literal =
+      character === '\r' || character === '-' || character === '`' || character === "'"
+        ? textLiterals.find(([input]) => source.startsWith(input, position))
+        : undefined;
+    if (literal) {
+      flush(position);
+      nodes.push(schema.nodes.latex_inline!.create({ source: literal[0], label: literal[1] }, null, marks));
+      plain = position + literal[0].length;
+      position = plain - 1;
+      continue;
+    }
     if (!'\\%${}#&_^~'.includes(character)) continue;
     flush(position);
     const commandLength = commandEnd(source, position);

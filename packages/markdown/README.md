@@ -49,3 +49,10 @@ adding page breaks or repeated rows to the document. This keeps layout and
 source edits on the same model for both native objects and source-backed
 environments. The same constraints can accept measurements from a different
 layout host.
+
+`latexPageLayout(prefix)` resolves standard type sizes, leading, interword glue, and title
+spacing. `latexParagraphText(node)` projects supported text and inline formulas with editor
+offsets. Pass font and inline box measurements to `composeLatexParagraph` to get justified line
+breaks and discretionary hyphens at those offsets. The host can use `measureLatexRoman` for
+standard Computer Modern Roman text and `hyphenateLatexEnglish` for US English. The browser
+can paint the returned breaks without changing the editable document or running TeX.

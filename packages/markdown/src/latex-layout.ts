@@ -1,8 +1,8 @@
 import { readLatexClass, type LatexBlockFlow, type LatexBreak } from './latex-flow';
+import { latexTypography, texPoint, type LatexTypography } from './latex-typography';
 import { commandEnd, groupAt } from './latex-syntax';
 
 const inch = 96;
-const texPoint = inch / 72.27;
 const millimeter = inch / 25.4;
 const paperSizes = new Map([
   ['letterpaper', [8.5 * inch, 11 * inch]],
@@ -23,6 +23,7 @@ export type LatexPageLayout = {
   gap: number;
   fontSize: number;
   leading: number;
+  typography?: LatexTypography;
   firstBaseline: number;
   footerBaseline: number;
   paragraphIndent: number;
@@ -55,7 +56,7 @@ function dimension(value: string | undefined, quad?: number) {
 
 function readOptions(prefix: string) {
   const source = prefix.replace(/(?<!\\)%[^\n]*/g, '');
-  const classOptions = readLatexClass(prefix).options;
+  const { name: documentClass, options: classOptions } = readLatexClass(prefix);
   const geometryOptions: string[] = [];
   let geometry = false;
   for (const match of source.matchAll(
@@ -86,6 +87,7 @@ function readOptions(prefix: string) {
     orientation,
     fontSize,
     classOptions,
+    documentClass,
   };
 }
 
@@ -164,13 +166,13 @@ function paragraphLengths(source: string, quad: number, defaultIndent: number, l
 
 /** Read the standard class and geometry options that determine the editable page. */
 export function latexPageLayout(prefix: string): LatexPageLayout {
-  const { source, geometry, geometryOptions, paperSize, orientation, fontSize, classOptions } =
+  const { source, geometry, geometryOptions, paperSize, orientation, fontSize, classOptions, documentClass } =
     readOptions(prefix);
   const landscape = orientation === 'landscape';
   const paper = paperSizes.get(paperSize ?? 'letterpaper')!;
   let [width, height] = landscape ? [paper[1]!, paper[0]!] : [paper[0]!, paper[1]!];
-  const leading = (fontSize === 12 ? 14.5 : fontSize === 11 ? 13.6 : 12) * texPoint;
-  const font = (fontSize === 11 ? 10.95 : fontSize) * texPoint;
+  const typography = latexTypography(fontSize, source);
+  const { size: font, leading } = typography.text;
   // Standard Computer Modern classes set lengths using the font's quad.
   const quad = (fontSize === 12 ? 11.74988 : fontSize === 11 ? 10.95003 : 10) * texPoint;
   const twoColumns = classOptions.includes('twocolumn');
@@ -253,6 +255,7 @@ export function latexPageLayout(prefix: string): LatexPageLayout {
     gap: 24,
     fontSize: font,
     leading,
+    typography: ['article', 'report', 'book'].includes(documentClass) ? typography : undefined,
     firstBaseline: fontSize * texPoint,
     footerBaseline: height - bottom + (dimension(sizes.get('footskip')) ?? 30 * texPoint),
     paragraphIndent: paragraphs.parindent,

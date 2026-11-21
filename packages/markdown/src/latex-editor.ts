@@ -9,7 +9,14 @@ import { collab } from 'prosemirror-collab';
 import { history, redo, undo } from 'prosemirror-history';
 import { InputRule, inputRules, undoInputRule, wrappingInputRule } from 'prosemirror-inputrules';
 import { keymap } from 'prosemirror-keymap';
-import { Fragment, Slice, type Mark, type Node } from 'prosemirror-model';
+import {
+  DOMParser,
+  Fragment,
+  Slice,
+  type Mark,
+  type Node,
+  type ParseOptions,
+} from 'prosemirror-model';
 import { liftListItem, sinkListItem, splitListItem } from 'prosemirror-schema-list';
 import {
   EditorState,
@@ -32,6 +39,15 @@ import { noteProofreadingPlugin } from './proofreading';
 
 export type LatexNodeViews = Record<string, NodeViewConstructor>;
 type Style = 'strong' | 'em';
+
+class LatexEditorDOMParser extends DOMParser {
+  override parse(dom: Parameters<DOMParser['parse']>[0], options?: ParseOptions) {
+    // Source line breaks collapse on the page but stay intact when the browser reports an edit.
+    return super.parse(dom, { ...options, preserveWhitespace: 'full' });
+  }
+}
+
+const latexEditorDOMParser = new LatexEditorDOMParser(schema, DOMParser.fromSchema(schema).rules);
 
 function hasStyle(mark: Mark, style: Style) {
   return (
@@ -388,6 +404,7 @@ export function latexState(
         props: {
           ...(nodeViews ? { nodeViews } : {}),
           handleDOMEvents: { mousedown: continueAfterLatexBlock },
+          domParser: latexEditorDOMParser,
           ...latexClipboard(schema),
           clipboardTextSerializer: ({ content }) =>
             serializeLatex(

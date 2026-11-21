@@ -4,7 +4,7 @@ import { AllSelection } from 'prosemirror-state';
 import { EditorView, noteState } from '../src/editor';
 import { parseLatex, serializeLatex } from '../src/latex';
 
-test('copy and paste preserves equations, delimiters and opaque LaTeX', async () => {
+async function withLatexEditor(source: string, run: (view: EditorView) => void | Promise<void>) {
   const browser = new Window();
   const keys = [
     'window',
@@ -23,6 +23,22 @@ test('copy and paste preserves equations, delimiters and opaque LaTeX', async ()
       configurable: true,
       value: key === 'window' ? browser : browser[key],
     });
+  const view = new EditorView(document.body, {
+    state: noteState('', 0, 'copy', parseLatex(source)),
+  });
+  try {
+    await run(view);
+  } finally {
+    view.destroy();
+    for (const [key, descriptor] of previous) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else Reflect.deleteProperty(globalThis, key);
+    }
+    await browser.happyDOM.close();
+  }
+}
+
+test('copy and paste preserves equations, delimiters and opaque LaTeX', async () => {
   const source = String.raw`\chapter{Introduction}
 
 \section*[Short]{Long title}
@@ -36,21 +52,26 @@ test('copy and paste preserves equations, delimiters and opaque LaTeX', async ()
 \begin{verbatim}
 raw & <value>
 \end{verbatim}`;
-  const view = new EditorView(document.body, {
-    state: noteState('', 0, 'copy', parseLatex(source)),
-  });
-  try {
+  await withLatexEditor(source, (view) => {
     view.dispatch(view.state.tr.setSelection(new AllSelection(view.state.doc)));
     const clipboard = view.serializeForClipboard(view.state.selection.content());
     expect(clipboard.text).toBe(source);
     expect(view.pasteHTML(clipboard.dom.innerHTML)).toBe(true);
     expect(serializeLatex(view.state.doc)).toBe(source);
-  } finally {
-    view.destroy();
-    for (const [key, descriptor] of previous) {
-      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
-      else Reflect.deleteProperty(globalThis, key);
-    }
-    await browser.happyDOM.close();
-  }
+  });
 });
+
+test.each(['LF', 'CRLF'])(
+  'editing rendered text preserves an existing %s source line break',
+  async (ending) => {
+    const source = ['The meeting begins shortly.', 'Bring a copy of the agenda.'].join(
+      ending === 'LF' ? '\n' : '\r\n',
+    );
+    await withLatexEditor(source, async (view) => {
+      const text = view.dom.querySelector('p')!.lastChild!;
+      text.nodeValue += ' Please arrive early.';
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      expect(serializeLatex(view.state.doc)).toBe(source + ' Please arrive early.');
+    });
+  },
+);
