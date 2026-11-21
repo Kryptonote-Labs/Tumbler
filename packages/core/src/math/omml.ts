@@ -118,6 +118,12 @@ function canEdit(element: OmmlElement, runProperties: Set<string>): boolean {
   if (!modeledElements.has(element.localName)) return false;
   if (element.localName === "sty" && !["p", "i"].includes(value(element) ?? "")) return false;
   if (element.localName === "d" && math(element).filter((item) => item.localName === "e").length !== 1) return false;
+  const hasHiddenContent = (properties: string, slotName: string) => {
+    const argument = child(element, slotName);
+    return !!argument && on(element, properties, `${slotName}Hide`) && math(argument).length > 0;
+  };
+  if (element.localName === "rad" && hasHiddenContent("radPr", "deg")) return false;
+  if (element.localName === "nary" && (hasHiddenContent("naryPr", "sub") || hasHiddenContent("naryPr", "sup"))) return false;
   if (element.localName === "r") {
     // Hosts can use the first run's typography, but the editor cannot retain per-run typography.
     const properties = element.children.find((item): item is OmmlElement => item.kind === "element" &&
