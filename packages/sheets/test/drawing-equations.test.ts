@@ -53,7 +53,7 @@ test('an imported Excel equation edits in place, keeping its anchor and display 
 
   const [imported] = objects(artifact);
   expect(imported!.object.equation).toMatchObject({ display: true, size: 14 * (96 / 72) });
-  artifact = applySpreadsheetCommand(artifact, { name: 'edit-equation', sheetId, objectId: 2, equation: edited });
+  artifact = applySpreadsheetCommand(artifact, { name: 'edit-equation', sheetId, objectId: 2, equation: edited, width: 90, height: 30 });
   const xml = drawingXml(openSpreadsheetArtifact(artifact.bytes()));
   expect(xml).toContain('<xdr:twoCellAnchor><xdr:from><xdr:col>2</xdr:col>');
   expect(xml).toContain('<m:oMathParaPr><m:jc m:val="left"/></m:oMathParaPr>');

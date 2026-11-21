@@ -170,7 +170,7 @@ export function applySpreadsheetDrawingCommand(artifact: SpreadsheetArtifact, in
     if (command.name === 'edit-equation') {
       if (!shape) throw new Error('Select an equation to edit it.');
       const edited = editedEquationShape(document, shape, command.equation);
-      if (command.width === undefined || command.height === undefined) editor.replaceElementMarkup(shape, edited);
+      if (anchor.kind !== 'absolute' || command.width === undefined || command.height === undefined) editor.replaceElementMarkup(shape, edited);
       else {
         // Resizing rewrites the anchor, so the edited shape goes in with the anchor's other content.
         const markup = anchorContent(element).map(e => e === shape ? edited : e.span.start <= shape.span.start && e.span.end >= shape.span.end ? raw(e).replace(raw(shape), edited) : raw(e)).join('');
