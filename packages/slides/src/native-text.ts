@@ -8,6 +8,7 @@ import type { PresentationCommand } from './commands.ts';
 import type { MathEquation } from '@tumblerjs/core/math';
 import { EQUATION_FONT } from '@tumblerjs/core/math';
 import { EQUATION_CHARACTER } from './equations.ts';
+import { PresentationError } from './model.ts';
 
 type TextCommand = Extract<
   PresentationCommand,
@@ -365,7 +366,11 @@ function setNativeEquation(
       let inserted = false;
       for (const run of paragraph.runs) {
         const local = command.start - at;
-        if (existing && local === 0 && run.equation) runs.push({ ...run, equation: command.equation });
+        if (existing && local === 0 && run.equation) {
+          if (run.equation.readOnly)
+            throw new PresentationError('unsupported_edit', 'This equation contains Office Math features that cannot be edited in place.');
+          runs.push({ ...run, equation: command.equation });
+        }
         else if (!existing && !inserted && local >= 0 && local <= run.text.length) {
           if (local) runs.push({ ...run, text: run.text.slice(0, local) });
           runs.push(equationRun(run, command.equation));
