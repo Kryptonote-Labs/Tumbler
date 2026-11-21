@@ -15,6 +15,7 @@
   import { presentationTabs } from "./presentation-tabs.ts";
   import { presentationTextLayout } from "./presentation-text-layout.ts";
   import { slideParagraphFontSize, type SlideText } from "@tumblerjs/slides";
+  import PresentationEquation from "./PresentationEquation.svelte";
   let {
     text,
     onslide,
@@ -29,6 +30,15 @@
     editor?: Omit<SlideTextEditorOptions, "paragraphs">;
   } = $props();
   let vertical = $derived(text.direction && text.direction !== "horz");
+  // Text offset where each run starts, so equations know the character they occupy.
+  const runStarts = $derived.by(() => {
+    let offset = 0;
+    return text.paragraphs.map((paragraph) => {
+      const starts = paragraph.runs.map((run) => (offset += run.text.length) - run.text.length);
+      offset++;
+      return starts;
+    });
+  });
 </script>
 
 <div
@@ -70,7 +80,7 @@
     style:writing-mode={vertical ? "vertical-rl" : "horizontal-tb"}
     style:tab-size={`${text.tabSize ?? 96}px`}
   >
-    {#each text.paragraphs as paragraph}
+    {#each text.paragraphs as paragraph, paragraphIndex}
       {@const base = paragraph.runs[0] ?? paragraph.endRun}
       {@const family = base?.fontFamily ?? "Arial"}
       <p
@@ -103,7 +113,12 @@
             style:display="inline-block"
             style:min-width={`${Math.max(0, -paragraph.indent)}px`}
             >{paragraph.bullet}
-          </span>{/if}{#each paragraph.runs as run}<span
+          </span>{/if}{#each paragraph.runs as run, runIndex}{#if run.equation}<PresentationEquation
+              run={{ ...run, equation: run.equation }}
+              start={runStarts[paragraphIndex]?.[runIndex] ?? 0}
+              fontFamily={fonts?.family(run.fontFamily) ?? cssFontFamily(run.fontFamily)}
+              {editor}
+            />{:else}<span
             data-text-run
             style:font-family={fonts?.family(run.fontFamily) ??
               cssFontFamily(run.fontFamily)}
@@ -138,7 +153,7 @@
                     data-tab
                     style="display:inline-block;white-space:pre">{piece}</span
                   >{:else}{piece}{/if}{/each}{/if}</span
-          >{/each}{#if paragraph.runs.length === 0}<br />{/if}
+          >{/if}{/each}{#if paragraph.runs.length === 0}<br />{/if}
       </p>
     {/each}
   </div>

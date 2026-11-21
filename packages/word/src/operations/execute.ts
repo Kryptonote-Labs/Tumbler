@@ -91,9 +91,12 @@ export function createWordOperations(commands = createWordCommands()) {
             if (
               (patch.image && !current.image) ||
               (patch.shape && !current.shape) ||
-              (patch.ink && !current.ink)
+              (patch.ink && !current.ink) ||
+              (patch.equation && !current.equation)
             )
               throw new Error("The patch must match the existing object type.");
+            if (patch.equation && current.equation?.readOnly)
+              throw new Error("This equation contains Office Math features that cannot be edited in place.");
             if (current.image && (patch.image || patch.drawing)) {
               const { image, drawing, ...other } = patch;
               staged.applyDelta(commands.wordTransaction(staged, [{
@@ -277,6 +280,12 @@ export function createWordOperations(commands = createWordCommands()) {
             ),
           );
           return { start: range.start, end: range.start };
+        }
+        case "insert-equation": {
+          // The equation takes the surrounding run's typography, as typed text would.
+          const { wordSource: _source, wordCopy: _copy, link: _link, ...format } = commands.wordFormats(staged, range);
+          staged.applyDelta(commands.replaceWordDelta(staged, range, "\uFFFC", { ...format, equation: operation.input.equation }));
+          return { start: range.start + 1, end: range.start + 1 };
         }
         case "insert-chart":
         case "insert-ink":

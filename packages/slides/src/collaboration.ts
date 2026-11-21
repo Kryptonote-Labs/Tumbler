@@ -190,7 +190,7 @@ export function rebasePresentationCommands(
           if (
             command.start < change.end &&
             command.end > change.start &&
-            (command.name === 'edit-text' || change.end > change.start)
+            (command.name === 'edit-text' || command.name === 'set-equation' || change.end > change.start)
           )
             conflict();
         const offset = (value: number, right: boolean) =>

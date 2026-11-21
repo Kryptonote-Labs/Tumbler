@@ -241,6 +241,7 @@ function paintLine<Image, Path>(context: WordCanvasContext<Image, Path>, line: W
     if (fragment.kind === "drawing") {
       if (fragment.drawing?.placement !== "anchor") paintDrawing(context, fragment, options);
     }
+    else if (fragment.kind === "math") paintMath(context, fragment, options);
     else if (fragment.kind !== "tab") paintText(context, fragment, fragment.text, options);
   }
 }
@@ -358,6 +359,43 @@ function paintText<Image, Path>(context: WordCanvasContext<Image, Path>, item: W
   if (format.underline !== "none") rule(item.baseline + size * 0.12);
   if (format.underline === "double") rule(item.baseline + size * 0.12 + thickness * 2);
   if (format.strike) rule(item.baseline - size * 0.3);
+}
+
+/** Equations paint their glyphs, rules and radical strokes in the run's font and colour. */
+function paintMath<Image, Path>(context: WordCanvasContext<Image, Path>, fragment: WordLayoutFragment, options: WordPagePaintOptions<Image, Path>): void {
+  const math = fragment.math;
+  if (!math) return;
+  const { format } = fragment;
+  options.prepareFont?.(format.fontFamily);
+  context.fillStyle = format.color;
+  context.strokeStyle = format.color;
+  context.direction = "ltr";
+  context.letterSpacing = "0px";
+  const x = fragment.x;
+  const y = fragment.baseline;
+  for (const item of math.layout.items) {
+    if (item.kind === "glyph") {
+      context.font = wordCanvasFont({ ...format, fontSizePoints: item.size, italic: item.italic, bold: item.bold }, 1, options.fontFamily);
+      if (item.scaleY) {
+        context.save();
+        context.translate(x + item.x, y + item.y);
+        context.scale(1, item.scaleY);
+        context.fillText(item.text, 0, 0);
+        context.restore();
+      } else context.fillText(item.text, x + item.x, y + item.y);
+    } else if (item.kind === "rule") context.fillRect(x + item.x, y + item.y, item.width, item.height);
+    else if (item.kind === "path") {
+      context.lineWidth = item.width;
+      context.setLineDash([]);
+      context.beginPath();
+      for (const [index, [px, py]] of item.points.entries()) {
+        if (index) context.lineTo(x + px, y + py);
+        else context.moveTo(x + px, y + py);
+      }
+      context.stroke();
+    }
+    // Empty slots and prompts are editing affordances; they do not print.
+  }
 }
 
 function strokeLine<Image, Path>(context: WordCanvasContext<Image, Path>, x1: number, y1: number, x2: number, y2: number, border: WordTableBorder): void {

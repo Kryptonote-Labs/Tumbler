@@ -3,6 +3,22 @@ import { presentationTextPosition } from "./presentation-text-position.ts";
 import { PresentationTypingHistory } from "./presentation-typing-history.ts";
 import { tick } from "svelte";
 import type { PresentationTextRange } from "@tumblerjs/slides";
+import type { MathPosition, MathSelection } from "@tumblerjs/core/math";
+
+/** The equation a host is editing in place, at its object character's offset. */
+export interface SlideEquationEditing {
+  start: number;
+  selection: MathSelection;
+  /** The host's equation input has focus, so the caret blinks. */
+  focused: boolean;
+}
+const EQUATION = "\uFFFC";
+/** Semantic text in a DOM fragment: bullets are decoration and each equation is one character. */
+function fragmentText(fragment: DocumentFragment | HTMLElement) {
+  fragment.querySelectorAll("[data-bullet]").forEach((n) => n.remove());
+  fragment.querySelectorAll("[data-text-equation]").forEach((n) => n.replaceWith(EQUATION));
+  return fragment.textContent ?? "";
+}
 export interface SlideTextEditorOptions {
   active: boolean;
   initialText?: string;
@@ -20,6 +36,11 @@ export interface SlideTextEditorOptions {
   onvertical?: (direction: -1 | 1, x: number) => boolean;
   onindent?: (amount: -1 | 1) => boolean;
   onshortcut?: (key: "bold" | "italic" | "underline") => void;
+  equation?: SlideEquationEditing | undefined;
+  /** Moves the caret into the equation at `start`, from a press or an arrow key. */
+  onequation?: (start: number, at: MathPosition | "start" | "end", extend: boolean) => void;
+  /** Reports the equation caret in client coordinates for input method windows. */
+  onequationcaret?: (rect: { left: number; top: number; height: number }) => void;
 }
 /** The browser owns caret movement; document commands own text mutations. */
 export function presentationTextEdit(
@@ -44,13 +65,11 @@ export function presentationTextEdit(
       r = document.createRange();
     r.selectNodeContents(p);
     r.setEnd(container, offset);
-    const copy = r.cloneContents();
-    copy.querySelectorAll("[data-bullet]").forEach((n) => n.remove());
     return (
       options.paragraphs.slice(0, i).reduce((n, s) => n + s.length + 1, 0) +
       Math.min(
         options.paragraphs[i]?.length ?? 0,
-        copy.textContent?.length ?? 0,
+        fragmentText(r.cloneContents()).length,
       )
     );
   }
@@ -225,6 +244,16 @@ export function presentationTextEdit(
     if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) return;
     event.stopPropagation();
     if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End", "PageUp", "PageDown", "Tab", "Escape"].includes(event.key) || event.ctrlKey || event.metaKey) history.break();
+    // Arrow keys step into an adjacent equation at its near edge.
+    if ((event.key === "ArrowLeft" || event.key === "ArrowRight") && options.onequation &&
+      range.start === range.end && !event.shiftKey && !event.ctrlKey && !event.metaKey && !event.altKey) {
+      const value = text(), right = event.key === "ArrowRight";
+      if (value[right ? range.start : range.start - 1] === EQUATION) {
+        event.preventDefault();
+        options.onequation(right ? range.start : range.start - 1, right ? "start" : "end", false);
+        return;
+      }
+    }
     if ((event.key === "ArrowUp" || event.key === "ArrowDown") &&
       !event.shiftKey && !event.ctrlKey && !event.metaKey && options.onvertical) {
       capture();
@@ -281,11 +310,7 @@ export function presentationTextEdit(
     composing = false;
     const previous = text();
     const current = Array.from(node.querySelectorAll("[data-text-paragraph]"))
-      .map((p) => {
-        const c = p.cloneNode(true) as HTMLElement;
-        c.querySelectorAll("[data-bullet]").forEach((n) => n.remove());
-        return c.textContent ?? "";
-      })
+      .map((p) => fragmentText(p.cloneNode(true) as HTMLElement))
       .join("\n");
     let start = 0,
       end = previous.length,
@@ -368,7 +393,8 @@ export function presentationTextEdit(
     if (leaving) clearSelection();
     if (entering) {
       await tick();
-      if (!active) return;
+      // A host editing an equation here keeps focus in its own input.
+      if (!active || options.equation) return;
       node.focus({ preventScroll: true });
       if (options.selection) {
         range = { start: Math.min(options.selection.start, text().length), end: Math.min(options.selection.end, text().length) };
@@ -396,6 +422,7 @@ export function presentationTextEdit(
       }
     } else if (
       active &&
+      !options.equation &&
       ((focused && revised) || refocus || requested) &&
       !restorePending &&
       !composing

@@ -9,15 +9,21 @@ import { SpreadsheetArtifact } from './artifact.ts';
 import { openSpreadsheet } from './workbook.ts';
 import { parseCellRange } from './references.ts';
 import { spreadsheetDrawingBounds, spreadsheetDrawingObjectId } from './drawings.ts';
+import { isMathEquation, reconcileDrawingEquationShape, type MathEquation } from '@tumblerjs/core/math';
+import { drawingContent, editedEquationShape, equationShapeMarkup, equationZone } from './drawing-equations.ts';
 
 const id = z.string().min(1);
 const position = { x: z.number().finite(), y: z.number().finite(), width: z.number().finite().positive(), height: z.number().finite().positive() };
 const chartContent = z.object({ xml: z.string(), workbook: z.string().optional(), resources: chartResourcesSchema.optional() }).strict();
 const target = { sheetId: id, objectId: z.number().int().nonnegative() };
+const equation = z.custom<MathEquation>(isMathEquation).describe('Structured equation {body:[nodes]} as in @tumblerjs/core/math.');
 export const spreadsheetDrawingCommand = z.discriminatedUnion('name', [
   z.object({ name: z.literal('insert-chart'), sheetId: id, ...position, content: chartContent, bindUnboundData: z.boolean().optional(), sourceRange: z.string().optional() }).strict(),
   z.object({ name: z.literal('edit-chart'), ...target, content: chartContent, bindUnboundData: z.boolean().optional() }).strict(),
   z.object({ name: z.literal('insert-shape'), sheetId: id, ...position, preset: id, text: z.string().optional(), fill: z.string().optional(), stroke: z.string().optional() }).strict(),
+  z.object({ name: z.literal('insert-equation'), sheetId: id, ...position, equation }).strict(),
+  /** Rewrites an equation text box; a size fits the box to the new equation. */
+  z.object({ name: z.literal('edit-equation'), ...target, equation, width: position.width.optional(), height: position.height.optional() }).strict(),
   z.object({ name: z.literal('insert-image'), sheetId: id, ...position, data: id, contentType: z.enum(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/svg+xml']), alt: z.string().optional() }).strict(),
   z.object({ name:z.literal('align-drawing'), ...target, range:id, action:z.enum(['left','center','right','top','middle','bottom']) }).strict(),
   z.object({ name: z.literal('style-drawing'), ...target, fill: z.string().optional(), stroke: z.string().optional(), strokeWidth: z.number().finite().nonnegative().optional() }).strict(),
@@ -34,6 +40,9 @@ const emu = (n: number) => {
   return value;
 };
 const children = (e: LosslessXmlElement) => e.children.filter((n): n is LosslessXmlElement => n.kind === 'element');
+const DRAWING_KINDS = ['sp', 'pic', 'cxnSp', 'grpSp', 'graphicFrame'];
+// An anchor's own content, keeping `mc:AlternateContent` whole so equations and fallbacks move together.
+const anchorContent = (e: LosslessXmlElement) => children(e).filter(e => DRAWING_KINDS.includes(e.localName) || e.localName === 'AlternateContent');
 
 /** Drawing operations share one transactional OOXML engine across human and agent hosts. */
 export function applySpreadsheetDrawingCommand(artifact: SpreadsheetArtifact, input: SpreadsheetDrawingCommand): SpreadsheetArtifact {
@@ -102,11 +111,16 @@ export function applySpreadsheetDrawingCommand(artifact: SpreadsheetArtifact, in
     const clientData=original && children(original).find(e=>e.localName==='clientData');
     return `<xdr:absoluteAnchor xmlns:xdr="${ns.spreadsheetDrawing}" xmlns:a="${ns.drawing}" xmlns:r="${rel}" ${attributes}><xdr:pos x="${emu(bounds.x)}" y="${emu(bounds.y)}"/><xdr:ext cx="${emu(bounds.width)}" cy="${emu(bounds.height)}"/>${content}${clientData?raw(clientData):'<xdr:clientData/>'}</xdr:absoluteAnchor>`;
   };
-  if (command.name === 'insert-shape' || command.name === 'insert-image' || command.name === 'insert-chart') {
+  // The equation shape whose Office Math fallback must follow this edit.
+  let equationShape: number | undefined;
+  if (command.name === 'insert-shape' || command.name === 'insert-image' || command.name === 'insert-chart' || command.name === 'insert-equation') {
     const objectId = nextId++;
     const xfrm = `<a:xfrm><a:off x="${emu(command.x)}" y="${emu(command.y)}"/><a:ext cx="${emu(command.width)}" cy="${emu(command.height)}"/></a:xfrm>`;
     let content: string;
-    if (command.name === 'insert-shape') {
+    if (command.name === 'insert-equation') {
+      content = equationShapeMarkup(objectId, xfrm, command.equation);
+      equationShape = objectId;
+    } else if (command.name === 'insert-shape') {
       if (!Object.hasOwn(presetGeometries, command.preset)) throw new Error('Unknown DrawingML shape preset.');
       const fill = command.fill ?? '#729fcf', stroke = command.stroke ?? '#3465a4';
       const paint = (value: string) => {
@@ -144,15 +158,27 @@ export function applySpreadsheetDrawingCommand(artifact: SpreadsheetArtifact, in
   } else {
     const anchor = anchors.find(a => {
       const element = document.element(a.elementId);
-      const object = element && children(element).find(e => ['sp','pic','cxnSp','grpSp','graphicFrame'].includes(e.localName));
+      const object = element && drawingContent(element).find(e => DRAWING_KINDS.includes(e.localName));
       const props = object && children(object).find(e => e.localName.startsWith('nv'));
       const identity = props && children(props).find(e => e.localName === 'cNvPr');
       return Number(identity?.attributes.find(a => a.localName === 'id')?.value) === command.objectId;
     });
     const element = anchor && document.element(anchor.elementId);
     if (!anchor || !element) throw new Error('Drawing object does not exist.');
-    if(command.name === 'style-drawing') {
-      const object = children(element).find(e=>e.localName==='sp'||e.localName==='cxnSp');
+    const shape = drawingContent(element).find(e => e.localName === 'sp');
+    if (shape && equationZone(shape)) equationShape = command.objectId;
+    if (command.name === 'edit-equation') {
+      if (!shape) throw new Error('Select an equation to edit it.');
+      const edited = editedEquationShape(document, shape, command.equation);
+      if (anchor.kind !== 'absolute' || command.width === undefined || command.height === undefined) editor.replaceElementMarkup(shape, edited);
+      else {
+        // Resizing rewrites the anchor, so the edited shape goes in with the anchor's other content.
+        const markup = anchorContent(element).map(e => e === shape ? edited : e.span.start <= shape.span.start && e.span.end >= shape.span.end ? raw(e).replace(raw(shape), edited) : raw(e)).join('');
+        const bounds = spreadsheetDrawingBounds(anchor, worksheet.rowGeometry(), worksheet.columnGeometry());
+        editor.replaceElementMarkup(element, anchorMarkup({ ...bounds, width: command.width, height: command.height }, markup, element));
+      }
+    } else if(command.name === 'style-drawing') {
+      const object = drawingContent(element).find(e=>e.localName==='sp'||e.localName==='cxnSp');
       const properties = object && children(object).find(e=>e.localName==='spPr');
       if(!properties) throw new Error('Select a shape to change its style.');
       const fillTypes = new Set(['solidFill','noFill','gradFill','pattFill','blipFill','grpFill']);
@@ -179,7 +205,7 @@ export function applySpreadsheetDrawingCommand(artifact: SpreadsheetArtifact, in
       else insertAfter(other, raw(element));
     } else {
       const bounds = command.name === 'move-drawing' ? command : spreadsheetDrawingBounds(anchor, worksheet.rowGeometry(), worksheet.columnGeometry());
-      const content = children(element).filter(e => ['sp', 'pic', 'cxnSp', 'grpSp', 'graphicFrame'].includes(e.localName)).map(raw).join('');
+      const content = anchorContent(element).map(raw).join('');
       if (command.name === 'duplicate-drawing') {
         const cloneEditor = beginLosslessXmlEdit(document);
         const renumber = (e: LosslessXmlElement) => {
@@ -210,12 +236,15 @@ export function applySpreadsheetDrawingCommand(artifact: SpreadsheetArtifact, in
         }
         const cloneDocument = parseLosslessXml(cloneEditor.commit().bytes);
         const cloneElement = cloneDocument.element(element.id)!;
-        const clone = children(cloneElement).filter(e => ['sp','pic','cxnSp','grpSp','graphicFrame'].includes(e.localName)).map(e=>cloneDocument.source.slice(e.span.start,e.span.end)).join('');
+        const clone = anchorContent(cloneElement).map(e=>cloneDocument.source.slice(e.span.start,e.span.end)).join('');
         insertAfter(element, anchorMarkup({ ...bounds, x: bounds.x + 16, y: bounds.y + 16 }, clone, element));
       } else editor.replaceElementMarkup(element, anchorMarkup(bounds, content, element));
     }
   }
-  const bytes = editor.commit().bytes;
+  let bytes = editor.commit().bytes;
+  // Duplicates and deletions carry their fallbacks whole; other edits regenerate them.
+  if (equationShape !== undefined && command.name !== 'duplicate-drawing' && command.name !== 'delete-drawing')
+    bytes = reconcileDrawingEquationShape(bytes, String(equationShape));
   if (!drawing) {
     if (command.name !== 'insert-image' && command.name !== 'insert-chart') transaction.addPart(drawingPart, 'application/vnd.openxmlformats-officedocument.drawing+xml', bytes);
     else transaction.replacePart(drawingPart, bytes);

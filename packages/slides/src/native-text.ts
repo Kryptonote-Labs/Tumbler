@@ -5,10 +5,14 @@ import type { NativeParagraphField } from './model.ts';
 import type { FormattingPatch } from '@tumblerjs/core';
 import type { SlideText, SlideTextRun, SlideParagraph } from './model.ts';
 import type { PresentationCommand } from './commands.ts';
+import type { MathEquation } from '@tumblerjs/core/math';
+import { EQUATION_FONT } from '@tumblerjs/core/math';
+import { EQUATION_CHARACTER } from './equations.ts';
+import { PresentationError } from './model.ts';
 
 type TextCommand = Extract<
   PresentationCommand,
-  { name: 'edit-text' | 'format-text' | 'paragraph' }
+  { name: 'edit-text' | 'format-text' | 'paragraph' | 'set-equation' }
 >;
 const value = (text: SlideText) =>
   text.paragraphs.map((p) => p.runs.map((r) => r.text).join('')).join('\n');
@@ -19,7 +23,7 @@ function coalesceRuns(runs: readonly SlideTextRun[]) {
     const last = result.at(-1);
     const { text: a, ...left } = last ?? run,
       { text: b, ...right } = run;
-    if (last && JSON.stringify(left) === JSON.stringify(right))
+    if (last && !last.equation && !run.equation && JSON.stringify(left) === JSON.stringify(right))
       result[result.length - 1] = { ...last, text: last.text + run.text };
     else if (run.text) result.push(run);
   }
@@ -133,9 +137,10 @@ export function editNativeText(
   if (
     command.name === 'edit-text' &&
     (!command.value.isWellFormed() ||
-      /[\u0000-\u0008\u000b\u000c\u000e-\u001f\r\uFFFE\uFFFF]/u.test(command.value))
+      /[\u0000-\u0008\u000b\u000c\u000e-\u001f\r\uFFFC\uFFFE\uFFFF]/u.test(command.value))
   )
     throw new RangeError('Invalid XML text character.');
+  if (command.name === 'set-equation') return setNativeEquation(text, command, baseline);
   const fallback: SlideTextRun = {
     text: '',
     fontFamily: 'Aptos',
@@ -286,6 +291,11 @@ export function editNativeText(
     }
     at += run.text.length;
   }
+  // Text typed beside an equation takes its typography, not its math.
+  if (typing.equation) {
+    const { equation: _, ...rest } = typing;
+    typing = rest;
+  }
   const lines = command.value.split('\n');
   const before = slice(begin.paragraph, 0, command.start - begin.start, false, begin.base);
   const after = slice(
@@ -328,5 +338,61 @@ export function editNativeText(
       ...inserted,
       ...text.paragraphs.slice(last + 1),
     ],
+  };
+}
+
+
+function setNativeEquation(
+  text: SlideText,
+  command: Extract<TextCommand, { name: 'set-equation' }>,
+  baseline: SlideText,
+): SlideText {
+  const value = text.paragraphs.map((p) => p.runs.map((r) => r.text).join('')).join('\n');
+  const existing = command.end === command.start + 1 && value[command.start] === EQUATION_CHARACTER;
+  const placed = existing
+    ? text
+    : editNativeText(text, { ...command, name: 'edit-text', value: '', formatting: undefined }, baseline);
+  let offset = 0;
+  return {
+    ...placed,
+    paragraphs: placed.paragraphs.map((paragraph) => {
+      const start = offset;
+      const length = paragraph.runs.reduce((n, r) => n + r.text.length, 0);
+      offset += length + 1;
+      if (command.start < start || command.start > start + length) return paragraph;
+      let at = start;
+      const runs: SlideTextRun[] = [];
+      const donor = paragraph.endRun ?? paragraph.runs[0];
+      let inserted = false;
+      for (const run of paragraph.runs) {
+        const local = command.start - at;
+        if (existing && local === 0 && run.equation) {
+          if (run.equation.readOnly)
+            throw new PresentationError('unsupported_edit', 'This equation contains Office Math features that cannot be edited in place.');
+          runs.push({ ...run, equation: command.equation });
+        }
+        else if (!existing && !inserted && local >= 0 && local <= run.text.length) {
+          if (local) runs.push({ ...run, text: run.text.slice(0, local) });
+          runs.push(equationRun(run, command.equation));
+          if (local < run.text.length) runs.push({ ...run, text: run.text.slice(local) });
+          inserted = true;
+        } else runs.push(run);
+        at += run.text.length;
+      }
+      if (!existing && !inserted)
+        runs.push(equationRun(donor ?? { text: '', fontFamily: 'Aptos', fontSize: 32, color: '#000000', bold: false, italic: false, underline: false }, command.equation));
+      return nativeParagraphMetrics({ ...paragraph, runs, endRun: undefined });
+    }),
+  };
+}
+function equationRun(donor: SlideTextRun, equation: MathEquation): SlideTextRun {
+  const { equation: _, hyperlink: __, ...style } = donor;
+  return {
+    ...style,
+    text: EQUATION_CHARACTER,
+    equation,
+    fontFamily: EQUATION_FONT,
+    nativeOwnFonts: { latin: EQUATION_FONT, eastAsian: donor.nativeOwnFonts?.eastAsian, complexScript: donor.nativeOwnFonts?.complexScript },
+    ...(donor.nativeFonts ? { nativeFonts: { ...donor.nativeFonts, authored: { ...donor.nativeFonts.authored, latin: EQUATION_FONT } } } : {}),
   };
 }

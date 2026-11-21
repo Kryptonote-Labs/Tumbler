@@ -136,6 +136,7 @@ export function importOperationDelta(artifact: WordArtifact) {
             ...(run.source ? { wordSource: run.source } : {}),
             ...runAttributes(format),
             ...(run.drawing ? { drawing: run.drawing } : {}),
+            ...(run.equation ? { equation: run.equation } : {}),
             ...(run.ink ? { ink: run.ink } : {}),
             ...(run.inkTraces ? { inkTraces: run.inkTraces } : {}),
             ...(run.chart ? { chart: run.chart } : {}),

@@ -2,6 +2,7 @@ export { default as WordInkPageLayer } from "./WordInkPageLayer.svelte";
 /** Replaceable Svelte heads for Tumbler's format packages. */
 /** Owned Svelte heads for Tumbler's format-neutral document models. */
 export { default as SpreadsheetGrid } from "./SpreadsheetGrid.svelte";
+export type { SpreadsheetEquationEditing } from "./spreadsheet-equation.ts";
 export { default as SpreadsheetFormulaBar } from "./SpreadsheetFormulaBar.svelte";
 export { default as FormattingToolbar } from "./FormattingToolbar.svelte";
 export { default as OoxmlChart } from "./OoxmlChart.svelte";
@@ -87,3 +88,6 @@ export { chartDataHighlights } from './chart-data-highlights.ts';
 export { parseSpreadsheetClipboard } from './spreadsheet-clipboard.ts';
 
 export type { ChartDesignControls } from './chart-design-controls.ts';
+
+export { default as MathGraphic } from "./MathGraphic.svelte";
+export { browserMathMeasure } from "./math-measure.ts";

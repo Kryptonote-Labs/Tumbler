@@ -8,6 +8,7 @@ import { isShapeTextBody } from "../shape-text.ts";
 import { isWordDrawingGeometry } from "../drawing-geometry.ts";
 import { isWordColour } from "../theme-colours.ts";
 import { isWordAuthoredShape } from "../shapes.ts";
+import { isMathEquation } from "@tumblerjs/core/math";
 import {
   isWordParagraphPositioning,
   isWordPositionalTab,
@@ -103,6 +104,7 @@ export function validateAttributes(attributes: Record<string, unknown> | undefin
     if (key === "inkTraces" && isWordInkTraceOverrides(value)) continue;
     if (key === "drawing" && isWordDrawingGeometry(value)) continue;
     if (key === "shape" && isWordAuthoredShape(value)) continue;
+    if (key === "equation" && isMathEquation(value)) continue;
     if (key === "link" && isWordHyperlink(value)) continue;
     if (key === "color" && isTextColor(value)) continue;
     if (key === "align" && ALIGNMENTS.some((alignment) => alignment === value)) continue;

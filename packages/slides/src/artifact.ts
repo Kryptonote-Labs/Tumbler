@@ -2,9 +2,14 @@ import { isPresentationBlock } from './native-block.ts';
 import { readNativePresentation } from './native-open.ts';
 import { refreshPresentationInkFallback } from "./ink-authoring.ts";
 import { refreshModificationId } from "./modification-id.ts";
+import { reconcileDrawingEquationShape } from "@tumblerjs/core/math";
+import type { MathEquation } from "@tumblerjs/core/math";
 import {
   editPresentationText,
+  setPresentationEquation,
   presentationTextTarget,
+  type PresentationTextRange,
+  type PresentationTableCellAddress,
   editPresentationShape,
   type PresentationTextEdit,
   type PresentationFormatChange,
@@ -25,7 +30,12 @@ import {
   type OpenPresentationOptions,
   type PresentationDocument,
   type PresentationObjectChange,
+  type SlideObject,
+  type SlideText,
 } from "./model.ts";
+
+const hasText = (text: SlideText | undefined) => !!text?.paragraphs.some((p) => p.runs.some((r) => r.equation));
+const hasEquations = (object: SlideObject) => hasText(object.text) || !!object.table?.cells.some((cell) => hasText(cell.text));
 
 /** Immutable presentation edits. Only the owning slide XML part is replaced. */
 export class PresentationArtifact {
@@ -49,6 +59,16 @@ export class PresentationArtifact {
     if (!source)
       throw new PresentationError("invalid_document", "Missing source XML.");
     return { object, source };
+  }
+  /** Inserts or rewrites an inline equation; see the `set-equation` command. */
+  setEquation(change: PresentationTextRange & { slideId: string; objectKey: string; cell?: PresentationTableCellAddress | undefined; equation: MathEquation }): PresentationArtifact {
+    const { object, source } = this.target(change.slideId, change.objectKey);
+    return this.commitPart(
+      object.sourcePart,
+      setPresentationEquation(source, presentationTextTarget(object, change.cell), change, change.equation),
+      object.shapeId,
+      true,
+    );
   }
   editText(change: PresentationTextEdit): PresentationArtifact {
     const { object, source } = this.target(change.slideId, change.objectKey);
@@ -90,7 +110,10 @@ export class PresentationArtifact {
     part: string,
     bytes: Uint8Array,
     shapeId: string,
+    /** The shape holds or held Office Math, so its alternate representation follows the edit. */
+    equations = this.document.slides.some((slide) => slide.objects.some((object) => object.sourcePart === part && object.shapeId === shapeId && hasEquations(object))),
   ): PresentationArtifact {
+    if (equations) bytes = reconcileDrawingEquationShape(bytes, shapeId);
     const original = readPresentationPart(this.document, part);
     if (
       original.length === bytes.length &&

@@ -161,7 +161,7 @@ export function wordParagraphRenderer(
   const runMarkup = (run: WordTextRun, generatedRun: string | undefined, resetStyle = false) => {
     const scope = copies.scopes.get(run) ?? 0;
     ({ emitted, remaining } = stateFor(scope));
-    if ((run.ink || run.shape || run.chart) && run.source === undefined) return remap(generatedRun ?? '');
+    if ((run.ink || run.shape || run.chart || run.equation) && run.source === undefined) return remap(generatedRun ?? '');
     if (run.image && !document.drawings.has(run.source!)) return remap(generatedRun ?? '');
     const original = run.source === undefined ? undefined : originalRuns.get(run.source);
     if (run.source !== undefined && !original) throw new Error('Invalid run source reference.');
@@ -176,6 +176,28 @@ export function wordParagraphRenderer(
           remaining.set(owner.source, remaining.get(owner.source)! - 1);
           content += finishSource(owner);
         }
+      }
+      return copies.markers(content, scope);
+    }
+    // Imported Office Math zones are siblings of runs. Unchanged ones keep their source markup;
+    // an edited display equation keeps its math paragraph and justification.
+    if (run.equation && original?.equation) {
+      const equationUnchanged = JSON.stringify(run.equation) === JSON.stringify(original.equation);
+      if (!equationUnchanged && original.equation.readOnly)
+        throw new Error('This equation contains Office Math features that cannot be edited in place.');
+      const unchanged = equationUnchanged && (original.equation.readOnly || JSON.stringify(run.format) === JSON.stringify(original.format));
+      const zones = element?.localName === 'oMathPara' ? markup.children(element, 'oMath') : [];
+      let content = element && unchanged
+        ? markup.raw(element)
+        : element && zones.length
+          ? markup.document.source.source.slice(element.span.start, zones[0]!.span.start) + remap(generatedRun ?? '') +
+            markup.document.source.source.slice(zones.at(-1)!.span.end, element.span.end)
+          : remap(generatedRun ?? '');
+      if (!emitted.has(run.source!)) { content = (before.get(run.source!) ?? []).join('') + content; emitted.add(run.source!); }
+      const owner = owners.get(run.source!);
+      if (owner?.source !== undefined) {
+        remaining.set(owner.source, remaining.get(owner.source)! - 1);
+        content += finishSource(owner);
       }
       return copies.markers(content, scope);
     }
@@ -344,7 +366,10 @@ export function wordParagraphRenderer(
           : '<w:numPr><w:numId w:val="0"/></w:numPr>',
       );
     }
-    const generatedRuns = generatedP.inlines.filter((inline) => inline.kind === 'run' || inline.kind === 'hyperlink');
+    // Authored equations export as `m:oMath` siblings, which parse as runs.
+    const generatedRuns = generatedP.inlines.filter(
+      (inline) => inline.kind === 'run' || inline.kind === 'hyperlink',
+    );
     let content = paragraph.runs
       .map((run, index) =>
         runMarkup(

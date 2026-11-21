@@ -5,6 +5,9 @@ import { readSlideTiming } from "./timing.ts";
 import { readPresentationMedia } from "./media.ts";
 import { embeddedFontBytes } from "./embedded-fonts.ts";
 import { scriptSegments } from "./text-fonts.ts";
+import type { MathEquation } from "@tumblerjs/core/math";
+import { DRAWING_2010_NAMESPACE, drawingEquation, drawingEquationRunProperties, isDrawingEquation } from "@tumblerjs/core/math";
+import { EQUATION_CHARACTER } from "./equations.ts";
 import { formatAutoNumber } from "./text-numbering.ts";
 import { builtinTableStyles } from "./builtin-table-styles.ts";
 import type {
@@ -321,6 +324,7 @@ class Reader {
         this.ns.presentation,
         DIAGRAM_DRAWING,
         this.ns.drawing,
+        DRAWING_2010_NAMESPACE,
         this.ns.chart,
         this.rel,
       ]),
@@ -1462,6 +1466,15 @@ class Reader {
               "http://schemas.microsoft.com/office/powerpoint/2010/main",
         );
       });
+      // PowerPoint stores shapes containing Office Math as an a14 choice with a picture fallback.
+      const equationShape =
+        (element.localName === "sp" || element.localName === "graphicFrame") &&
+        choices.length === 1 &&
+        choices[0]?.kind === "element" &&
+        choices[0].attributes.find((item) => item.localName === "Requires")?.value.trim() === "a14" &&
+        choices[0].children.filter((item) => item.kind === "element").length === 1 &&
+        choices[0].span.start < element.span.start &&
+        choices[0].span.end > element.span.end;
       const editableInk =
         element.localName === "pic" &&
         choices.length > 0 &&
@@ -1473,7 +1486,7 @@ class Reader {
         ? "Signed presentations are read-only."
         : layer !== "slide"
           ? "Master and layout objects must be edited in their source layout."
-          : alternate && !editableInk
+          : alternate && !editableInk && !equationShape
             ? "Objects with alternate representations are read-only."
             : kind === "unsupported"
               ? "This object type is not editable yet."
@@ -1924,6 +1937,7 @@ class Reader {
         rpr: Element | undefined,
         value: string,
         collectDefaults = true,
+        equation?: MathEquation,
       ): SlideTextRun[] => {
         const defaults = [
           rpr,
@@ -1981,6 +1995,7 @@ class Reader {
           spacing: ((numeric(runAttr("spc"), 0) / 100) * 4) / 3,
           capitals: runAttr("cap") ?? "none",
           ...(hyperlink ? { hyperlink } : {}),
+          ...(equation ? { equation } : {}),
         }));
         const fontContext:NativeTextFonts={theme:context.fonts,authored:{latin:defaults.map(item=>attr(this.child(item,'latin'),'typeface')).find(v=>!!v),eastAsian:defaults.map(item=>attr(this.child(item,'ea'),'typeface')).find(v=>!!v),complexScript:defaults.map(item=>attr(this.child(item,'cs'),'typeface')).find(v=>!!v)},role:['title','ctrTitle'].includes(role)?'major':'minor',language:runAttr('lang'),scale:fontScale};
         for(const run of result)nativeRunFonts.set(run,fontContext);
@@ -2015,6 +2030,11 @@ class Reader {
             italic: false,
             underline: false,
           });
+          continue;
+        }
+        if (isDrawingEquation(run)) {
+          this.characters += 1;
+          runs.push(...runStyle(drawingEquationRunProperties(run), EQUATION_CHARACTER, true, drawingEquation(run)));
           continue;
         }
         if (!["r", "fld"].includes(run.localName)) continue;
@@ -2183,6 +2203,7 @@ class Reader {
           this.children(paragraph).every(
             (item) =>
               ["pPr", "endParaRPr", "br"].includes(item.localName) ||
+              isDrawingEquation(item) ||
               (item.localName === "r" &&
                 this.children(item).every((runChild) =>
                   ["rPr", "t"].includes(runChild.localName),

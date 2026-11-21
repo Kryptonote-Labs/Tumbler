@@ -29,6 +29,8 @@
     type SlideText,
   } from "@tumblerjs/slides";
   import type { FormattingPatch, FormattingState } from "@tumblerjs/core";
+  import type { MathPosition } from "@tumblerjs/core/math";
+  import type { PresentationEquationEditing, PresentationEquationTarget } from "./presentation-equation.ts";
   import { onDestroy, onMount, tick, setContext, untrack, type Snippet } from "svelte";
   import type {
     PresentationCommand,
@@ -88,6 +90,9 @@
     onadvance,
     overlay,
     remoteSelections = [],
+    equation,
+    onequation,
+    onequationcaret,
   }: {
     textAnnotations?: readonly PresentationTextAnnotation[];
     onannotationactivate?: (activation: PresentationAnnotationActivation) => void;
@@ -130,7 +135,21 @@
       objectKey: string;
       value: string;
     }) => void;
+    /** The equation the host is editing, drawn with its math caret and selection. */
+    equation?: PresentationEquationEditing | undefined;
+    /** The caret entered the equation at `start` in the edited text, by press or arrow key. */
+    onequation?: (target: PresentationEquationTarget, at: MathPosition | "start" | "end", extend: boolean) => void;
+    onequationcaret?: (rect: { left: number; top: number; height: number }) => void;
   } = $props();
+  const equationFor = (object: SlideObject, cell?: PresentationTableCellAddress) =>
+    equation && equation.objectKey === object.key &&
+    equation.cell?.row === cell?.row && equation.cell?.column === cell?.column
+      ? equation
+      : undefined;
+  const enterEquation = (object: SlideObject) =>
+    onequation &&
+    ((start: number, at: MathPosition | "start" | "end", extend: boolean) =>
+      onequation({ slideId: slide.id, objectKey: object.key, cell: object.table ? cellAddress : undefined, start }, at, extend));
   const viewId = $props.id();
   let host = $state<HTMLDivElement>();
   let svg = $state<SVGSVGElement>();
@@ -1119,6 +1138,9 @@
                     },
                     onundo,
                     onshortcut: shortcut,
+                    equation: equationFor(object, cellAddress),
+                    onequation: enterEquation(object),
+                    onequationcaret,
                   }}
                 />
               {:else if object.kind === "chart" && object.chart}
@@ -1200,6 +1222,9 @@
                       onundo,
                       onshortcut: shortcut,
                       onindent: indentText,
+                      equation: equationFor(object),
+                      onequation: enterEquation(object),
+                      onequationcaret,
                     }}
                   />
                 </foreignObject>

@@ -42,6 +42,8 @@
   import { spreadsheetSelectionRects, spreadsheetSelectionRanges } from "./spreadsheet-selection.ts";
   import { spreadsheetCellLayer } from "./spreadsheet-cell-layer.ts";
   import SpreadsheetDrawingObject from "./SpreadsheetDrawingObject.svelte";
+  import type { SpreadsheetEquationEditing } from "./spreadsheet-equation.ts";
+  import type { MathPosition } from "@tumblerjs/core/math";
   import SpreadsheetChart from "./SpreadsheetChart.svelte";
   import { resizeDrawingBounds } from "./spreadsheet-drawing-handles.ts";
   import { objectHandles, type ObjectHandle } from "./object-selection.ts";
@@ -80,6 +82,11 @@
     readonly onobjectdelete?: (objectId: number) => void;
     chartSelection?: number;
     readonly onobjectselectionchange?: (objectId: number | undefined) => void;
+    /** The equation text box the host is editing, drawn with its caret and selection. */
+    readonly equation?: SpreadsheetEquationEditing | undefined;
+    /** A press on the selected equation text box, as an equation position. */
+    readonly onequation?: (objectId: number, position: MathPosition, extend: boolean) => void;
+    readonly onequationcaret?: (rect: { left: number; top: number; height: number }) => void;
     readonly onchartselectionchange?: (anchorElementId: number | undefined) => void;
     /** Prevents cell edits while retaining selection and table view controls. */
     readonly readonly?: boolean;
@@ -109,6 +116,9 @@
     objectSelection, onobjectmove, onobjectdelete,
     chartSelection,
     onobjectselectionchange,
+    equation,
+    onequation,
+    onequationcaret,
     onchartselectionchange,
     readonly = false,
     preserveInputFocus = false,
@@ -912,7 +922,14 @@
   {@const id = frame.object.objectId}
   {@const shown = previewBounds(id, frame.bounds)}
   <button type="button" aria-label={`Select ${frame.object.name}`} class="drawing-object" data-drawing-id={id} onclick={(event)=>{event.stopPropagation();onobjectselectionchange?.(id);}} class:selected={readonly && objectSelection===id} onpointerdown={event=>drawingPointerDown(event,id,frame.bounds)} style:position="absolute" style:z-index={3 + (worksheet.drawing?.anchors.findIndex(anchor => anchor.elementId === frame.anchor.elementId) ?? 0)} style:left={`${left + shown.x - frame.bounds.x}px`} style:top={`${top + shown.y - frame.bounds.y}px`} style:width={`${Math.max(1, shown.width)}px`} style:height={`${Math.max(1, shown.height)}px`}>
-    <SpreadsheetDrawingObject object={frame.object} />
+    <SpreadsheetDrawingObject
+      object={frame.object}
+      equation={equation?.objectId === id ? equation : undefined}
+      onequation={!readonly && onequation && frame.object.equation && objectSelection === id
+        ? (position, extend) => onequation(id, position, extend)
+        : undefined}
+      {onequationcaret}
+    />
   </button>
   {@render drawingSelection(id, frame.bounds, shown, left, top)}
 {/snippet}

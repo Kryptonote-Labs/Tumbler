@@ -27,9 +27,10 @@ export interface WordTextSelection {
 export interface WordParagraphTextSegment {
   readonly tab?: import("./document.ts").WordPositionalTab;
   readonly breakType?: import('./breaks.ts').WordBreakType;
-  readonly kind: "text" | "symbol" | "tab" | "break" | "drawing" | "note" | "page-field";
+  readonly kind: "text" | "symbol" | "tab" | "break" | "drawing" | "note" | "page-field" | "math";
   readonly field?: import("./page-fields.ts").WordPageField;
   readonly symbolFont?: string;
+  readonly equation?: import("@tumblerjs/core/math").MathEquation;
   /** Additional source elements owned by a projected complex field. */
   readonly replacedElementIds?: readonly number[];
   readonly elementId: number;
@@ -57,6 +58,7 @@ export function wordParagraphTextSegments(_document: WordDocument | undefined, p
         : content.kind === "tab" ? { kind: "tab" as const, value: "\t" }
         : content.kind === "break" ? { kind: "break" as const, value: "\n", breakType: content.breakType }
         : content.kind === "drawing" ? { kind: "drawing" as const, value: "\uFFFC" }
+        : content.kind === "math" ? { kind: "math" as const, value: "\uFFFC" }
         : content.kind === "footnote-reference" || content.kind === "endnote-reference" ? { kind: "note" as const, value: "\uFFFC" }
         : undefined;
       if (projected === undefined) continue;
@@ -66,6 +68,7 @@ export function wordParagraphTextSegments(_document: WordDocument | undefined, p
         kind: projected.kind,
         ...(content.kind === "symbol" && !content.unicodeFallback ? { symbolFont: content.fontFamily } : {}),
         ...(content.kind === "break" ? { breakType: content.breakType } : {}),
+        ...(content.kind === "math" ? { equation: content.equation } : {}),
         ...(content.kind === "tab" && content.position ? { tab: content.position } : {}),
         ...(content.kind === "page-field" ? { field: content.field, ...(content.replacedElementIds ? { replacedElementIds: content.replacedElementIds } : {}) } : {}),
         elementId: content.elementId,

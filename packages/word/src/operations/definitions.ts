@@ -1,6 +1,6 @@
 import { wordSectionFormatSchema } from '../section-format.ts';
 import { isWordColour, type WordColour } from '../theme-colours.ts';
-import { objectPatch, ink, chart } from "./schemas.ts";
+import { objectPatch, ink, chart, equation } from "./schemas.ts";
 import * as z from 'zod';
 import { WORD_PAGE_NUMBER_PRESETS } from "../page-fields.ts";
 import { WORD_LIST_KINDS } from "../authored-list.ts";
@@ -199,6 +199,12 @@ export const wordOperations = {
     () => (z.object({ ...search, value: z.string() }).strict()),
     { query: "draft", value: "final", wholeWord: true },
   ),
+  "insert-equation": operation(
+    "insert-equation",
+    "Insert an editable inline equation at the target, using the surrounding text's typography.",
+    () => z.object({ equation }).strict(),
+    { equation: { body: [{ kind: "fraction", num: [{ kind: "char", value: "a" }], den: [{ kind: "char", value: "b" }] }] } },
+  ),
   "insert-chart": operation(
     'insert-chart',
     'Insert an editable native chart and its optional embedded source workbook.',
@@ -251,6 +257,7 @@ export const wordOperation = z.lazy(() => z.discriminatedUnion("name", [
   wordOperations["edit-table"].schema,
   wordOperations["format-table"].schema,
   wordOperations["replace-all"].schema,
+  wordOperations["insert-equation"].schema,
   wordOperations["insert-chart"].schema,
   wordOperations["insert-shape"].schema,
   wordOperations["insert-image"].schema,

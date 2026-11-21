@@ -176,6 +176,8 @@ export function prepareWordContent(
         text: (originalRuns.get(run.source!)?.text === run.text ? run.text.replace(/[\r\n]/g, '') : run.text).replaceAll('\u2028', ''),
         ...(run.chart ? { chart: { ...run.chart, content: authoredChartContent(run, document.styles.themeColors, document.styles.themeFonts)! } } : {}),
         ...(run.shape ? { shape: run.shape } : {}),
+        // Office Math runs carry their own w:rPr so equations keep the paragraph typography.
+        ...(run.equation ? { equation: run.equation, ...(run.format ? { format: run.format } : {}) } : {}),
         ...(run.ink ? { ink: { ...run.ink, ...run.drawing } } : {}),
         ...(run.link === undefined ? {} : { link: run.link }),
         ...(run.image && (!document.drawings.has(run.source!) || replacedImages.has(run))

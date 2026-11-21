@@ -12,10 +12,18 @@ import { paragraphFormatXml } from './paragraph-format.ts';
 import { authoredCellPropertiesXml, rowFormatXml, type WordCellFormat, type WordRowFormat } from './table-format.ts';
 import { paragraphPositioningXml, positionalTabXml } from './positioning.ts';
 import { pageFieldXml } from './page-fields.ts';
+import { mathToOmml } from '@tumblerjs/core/math';
 import { authoredTableGrid } from './authored-table.ts';
 import { imagePlacement, type WordImagePosition } from './image-placement.ts';
-import type { WordTextParagraph } from './create.ts';
+import type { WordTextParagraph, WordTextRun } from './create.ts';
 import { runProperties, textContent, xmlAttribute } from './create-xml.ts';
+
+const MATH_NAMESPACE = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
+/** Equations export as Office Math beside the surrounding runs, keeping their run formatting. */
+function equationMarkup(run: WordTextRun) {
+  const properties = run.format ? `<w:rPr>${runProperties(run.format)}</w:rPr>` : '';
+  return mathToOmml(run.equation!, properties).replace('<m:oMath>', `<m:oMath xmlns:m="${MATH_NAMESPACE}">`);
+}
 
 /** Authored blocks are independent of package-local XML element identifiers. */
 export type WordContentBlock =
@@ -113,7 +121,7 @@ export function authoredContent(blocks: readonly WordContentBlock[], width: numb
           const markFormat = block.runs.every(run => !run.text) ? block.runs[0]?.format : undefined;
           const mark = markFormat ? `<w:rPr>${runProperties(markFormat)}</w:rPr>` : '';
           const properties = (block.styleId ? `<w:pStyle w:val="${xmlAttribute(block.styleId)}"/>` : '') + early.map(key => paragraph.get(key) ?? '').join('') + numbering + (paragraph.get('suppressLineNumbers') ?? '') + (paragraph.get('pBdr') ?? '') + (paragraph.get('shd') ?? '') + (positioning.tabs ?? '') + (paragraph.get('spacing') ?? '') + (positioning.ind ?? '') + (paragraph.get('contextualSpacing') ?? '') + (block.alignment ? `<w:jc w:val="${block.alignment === 'justify' ? 'both' : block.alignment}"/>` : '') + (paragraph.get('outlineLvl') ?? '') + mark + section;
-          return `<w:p>${properties ? `<w:pPr>${properties}</w:pPr>` : ''}${block.runs.map(run => linked(run.link, run.chart ? (run.text === '\uFFFC' ? chartMarkup({ ...run.chart, content: authoredChartContent(run, themeColors)! }, availableWidth) : (() => { throw new TypeError('Charts occupy one object character.'); })()) : run.ink ? (run.text === '\uFFFC' && !run.shape && !run.image && !run.field ? inkMarkup(run.ink, availableWidth) : (() => { throw new TypeError('Ink occupies one object character.'); })()) : run.shape ? (run.text === '\uFFFC' ? wordShapeXml(run.shape, ++imageId, availableWidth, paragraphs => visit(paragraphs.map(p => ({ kind: 'paragraph', ...p })), run.shape!.width)) : (() => { throw new TypeError('Shape runs occupy one object character.'); })()) : run.field ? pageFieldXml(run) : run.image ? (run.text === '\uFFFC' ? imageMarkup(run.image, availableWidth) : (() => { throw new TypeError('Image runs use the object replacement character.'); })()) : `<w:r>${run.format ? `<w:rPr>${runProperties(run.format)}</w:rPr>` : ''}${run.breakType ? wordBreakXml(run.breakType, run.text) : run.tab ? positionalTabXml(run.tab, run.text) : textContent(run.text)}</w:r>`)).join('')}</w:p>`;
+          return `<w:p>${properties ? `<w:pPr>${properties}</w:pPr>` : ''}${block.runs.map(run => linked(run.link, run.equation ? (run.text === '\uFFFC' ? equationMarkup(run) : (() => { throw new TypeError('Equations occupy one object character.'); })()) : run.chart ? (run.text === '\uFFFC' ? chartMarkup({ ...run.chart, content: authoredChartContent(run, themeColors)! }, availableWidth) : (() => { throw new TypeError('Charts occupy one object character.'); })()) : run.ink ? (run.text === '\uFFFC' && !run.shape && !run.image && !run.field ? inkMarkup(run.ink, availableWidth) : (() => { throw new TypeError('Ink occupies one object character.'); })()) : run.shape ? (run.text === '\uFFFC' ? wordShapeXml(run.shape, ++imageId, availableWidth, paragraphs => visit(paragraphs.map(p => ({ kind: 'paragraph', ...p })), run.shape!.width)) : (() => { throw new TypeError('Shape runs occupy one object character.'); })()) : run.field ? pageFieldXml(run) : run.image ? (run.text === '\uFFFC' ? imageMarkup(run.image, availableWidth) : (() => { throw new TypeError('Image runs use the object replacement character.'); })()) : `<w:r>${run.format ? `<w:rPr>${runProperties(run.format)}</w:rPr>` : ''}${run.breakType ? wordBreakXml(run.breakType, run.text) : run.tab ? positionalTabXml(run.tab, run.text) : textContent(run.text)}</w:r>`)).join('')}</w:p>`;
         }
         case 'table': {
           const grid = authoredTableGrid(block.rows, block.columnWidths, availableWidth, block.rowGrids);
