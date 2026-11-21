@@ -106,6 +106,10 @@ const modeledElements = new Set([
   "d", "dPr", "begChr", "endChr", "nary", "naryPr", "chr", "limLoc", "subHide", "supHide",
   "func", "fName", "acc", "accPr", "limLow", "limUpp", "lim", "m", "mr",
 ]);
+const modeledWordRunProperties = new Set([
+  "rFonts", "sz", "szCs", "b", "bCs", "i", "iCs", "u", "color", "strike", "highlight", "shd",
+  "vertAlign", "spacing", "kern",
+]);
 
 function propertySignature(element: OmmlElement): unknown[] {
   return [element.namespaceUri, element.localName,
@@ -128,6 +132,9 @@ function canEdit(element: OmmlElement, runProperties: Set<string>): boolean {
     // Hosts can use the first run's typography, but the editor cannot retain per-run typography.
     const properties = element.children.find((item): item is OmmlElement => item.kind === "element" &&
       item.localName === "rPr" && item.namespaceUri !== OMML_NAMESPACE);
+    if (properties?.namespaceUri.includes("wordprocessingml") && properties.children.some(
+      (item) => item.kind === "element" && !modeledWordRunProperties.has(item.localName),
+    )) return false;
     runProperties.add(properties ? JSON.stringify(propertySignature(properties)) : "");
   }
   return math(element).every((item) => canEdit(item, runProperties));
