@@ -1,3 +1,4 @@
+import { readLatexClass } from './latex-flow';
 import type { Node } from 'prosemirror-model';
 import { commandEnd, environmentAt, groupAt } from './latex-syntax';
 
@@ -20,7 +21,7 @@ const opaqueCounters =
 const rawCounters =
   /\\(?:part|chapter|section|subsection|subsubsection|caption|captionof)\b|\\begin\s*\{(?:equation|align|gather|figure|table)\*?\}/;
 const latexHeadings = ['section', 'subsection', 'subsubsection', 'paragraph', 'subparagraph'];
-const floatEnvironment = /^\\begin\s*\{(figure|table)\*?\}/;
+const floatEnvironment = /^\\begin\s*\{(figure|table|longtable)\*?\}/;
 const subfloats = /\\begin\s*\{(subfigure|subtable)\}[\s\S]*?\\end\s*\{\1\}/g;
 const numberedEquation = /^\\begin\s*\{(equation|align|gather)\}$/;
 const labelCommand = /\\label\s*\{([^{}]+)\}/g;
@@ -74,7 +75,7 @@ export function latexEquationRows(source: string) {
  */
 export function latexNumbering(document: Node): LatexNumbering | undefined {
   const prefix = String(document.attrs.prefix ?? '');
-  const documentClass = /\\documentclass\s*(?:\[[^\]]*\])?\s*\{([^{}]+)\}/.exec(prefix)?.[1];
+  const documentClass = readLatexClass(prefix).name;
   if (documentClass && !['article', 'report', 'book'].includes(documentClass.trim())) return;
   if (opaqueCounters.test(prefix)) return;
   const chapters = documentClass === 'report' || documentClass === 'book';
@@ -168,7 +169,9 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
         counters.set(chapters ? 'chapter' : 'section', 0);
         return false;
       }
-      const kind = floatEnvironment.exec(source.trim())?.[1] as 'figure' | 'table' | undefined;
+      const environment = floatEnvironment.exec(source.trim())?.[1];
+      const kind = environment === 'figure' ? 'figure' :
+        environment === 'table' || environment === 'longtable' ? 'table' : undefined;
       if (kind) {
         const body = source.replace(subfloats, '');
         const captions = [...body.matchAll(/\\caption\b/g)];

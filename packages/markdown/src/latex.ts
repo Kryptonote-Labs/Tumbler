@@ -17,6 +17,8 @@ import {
 
 export { latexPageLayout, latexPaperSettings, paginateLatex } from './latex-layout';
 export type { LatexPageLayout, PageBlock, PageBreak, PageLine } from './latex-layout';
+export { latexBreakCommand, latexFlow, latexPageNumbers, readLatexClass } from './latex-flow';
+export type { LatexBlockFlow, LatexBreak, LatexPageNumber } from './latex-flow';
 export {
   latexFieldSource,
   latexFieldText,
@@ -53,6 +55,8 @@ export {
   insertLatexTableRow,
   latexTableCellText,
   latexTableSource,
+  readLatexMulticolumn,
+  readLatexTableBlock,
   readLatexTabular,
   setLatexTableCell,
   writeLatexTabular,
@@ -195,6 +199,7 @@ const blockCommands = new Set([
   '\\appendix',
   '\\newpage',
   '\\clearpage',
+  '\\cleardoublepage',
 ]);
 
 // Bibliography commands set the reference list where they stand, so they are blocks. A style

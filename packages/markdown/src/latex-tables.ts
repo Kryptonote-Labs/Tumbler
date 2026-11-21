@@ -1,10 +1,27 @@
 import { latexFieldSource, latexFieldText } from './latex-metadata';
+import { argumentAt, commandEnd, environmentAt, groupAt, latexCommands, lineEnd, verbatimEnd, whitespaceEnd } from './latex-syntax';
 import { groupEnd, splice } from './latex-scan';
 
 /** A cell's source, with the spacing around it kept so untouched cells stay as written. */
 type Cell = { lead: string; body: string; trail: string };
 /** One row: rules such as `\hline` before it, its cells, and the `\\` that ends it. */
 type Row = { rules: string; cells: Cell[]; end: string };
+type TableSection = 'firstHead' | 'head' | 'foot' | 'lastFoot' | 'body';
+
+type TableRows = { rows: number[]; tail: string; present: boolean };
+
+type TableLayout =
+  | { kind: 'fixed'; caption: boolean }
+  | { kind: 'continuing'; sections: Record<TableSection, TableRows> };
+
+const sectionEnds = /\\end(?:firsthead|head|foot|lastfoot)\b/y;
+const sectionOf = new Map<string, TableSection>([
+  ['\\endfirsthead', 'firstHead'],
+  ['\\endhead', 'head'],
+  ['\\endfoot', 'foot'],
+  ['\\endlastfoot', 'lastFoot'],
+]);
+
 
 export type LatexTabular = {
   /** Where the body between `\begin{tabular}{…}` and `\end{tabular}` is in the source. */
@@ -12,6 +29,8 @@ export type LatexTabular = {
   end: number;
   spec: { start: number; end: number; columns: string[] };
   rows: Row[];
+  layout: TableLayout;
+  rowStarts: number[];
   /** Text after the last row, usually a closing rule. */
   tail: string;
   /** Rows and columns can be added and removed only when every row is a plain grid. */
@@ -54,7 +73,7 @@ function columnsOf(spec: string) {
 
 /** Split `text` at top-level occurrences of `separator`, outside groups and comments. */
 function splitTop(text: string, separator: RegExp) {
-  const parts: { text: string; separator: string }[] = [];
+  const parts: { text: string; separator: string; start: number }[] = [];
   let depth = 0;
   let from = 0;
   for (let index = 0; index < text.length; index++) {
@@ -62,22 +81,27 @@ function splitTop(text: string, separator: RegExp) {
       separator.lastIndex = index;
       const match = separator.exec(text);
       if (match) {
-        parts.push({ text: text.slice(from, index), separator: match[0] });
+        parts.push({ text: text.slice(from, index), separator: match[0], start: from });
         from = index + match[0].length;
         index = from - 1;
         continue;
       }
     }
     const char = text[index];
-    if (char === '\\') index++;
-    else if (char === '{') depth++;
+    if (char === '\\') {
+      const end = commandEnd(text, index);
+      const command = text.slice(index, end);
+      index =
+        (command === '\\verb'
+          ? verbatimEnd(text, end)
+          : command === '\\begin'
+            ? (environmentAt(text, index)?.end ?? end)
+            : end) - 1;
+    } else if (char === '{') depth++;
     else if (char === '}') depth--;
-    else if (char === '%') {
-      const line = text.indexOf('\n', index);
-      index = line < 0 ? text.length : line;
-    }
+    else if (char === '%') index = lineEnd(text, index);
   }
-  parts.push({ text: text.slice(from), separator: '' });
+  parts.push({ text: text.slice(from), separator: '', start: from });
   return parts;
 }
 
@@ -90,35 +114,88 @@ function cellOf(text: string): Cell {
   return { lead, body: text.slice(lead.length, text.length - trail.length), trail };
 }
 
-/** Read the first `tabular` in `source`, keeping the source of everything it does not model. */
-export function readLatexTabular(source: string): LatexTabular | undefined {
-  const begin = /\\begin\s*\{tabular\*?\}\s*(?:\[[^\]]*\]\s*)?\{/.exec(source);
-  if (!begin) return;
-  const open = begin.index + begin[0].length - 1;
-  const specEnd = groupEnd(source, open);
-  const close = source.indexOf('\\end{tabular', specEnd);
-  if (specEnd < 0 || close < 0) return;
-  const columns = columnsOf(source.slice(open + 1, specEnd - 1));
-  const body = source.slice(specEnd, close);
-  const pieces = splitTop(body, rowEnd);
-  const last = pieces.at(-1)!;
-  const rows: Row[] = [];
-  let tail = '';
-  for (const piece of pieces) {
-    const rules = rule.exec(piece.text)?.[0] ?? /^\s*/.exec(piece.text)![0];
-    const rest = piece.text.slice(rules.length);
-    if (piece === last && !rest.trim()) {
-      tail = piece.text;
-      break;
+/** A longtable caption is followed by a row separator but occupies its own layout box. */
+function captionRow(source: string) {
+  let start = whitespaceEnd(source, 0);
+  if (source.startsWith('\\caption', start)) {
+    const end = commandEnd(source, start);
+    if (source.slice(start, end) !== '\\caption') return false;
+    const caption = argumentAt(source, end + Number(source[end] === '*'));
+    if (!caption) return false;
+    start = whitespaceEnd(source, caption.end);
+    if (source.startsWith('\\label', start)) {
+      const label = groupAt(source, whitespaceEnd(source, commandEnd(source, start)));
+      if (!label) return false;
+      start = whitespaceEnd(source, label.end);
     }
-    rows.push({
-      rules,
-      cells: splitTop(rest, cellEnd).map((cell) => cellOf(cell.text)),
-      end: piece.separator,
-    });
+    return start === source.length;
   }
+  return false;
+}
+
+/** Read a table's row source, including the separate roles that continue across pages. */
+export function readLatexTabular(source: string): LatexTabular | undefined {
+  let environment: ReturnType<typeof environmentAt>;
+  for (const { name, start, end } of latexCommands(source)) {
+    if (name !== 'begin') continue;
+    const group = groupAt(source, whitespaceEnd(source, end));
+    if (!group || !['tabular', 'tabular*', 'longtable'].includes(source.slice(group.from, group.to)))
+      continue;
+    environment = environmentAt(source, start);
+    break;
+  }
+  if (!environment) return;
+  const continuing = environment.name === 'longtable';
+  let open = whitespaceEnd(source, environment.from);
+  if (environment.name === 'tabular*') {
+    const width = groupAt(source, open);
+    if (!width) return;
+    open = whitespaceEnd(source, width.end);
+  }
+  const optional = groupAt(source, open, '[', ']');
+  const spec = groupAt(source, whitespaceEnd(source, optional?.end ?? open));
+  if (!spec) return;
+
+  const columns = columnsOf(source.slice(spec.from, spec.to));
+  const body = source.slice(spec.end, environment.to);
+  const rows: Row[] = [];
+  const rowStarts: number[] = [];
+  const sections: Record<TableSection, TableRows> = {
+    firstHead: { rows: [], tail: '', present: false },
+    head: { rows: [], tail: '', present: false },
+    foot: { rows: [], tail: '', present: false },
+    lastFoot: { rows: [], tail: '', present: false },
+    body: { rows: [], tail: '', present: false },
+  };
+  let tail = '';
+  const groups = continuing ? splitTop(body, sectionEnds) : [{ text: body, separator: '', start: 0 }];
+  for (const group of groups) {
+    const section = sectionOf.get(group.separator) ?? 'body';
+    sections[section].present = true;
+    const pieces = splitTop(group.text, rowEnd);
+    for (const piece of pieces) {
+      const rules = rule.exec(piece.text)?.[0] ?? /^\s*/.exec(piece.text)![0];
+      const rest = piece.text.slice(rules.length);
+      if (piece === pieces.at(-1) && !rest.trim()) {
+        sections[section].tail = piece.text;
+        if (section === 'body') tail = piece.text;
+        break;
+      }
+      if (continuing && captionRow(rest)) continue;
+      sections[section].rows.push(rows.length);
+      rowStarts.push(spec.end + group.start + piece.start);
+      rows.push({
+        rules,
+        cells: splitTop(rest, cellEnd).map((cell) => cellOf(cell.text)),
+        end: piece.separator,
+      });
+    }
+  }
+  // A tabular outside a float has no caption slot. A center wrapper is still editable.
+  const caption = /^\s*\\begin\s*\{table\*?\}/.test(source);
   const width = columns?.length;
   const grid =
+    !continuing &&
     !!width &&
     rows.every(
       (row) =>
@@ -126,12 +203,53 @@ export function readLatexTabular(source: string): LatexTabular | undefined {
         !row.cells.some((cell) => /\\multi(?:column|row)\b/.test(cell.body)),
     );
   return {
-    start: specEnd,
-    end: close,
-    spec: { start: open + 1, end: specEnd - 1, columns: columns ?? [] },
+    start: spec.end,
+    end: environment.to,
+    spec: { start: spec.from, end: spec.to, columns: columns ?? [] },
     rows,
+    layout: continuing ? { kind: 'continuing', sections } : { kind: 'fixed', caption },
+    rowStarts,
     tail,
     grid,
+  };
+}
+
+/** Recognize blocks that can be represented by the table without losing its siblings. */
+export function readLatexTableBlock(source: string) {
+  const start = whitespaceEnd(source, 0);
+  const outer = environmentAt(source, start);
+  if (!outer || source.slice(outer.end).trim()) return;
+  switch (outer.name) {
+    case 'tabular':
+    case 'tabular*':
+    case 'longtable':
+    case 'table':
+    case 'table*':
+      return readLatexTabular(source);
+    case 'center': {
+      const inner = environmentAt(source, whitespaceEnd(source, outer.from));
+      if (inner && (inner.name === 'tabular' || inner.name === 'tabular*') &&
+          !source.slice(inner.end, outer.to).trim()) return readLatexTabular(source);
+    }
+  }
+}
+
+/** Read an ordinary multicolumn cell for the table layout, keeping its source intact. */
+export function readLatexMulticolumn(source: string) {
+  const start = whitespaceEnd(source, 0);
+  const command = commandEnd(source, start);
+  if (source.slice(start, command) !== '\\multicolumn') return;
+  const count = groupAt(source, whitespaceEnd(source, command));
+  const spec = count && groupAt(source, whitespaceEnd(source, count.end));
+  const value = spec && groupAt(source, whitespaceEnd(source, spec.end));
+  if (!count || !spec || !value || source.slice(value.end).trim()) return;
+  const columns = Number(source.slice(count.from, count.to));
+  if (!Number.isSafeInteger(columns) || columns < 1) return;
+  const align = /[lcr]/.exec(source.slice(spec.from, spec.to))?.[0];
+  return {
+    columns,
+    align,
+    text: latexFieldText(source.slice(value.from, value.to)) ?? source.slice(value.from, value.to),
   };
 }
 
@@ -143,6 +261,7 @@ const rowSource = (row: Row) =>
 
 /** Write a changed table back, leaving the source outside the tabular as it was. */
 export function writeLatexTabular(source: string, table: LatexTabular) {
+  if (table.layout.kind === 'continuing') return source;
   const body = table.rows.map(rowSource).join('') + table.tail;
   const withBody = splice(source, table.start, table.end, body);
   return splice(withBody, table.spec.start, table.spec.end, table.spec.columns.join(''));
@@ -153,6 +272,15 @@ export function setLatexTableCell(source: string, row: number, column: number, v
   const table = readLatexTabular(source);
   const cell = table?.rows[row]?.cells[column];
   if (!table || !cell) return source;
+  if (table.layout.kind === 'continuing') {
+    const entry = table.rows[row]!;
+    const preceding = entry.cells.slice(0, column).reduce(
+      (length, previous) => length + previous.lead.length + previous.body.length + previous.trail.length + 1,
+      0,
+    );
+    const start = table.rowStarts[row]! + entry.rules.length + preceding + cell.lead.length;
+    return splice(source, start, start + cell.body.length, tex ? value : latexFieldSource(value));
+  }
   // A blank cell gets the usual ` & ` spacing; a written one keeps its own.
   if (!cell.body.trim()) {
     if (!column) table.rows[row]!.rules = table.rows[row]!.rules.replace(/(\n)[ \t]+$/, '$1');

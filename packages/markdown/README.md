@@ -36,3 +36,16 @@ structured. Original command spellings, separators, the preamble, comments and o
 part of the document tree. `replaceLatexSource(document, source)` produces ProseMirror steps for
 source editing, undo and collaboration. The browser host can supply equation and raw source views
 through `NoteEditorOptions.latexNodeViews`. Parsing never executes TeX.
+
+`latexFlow(document)` resolves standard class and command behavior into
+layout constraints at editor positions. `readLatexTableBlock(source)` exposes
+the first, repeated, body, and final row groups and retains their source offsets.
+Use `setLatexTableCell` to change a cell in the original source.
+
+The browser supplies measured blocks and internal fragment anchors to
+`paginateLatex`. A continuation can reserve room for a footer on one sheet
+and repeat a header on the next. The paginator returns placements without
+adding page breaks or repeated rows to the document. This keeps layout and
+source edits on the same model for both native objects and source-backed
+environments. The same constraints can accept measurements from a different
+layout host.

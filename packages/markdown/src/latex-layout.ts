@@ -1,3 +1,4 @@
+import { readLatexClass, type LatexBlockFlow, type LatexBreak } from './latex-flow';
 import { commandEnd, groupAt } from './latex-syntax';
 
 const inch = 96;
@@ -54,7 +55,7 @@ function dimension(value: string | undefined, quad?: number) {
 
 function readOptions(prefix: string) {
   const source = prefix.replace(/(?<!\\)%[^\n]*/g, '');
-  const classOptions = /\\documentclass\s*(?:\[([^\]]*)\])?/.exec(source)?.[1] ?? '';
+  const classOptions = readLatexClass(prefix).options;
   const geometryOptions: string[] = [];
   let geometry = false;
   for (const match of source.matchAll(
@@ -71,7 +72,7 @@ function readOptions(prefix: string) {
   let paperSize: string | undefined;
   let orientation: 'landscape' | 'portrait' | undefined;
   let fontSize = 10;
-  for (const value of [...classOptions.split(',').map((item) => item.trim()), ...geometryOptions]) {
+  for (const value of [...classOptions, ...geometryOptions]) {
     const named = value.replace(/^paper\s*=\s*/, '');
     if (paperSizes.has(named)) paperSize = named;
     if (value === 'landscape' || value === 'portrait') orientation = value;
@@ -172,10 +173,7 @@ export function latexPageLayout(prefix: string): LatexPageLayout {
   const font = (fontSize === 11 ? 10.95 : fontSize) * texPoint;
   // Standard Computer Modern classes set lengths using the font's quad.
   const quad = (fontSize === 12 ? 11.74988 : fontSize === 11 ? 10.95003 : 10) * texPoint;
-  const twoColumns = classOptions
-    .split(',')
-    .map((part) => part.trim())
-    .includes('twocolumn');
+  const twoColumns = classOptions.includes('twocolumn');
   const defaultIndent = twoColumns
     ? quad
     : fontSize === 12
@@ -269,13 +267,27 @@ export function latexPageLayout(prefix: string): LatexPageLayout {
  * A line or unbreakable block in the continuous editor. `notes` are the heights of footnotes
  * whose marks it holds; they print at the foot of the same page and take room from its body.
  */
-export type PageLine = { position: number; top: number; bottom: number; notes?: number[] };
+export type PageLine = {
+  position: number;
+  top: number;
+  bottom: number;
+  notes?: number[];
+  /** Content repeated at the start of a continuation, and at its preceding boundary. */
+  continuation?: { fragment: number; startHeight: number };
+  /** Space needed after placing this line if another fragment follows on a new page. */
+  reserveAfter?: number;
+};
 export type PageBlock = PageLine & {
   split?: () => PageLine[];
-  force?: boolean;
-  forcePage?: boolean;
+  flow?: LatexBlockFlow;
 };
-export type PageBreak = { position: number; height: number };
+export type PageBreak = { position: number; height: number; fragment?: number };
+
+function strongerBreak(left: LatexBreak | undefined, right: LatexBreak | undefined) {
+  if (left === 'recto' || right === 'recto') return 'recto';
+  if (left === 'page' || right === 'page') return 'page';
+  return left ?? right;
+}
 
 /**
  * Place spacers into the continuous editor while keeping page breaks out of document history.
@@ -297,7 +309,7 @@ export function paginateLatex(
   let start = 0;
   let pages = 1;
   let occupied = false;
-  let forced: boolean | 'page' = false;
+  let pending: LatexBreak | undefined;
   // Spacers carry the page's unused body, including the room its footnotes take.
   let notes = 0;
   const room = (line: PageLine) => {
@@ -306,40 +318,44 @@ export function paginateLatex(
     return notes + extra + (notes ? 0 : noteGap);
   };
   const fits = (line: PageLine) =>
-    line.bottom - start + room(line) <= bodyHeight - (pages > 1 && pages <= columns ? firstSpanHeight : 0);
+    line.bottom - start + room(line) + (line.reserveAfter ?? 0) <= bodyHeight - (pages > 1 && pages <= columns ? firstSpanHeight : 0);
   function place(line: PageLine) {
     notes = room(line);
     for (const _ of line.notes ?? []) footnotes.push(pages - 1);
     footHeights[pages - 1] = notes;
   }
-  function advance(line: PageLine, wholePage = false) {
+  function advance(line: PageLine, boundary: LatexBreak = 'column') {
     // The next page has the same body capacity, even after a short previous page.
     const stride = bodyHeight + spacing;
     const distance = line.top - start;
     const needed = Math.max(1, Math.floor((distance + notes) / stride) + 1);
     const slot = pages - 1 + needed;
-    const next = wholePage ? Math.ceil(slot / columns) * columns : slot;
+    let next = boundary === 'column' ? slot : Math.ceil(slot / columns) * columns;
+    if (boundary === 'recto' && (next / columns) % 2 !== 0) next += columns;
     const advanceBy = next - (pages - 1);
     breakSlots.push(next);
+    const continuation = line.continuation;
+    const startHeight = continuation?.startHeight ?? 0;
     breaks.push({
       position: line.position,
-      height: advanceBy * stride - distance,
+      height: advanceBy * stride - distance + startHeight,
+      ...(continuation ? { fragment: continuation.fragment } : {}),
     });
     pages += advanceBy;
     for (let page = footHeights.length; page < pages; page++) footHeights.push(0);
-    start = line.top;
+    start = line.top - startHeight;
     occupied = false;
     notes = 0;
   }
   for (const block of blocks) {
-    if (block.force || block.forcePage) {
-      if (occupied) forced = block.forcePage ? 'page' : forced || true;
+    const flow = block.flow;
+    if (flow?.kind === 'break') {
+      if (occupied) pending = strongerBreak(pending, flow.boundary);
       continue;
     }
-    if (forced) {
-      advance(block, forced === 'page');
-      forced = false;
-    }
+    const before = strongerBreak(pending, flow?.before);
+    if (occupied && before) advance(block, before);
+    pending = flow?.after;
     if (fits(block) || (!occupied && !block.split)) {
       occupied = true;
       place(block);
