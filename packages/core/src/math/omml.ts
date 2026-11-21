@@ -100,11 +100,40 @@ function node(element: OmmlElement): MathNode[] {
   }
 }
 
-/**
- * An `m:oMath` or `m:oMathPara` zone as an editable equation. Structures the model lacks
- * (boxes, phantoms, borders) keep their contents; a paragraph's zones join into one row.
- */
+const modeledElements = new Set([
+  "oMath", "r", "rPr", "t", "sty", "nor", "f", "fPr", "type", "num", "den",
+  "sSup", "sSub", "sSubSup", "sPre", "e", "sup", "sub", "rad", "radPr", "deg", "degHide",
+  "d", "dPr", "begChr", "endChr", "nary", "naryPr", "chr", "limLoc", "subHide", "supHide",
+  "func", "fName", "acc", "accPr", "limLow", "limUpp", "lim", "m", "mr",
+]);
+
+function propertySignature(element: OmmlElement): unknown[] {
+  return [element.namespaceUri, element.localName,
+    element.attributes.map(({ namespaceUri, localName, value }) => JSON.stringify([namespaceUri, localName, value])).sort(),
+    element.children.flatMap((item) => item.kind === "element" ? [propertySignature(item)] : []),
+  ];
+}
+
+function canEdit(element: OmmlElement, runProperties: Set<string>): boolean {
+  if (!modeledElements.has(element.localName)) return false;
+  if (element.localName === "sty" && !["p", "i"].includes(value(element) ?? "")) return false;
+  if (element.localName === "d" && math(element).filter((item) => item.localName === "e").length !== 1) return false;
+  if (element.localName === "r") {
+    // Hosts can use the first run's typography, but the editor cannot retain per-run typography.
+    const properties = element.children.find((item): item is OmmlElement => item.kind === "element" &&
+      item.localName === "rPr" && item.namespaceUri !== OMML_NAMESPACE);
+    runProperties.add(properties ? JSON.stringify(propertySignature(properties)) : "");
+  }
+  return math(element).every((item) => canEdit(item, runProperties));
+}
+
+/** Read Office Math. Unmodeled markup is previewed but requires preserving the original XML. */
 export function mathFromOmml(element: OmmlElement): MathEquation {
   const zones = element.localName === "oMathPara" ? math(element).filter((item) => item.localName === "oMath") : [element];
-  return { body: zones.flatMap((zone) => row(zone)) };
+  const runProperties = new Set<string>();
+  const editable = zones.length === 1 && canEdit(zones[0]!, runProperties) && runProperties.size <= 1;
+  return {
+    body: zones.flatMap((zone) => row(zone)),
+    ...(editable ? {} : { readOnly: true }),
+  };
 }

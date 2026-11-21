@@ -97,3 +97,25 @@ test("editing an imported display equation keeps its math paragraph layout", () 
     session.destroy();
   }
 });
+
+test("editing surrounding text keeps an unmodeled Office Math phantom", () => {
+  const source = createWordArtifact({ paragraphs: [{ runs: [{ text: "Let " }, { text: "\uFFFC", equation }] }] });
+  const xml = source.document.source.source;
+  const phantom = '<m:phant><m:e><m:r><m:t>x</m:t></m:r></m:e></m:phant>';
+  const transaction = beginPackageTransaction(source.document.package);
+  transaction.replacePart(source.document.part.name, new TextEncoder().encode(
+    xml.replace(/(<m:oMath\b[^>]*>)[\s\S]*?(<\/m:oMath>)/, `$1${phantom}$2`),
+  ));
+  const session = openWordOperationDocument(openWordArtifact(transaction.commit()));
+  try {
+    expect(() => prepareWordOperation(session.text, { start: 4, end: 5 }, {
+      name: "edit-object", input: { equation },
+    })).toThrow("cannot be edited in place");
+    session.text.applyDelta(prepareWordOperation(session.text, { start: 0, end: 3 }, {
+      name: "replace", input: { value: "Given" },
+    }).delta);
+    expect(session.artifact().document.source.source).toContain(phantom);
+  } finally {
+    session.destroy();
+  }
+});

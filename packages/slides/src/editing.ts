@@ -13,7 +13,7 @@ import {
 } from "@tumblerjs/ooxml";
 import { PresentationError, type SlideObject } from "./model.ts";
 import type { MathEquation } from "@tumblerjs/core/math";
-import { drawingEquationMarkup, drawingEquationParagraph, drawingEquationRunProperties, EQUATION_FONT, isDrawingEquation } from "@tumblerjs/core/math";
+import { drawingEquation, drawingEquationMarkup, drawingEquationParagraph, drawingEquationRunProperties, EQUATION_FONT, isDrawingEquation } from "@tumblerjs/core/math";
 import { EQUATION_CHARACTER } from "./equations.ts";
 export interface PresentationTableCellAddress {
   readonly row: number;
@@ -671,7 +671,10 @@ export function setPresentationEquation(
   for (const p of body ? elements(body).filter((e) => e.localName === "p") : []) {
     for (const r of elements(p).filter((e) => e.localName === "r" || e.localName === "br" || isDrawingEquation(e))) {
       // An equation keeps its math run typography; an empty one has none, so it takes the text's.
-      const pr = isDrawingEquation(r) && offset === range.start && range.end === range.start + 1 && drawingEquationRunProperties(r);
+      const replacesEquation = isDrawingEquation(r) && offset === range.start && range.end === range.start + 1;
+      if (replacesEquation && drawingEquation(r).readOnly)
+        throw new PresentationError("unsupported_edit", "This equation contains Office Math features that cannot be edited in place.");
+      const pr = replacesEquation && drawingEquationRunProperties(r);
       if (pr) {
         const editor = beginLosslessXmlEdit(source);
         // Display equations stay display equations.

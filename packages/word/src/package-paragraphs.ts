@@ -182,7 +182,10 @@ export function wordParagraphRenderer(
     // Imported Office Math zones are siblings of runs. Unchanged ones keep their source markup;
     // an edited display equation keeps its math paragraph and justification.
     if (run.equation && original?.equation) {
-      const unchanged = JSON.stringify(run.equation) === JSON.stringify(original.equation) && JSON.stringify(run.format) === JSON.stringify(original.format);
+      const equationUnchanged = JSON.stringify(run.equation) === JSON.stringify(original.equation);
+      if (!equationUnchanged && original.equation.readOnly)
+        throw new Error('This equation contains Office Math features that cannot be edited in place.');
+      const unchanged = equationUnchanged && (original.equation.readOnly || JSON.stringify(run.format) === JSON.stringify(original.format));
       const zones = element?.localName === 'oMathPara' ? markup.children(element, 'oMath') : [];
       let content = element && unchanged
         ? markup.raw(element)

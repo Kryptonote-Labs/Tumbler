@@ -96,6 +96,7 @@ export function equationShapeMarkup(objectId: number, transform: string, equatio
 export function editedEquationShape(document: LosslessXmlDocument, shape: LosslessXmlElement, equation: MathEquation) {
   const zone = equationZone(shape);
   if (!zone) throw new Error('Select an equation to edit it.');
+  if (drawingEquation(zone).readOnly) throw new Error('This equation contains Office Math features that cannot be edited in place.');
   const properties = drawingEquationRunProperties(zone);
   const runProperties = properties
     ? document.source.slice(properties.span.start, properties.span.end)

@@ -95,6 +95,8 @@ export function createWordOperations(commands = createWordCommands()) {
               (patch.equation && !current.equation)
             )
               throw new Error("The patch must match the existing object type.");
+            if (patch.equation && current.equation?.readOnly)
+              throw new Error("This equation contains Office Math features that cannot be edited in place.");
             if (current.image && (patch.image || patch.drawing)) {
               const { image, drawing, ...other } = patch;
               staged.applyDelta(commands.wordTransaction(staged, [{

@@ -93,6 +93,8 @@ export type MathNode = MathChar | MathStructure;
 
 export interface MathEquation {
   readonly body: MathRow;
+  /** The source has formatting or structures that this preview cannot represent for editing. */
+  readonly readOnly?: true;
 }
 
 /** A row inside the tree: each step names a structure in the current row and one of its slots. */
