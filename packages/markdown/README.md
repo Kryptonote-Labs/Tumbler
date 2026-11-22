@@ -62,5 +62,8 @@ sheet dimensions. Landscape environments keep their source delimiters and contai
 editable blocks. `readLatexBeamerFrame` projects numeric overlays from one authored frame, and
 `readLatexTikzStateDiagram` exposes the states and edges of a supported TikZ automaton.
 
-`readLatexSyncTex` reads source line anchors from pdfTeX output so a host can map a point on a
-typeset sheet to its editable document.
+Formatting aliases declared with `\newcommand` can keep their argument as editable text.
+`readLatexTextMacros` and `interpretLatexText` also project common inline expansions into text
+and formatting for hosts that display source-backed commands. Import `@tumblerjs/markdown/latex-fonts.css`
+for the editable Computer Modern webfonts. Their outlines come from AMS Fonts under the
+included SIL Open Font License.

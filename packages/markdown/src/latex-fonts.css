@@ -1,0 +1,57 @@
+/* AMS Computer Modern outlines, converted by scripts/generate-latex-webfonts.py. */
+@font-face {
+  font-family: 'Tumbler TeX Roman';
+  src: url('./fonts/latex/tumblertexroman-regular.woff2') format('woff2');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Tumbler TeX Roman';
+  src: url('./fonts/latex/tumblertexroman-bold.woff2') format('woff2');
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Tumbler TeX Roman';
+  src: url('./fonts/latex/tumblertexroman-italic.woff2') format('woff2');
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Tumbler TeX Roman';
+  src: url('./fonts/latex/tumblertexroman-bolditalic.woff2') format('woff2');
+  font-style: italic;
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Tumbler TeX Roman 12';
+  src: url('./fonts/latex/tumblertexroman12-regular.woff2') format('woff2');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Tumbler TeX Roman 12';
+  src: url('./fonts/latex/tumblertexroman12-bold.woff2') format('woff2');
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Tumbler TeX Roman 17';
+  src: url('./fonts/latex/tumblertexroman17-regular.woff2') format('woff2');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Tumbler TeX Sans';
+  src: url('./fonts/latex/tumblertexsans-regular.woff2') format('woff2');
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Tumbler TeX Sans';
+  src: url('./fonts/latex/tumblertexsans-bold.woff2') format('woff2');
+  font-weight: 700;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Tumbler TeX Mono';
+  src: url('./fonts/latex/tumblertexmono-regular.woff2') format('woff2');
+  font-display: swap;
+}

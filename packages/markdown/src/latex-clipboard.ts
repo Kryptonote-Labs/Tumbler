@@ -69,7 +69,7 @@ export function latexClipboard(schema: Schema) {
     ];
   });
   const style: TagParseRule = {
-    tag: 'strong[data-latex-order], em[data-latex-order]',
+    tag: 'strong[data-latex-order], em[data-latex-order], span[data-latex-font][data-latex-order]',
     mark: 'latex_style',
     getAttrs: (element) => {
       const delimiters = readDelimiters(element);
@@ -80,10 +80,12 @@ export function latexClipboard(schema: Schema) {
         !Number.isSafeInteger(order)
       )
         return false;
+      const font = element.getAttribute('data-latex-font');
+      const style = font === 'sans' || font === 'mono' ? font : element.tagName === 'STRONG' ? 'strong' : 'em';
       return {
         open: delimiters.open,
         close: delimiters.close,
-        style: element.tagName === 'STRONG' ? 'strong' : 'em',
+        style,
         order,
       };
     },

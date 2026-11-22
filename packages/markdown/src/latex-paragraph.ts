@@ -14,13 +14,13 @@ export function latexInlineFlow(source: string): LatexInlineFlow | undefined {
 }
 
 type RunRange = { from: number; to: number; position: number };
-type TextRun = RunRange & { kind: 'text'; bold: boolean; italic: boolean };
+type TextRun = RunRange & { kind: 'text'; bold: boolean; italic: boolean; family?: 'sans' | 'mono' };
 type InlineBox = RunRange & { kind: 'math' };
 
 export type LatexParagraphSegment = { text: string; runs: (TextRun | InlineBox)[] };
 
 /** Project native inline content to measured text, retaining offsets into the editable node. */
-export function latexParagraphText(node: Node) {
+export function latexParagraphText(node: Node, resolvedInline?: (source: string) => boolean) {
   if (node.type.name !== 'paragraph') return;
   const segments: LatexParagraphSegment[] = [{ text: '', runs: [] }];
   let noIndent = false;
@@ -42,7 +42,8 @@ export function latexParagraphText(node: Node) {
       if (segments.length === 1 && !segment.text.trim()) noIndent = true;
       return;
     }
-    if (child.type.name === 'latex_math') {
+    if (child.type.name === 'latex_math' ||
+        (child.type.name === 'latex_inline' && child.attrs.label == null && resolvedInline?.(child.attrs.source))) {
       const from = segment.text.length;
       segment.text += '\ufffc';
       segment.runs.push({ kind: 'math', from, to: from + 1, position });
@@ -68,7 +69,8 @@ export function latexParagraphText(node: Node) {
       (mark) => mark.type.name === 'strong' || mark.attrs.style === 'strong',
     );
     const italic = child.marks.some((mark) => mark.type.name === 'em' || mark.attrs.style === 'em');
-    segment.runs.push({ kind: 'text', from, to: segment.text.length, position, bold, italic });
+    const family = child.marks.findLast((mark) => mark.attrs.style === 'sans' || mark.attrs.style === 'mono')?.attrs.style;
+    segment.runs.push({ kind: 'text', from, to: segment.text.length, position, bold, italic, family });
   });
   if (supported) return { segments, noIndent };
 }

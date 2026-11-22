@@ -28,6 +28,14 @@ export type LatexTypography = Readonly<{
     spaceAboveRule: number;
     spaceBelowRule: number;
   }>;
+  list: readonly Readonly<{
+    leftMargin: number;
+    labelSeparation: number;
+    topSeparation: number;
+    paragraphSeparation: number;
+    itemSeparation: number;
+    paragraphStartSeparation: number;
+  }>[];
   space: number;
   spaceStretch: number;
   spaceShrink: number;
@@ -74,8 +82,25 @@ export function latexTypography(points: number, prefix: string): LatexTypography
   const titleAscent = title.leading / 2 + 0.4 * title.size;
   const titleDescent = title.leading - titleAscent;
   const authorAscent = author.leading / 2 + 0.4 * author.size;
+  // Standard classes initialize \@listi through \@listvi with these glue values.
+  const list = [
+    [25, points === 12 ? 10 : points === 11 ? 9 : 8, points === 12 ? 5 : points === 11 ? 4.5 : 4, points === 12 ? 5 : points === 11 ? 4.5 : 4],
+    [22, points === 12 ? 5 : points === 11 ? 4.5 : 4, 2, 2],
+    [18.7, 2, 0, 2],
+    [17, 2, 0, 2],
+    [10, 2, 0, 2],
+    [10, 2, 0, 2],
+  ].map(([margin, top, paragraph, item], depth) => ({
+    leftMargin: (margin! / 10) * text.size,
+    labelSeparation: text.size / 2,
+    topSeparation: top! * texPoint,
+    paragraphSeparation: paragraph! * texPoint,
+    itemSeparation: item! * texPoint,
+    paragraphStartSeparation: (depth < 2 ? points === 10 ? 2 : 3 : 1) * texPoint,
+  }));
   return {
     text,
+    list,
     sections: [
       section(points === 12 ? textSize(17.28, 22) : textSize(14.4, 18), 3.5, 2.3),
       section(author, 3.25, 1.5),

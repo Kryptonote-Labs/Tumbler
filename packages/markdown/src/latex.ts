@@ -1,3 +1,5 @@
+export { interpretLatexText, readLatexTextMacros, type LatexPrintedText } from './latex-macros';
+import { latexFormattingAlias, readLatexTextMacros } from './latex-macros';
 import { Fragment, type Mark, type Node } from 'prosemirror-model';
 import { Transform } from 'prosemirror-transform';
 import { updateLatexBoundary, updateLatexNodeSource } from './latex-boundary-step';
@@ -22,7 +24,6 @@ export { latexHorizontalRule, latexNaturalColumns, latexNaturalTableWidths } fro
 export { hyphenateLatexEnglish } from './latex-hyphenation';
 export { readLatexBeamerFrame } from './latex-beamer';
 export { readLatexTikzStateDiagram } from './latex-tikz';
-export { readLatexSyncTex } from './latex-synctex';
 export type { LatexTypography } from './latex-typography';
 export { latexLandscapeLayout, latexPageLayout, latexPaperSettings, paginateLatex } from './latex-layout';
 export { paginateLatexRegions, type LatexRegionBlock } from './latex-page-regions';
@@ -123,6 +124,7 @@ export function isLatex(document: Node) {
 
 function inline(
   source: string,
+  macros: ReturnType<typeof readLatexTextMacros>,
   depth = 0,
   marks: readonly Mark[] = [],
   order = { next: 0 },
@@ -169,13 +171,8 @@ function inline(
       );
       end = formulaEnd + close.length;
     } else {
-      const style =
-        command === '\\textbf'
-          ? 'strong'
-          : ['\\emph', '\\textit'].includes(command)
-            ? 'em'
-            : undefined;
-      const argument = style && argumentAt(source, end);
+      const style = latexFormattingAlias(command.slice(1), macros);
+      const argument = style && groupAt(source, whitespaceEnd(source, end));
       if (argument && argument.from < argument.to) {
         const formatting = schema.marks.latex_style!.create({
           style,
@@ -185,6 +182,7 @@ function inline(
         });
         inline(
           source.slice(argument.from, argument.to),
+          macros,
           depth + 1,
           [...marks, formatting],
           order,
@@ -299,7 +297,7 @@ function paragraphEnd(source: string, position: number) {
   return source.length;
 }
 
-function listItems(source: string, depth: number): { items: Node[]; tail: string } | undefined {
+function listItems(source: string, macros: ReturnType<typeof readLatexTextMacros>, depth: number): { items: Node[]; tail: string } | undefined {
   let position = whitespaceEnd(source, 0);
   let before = source.slice(0, position);
   const items: Node[] = [];
@@ -328,7 +326,7 @@ function listItems(source: string, depth: number): { items: Node[]; tail: string
       } else if (source[next] === '{') next = groupAt(source, next)?.end ?? next + 1;
       else next++;
     }
-    const content = blocks(source.slice(start, next), depth + 1);
+    const content = blocks(source.slice(start, next), macros, depth + 1);
     if (!content.nodes.length) content.nodes.push(schema.nodes.paragraph!.create({ before: '' }));
     if (content.nodes[0]!.type !== schema.nodes.paragraph)
       content.nodes.unshift(schema.nodes.paragraph!.create({ before: '' }));
@@ -348,7 +346,7 @@ function listItems(source: string, depth: number): { items: Node[]; tail: string
   if (items.length) return { items, tail };
 }
 
-function environmentBlock(source: string, position: number, before: string, depth: number) {
+function environmentBlock(source: string, position: number, before: string, macros: ReturnType<typeof readLatexTextMacros>, depth: number) {
   if (source.slice(position, commandEnd(source, position)) !== '\\begin') return;
   const environment = environmentAt(source, position);
   if (!environment)
@@ -369,7 +367,7 @@ function environmentBlock(source: string, position: number, before: string, dept
       end,
     };
   if ((name === 'itemize' || name === 'enumerate') && depth < 64) {
-    const list = listItems(content, depth);
+    const list = listItems(content, macros, depth);
     if (list)
       return {
         node: schema.nodes[name === 'itemize' ? 'bullet_list' : 'ordered_list']!.create(
@@ -382,7 +380,7 @@ function environmentBlock(source: string, position: number, before: string, dept
   // Text environments edit as native blocks. The open and close source keep the environment, and
   // an empty one, such as a new abstract, gets an empty paragraph to type into.
   if (textEnvironments.has(name) && depth < 64) {
-    const quote = blocks(content, depth + 1);
+    const quote = blocks(content, macros, depth + 1);
     if (!quote.nodes.length) quote.nodes.push(schema.nodes.paragraph!.create({ before: '' }));
     return {
       node: schema.nodes[name === 'landscape' ? 'latex_landscape' : 'blockquote']!.create(
@@ -402,7 +400,7 @@ function environmentBlock(source: string, position: number, before: string, dept
   };
 }
 
-function blocks(source: string, depth = 0): { nodes: Node[]; tail: string } {
+function blocks(source: string, macros: ReturnType<typeof readLatexTextMacros>, depth = 0): { nodes: Node[]; tail: string } {
   const nodes: Node[] = [];
   let position = 0;
   while (position < source.length) {
@@ -431,7 +429,7 @@ function blocks(source: string, depth = 0): { nodes: Node[]; tail: string } {
             open: source.slice(start, heading.from),
             close: '}',
           },
-          inline(source.slice(heading.from, heading.to)),
+          inline(source.slice(heading.from, heading.to), macros),
         ),
       );
       position = heading.end;
@@ -459,7 +457,7 @@ function blocks(source: string, depth = 0): { nodes: Node[]; tail: string } {
       }
     }
     const environment =
-      source[start] === '\\' ? environmentBlock(source, start, before, depth) : undefined;
+      source[start] === '\\' ? environmentBlock(source, start, before, macros, depth) : undefined;
     if (environment) {
       nodes.push(environment.node);
       position = environment.end;
@@ -467,7 +465,7 @@ function blocks(source: string, depth = 0): { nodes: Node[]; tail: string } {
     }
     const end = paragraphEnd(source, start);
     const content = source.slice(start, end).trimEnd();
-    nodes.push(schema.nodes.paragraph!.create({ before }, inline(content)));
+    nodes.push(schema.nodes.paragraph!.create({ before }, inline(content, macros)));
     position = start + content.length;
   }
   return { nodes, tail: '' };
@@ -476,8 +474,8 @@ function blocks(source: string, depth = 0): { nodes: Node[]; tail: string } {
 /** Parse common constructs structurally and retain unsupported TeX as inert, verbatim nodes. */
 export function parseLatex(source: string): Node {
   const body = documentBody(source);
-  const { nodes, tail } = blocks(body ? source.slice(body.from, body.to) : source);
   const prefix = body ? source.slice(0, body.from) : '';
+  const { nodes, tail } = blocks(body ? source.slice(body.from, body.to) : source, readLatexTextMacros(prefix));
   const suffix = tail + (body ? source.slice(body.to) : '');
   if (!nodes.length) {
     // In a blank document, typing starts after the whitespace already following the opener.

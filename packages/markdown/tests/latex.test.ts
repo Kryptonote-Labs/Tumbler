@@ -175,3 +175,17 @@ test('simultaneous edits to separate cells survive collaboration and undo', () =
   undo(right, (transaction) => { right = right.apply(transaction); });
   expect(serializeLatex(right.doc)).toContain('Left & B');
 });
+
+test('a formatting alias stays editable and keeps the authored macro call', () => {
+  const source = String.raw`\documentclass{article}
+\newcommand{\queue}[1]{\textsf{#1}}
+\newcommand{\stage}[1]{\queue{#1}}
+\begin{document}
+\stage{Incoming}
+\end{document}`;
+  const document = parseLatex(source);
+  expect(document.firstChild?.firstChild?.text).toBe('Incoming');
+  expect(document.firstChild?.firstChild?.marks[0]?.attrs.style).toBe('sans');
+  const state = noteState('', 0, 'test', document);
+  expect(serializeLatex(state.tr.insertText('Ready', 1, 9).doc)).toBe(source.replace('Incoming', 'Ready'));
+});

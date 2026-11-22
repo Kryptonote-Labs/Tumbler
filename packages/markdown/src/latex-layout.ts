@@ -181,7 +181,10 @@ function paragraphLengths(source: string, quad: number, defaultIndent: number, l
 }
 
 /** Read the standard class and geometry options that determine the editable page. */
-export function latexPageLayout(prefix: string): LatexPageLayout {
+export function latexPageLayout(
+  prefix: string,
+  output: { defaultPaper?: 'a4paper' | 'letterpaper' } = {},
+): LatexPageLayout {
   const { source, geometry, geometryOptions, paperSize, orientation, fontSize, classOptions, documentClass } =
     readOptions(prefix);
   const landscape = orientation === 'landscape';
@@ -271,6 +274,27 @@ export function latexPageLayout(prefix: string): LatexPageLayout {
   if (top + bottom >= height - leading * 2) {
     top = height * 0.12;
     bottom = height * 0.18;
+  }
+  // A driver can ship a physical sheet independently of the lengths set by the class.
+  // Geometry uses the paper primitives and replaces that driver default.
+  if (!slide && !geometry && output.defaultPaper) {
+    const [sheetWidth, sheetHeight] = paperSizes.get(output.defaultPaper)!;
+    right += sheetWidth! - width;
+    bottom += sheetHeight! - height;
+    width = sheetWidth!;
+    height = sheetHeight!;
+  }
+  const outputDimensions = {
+    width: dimension(/\\pdfpagewidth\s*=?\s*([\d.]+\s*[a-z]+)/.exec(source)?.[1]),
+    height: dimension(/\\pdfpageheight\s*=?\s*([\d.]+\s*[a-z]+)/.exec(source)?.[1]),
+  };
+  if (outputDimensions.width && outputDimensions.width > 0) {
+    right += outputDimensions.width - width;
+    width = outputDimensions.width;
+  }
+  if (outputDimensions.height && outputDimensions.height > 0) {
+    bottom += outputDimensions.height - height;
+    height = outputDimensions.height;
   }
   return {
     width,

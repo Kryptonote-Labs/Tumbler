@@ -125,7 +125,12 @@ export const noteSchema = new Schema({
         order: { validate: 'number' },
       },
       excludes: '',
-      toDOM: (mark) => [mark.attrs.style === 'strong' ? 'strong' : 'em', 0],
+      toDOM: (mark) => {
+        const style = mark.attrs.style;
+        return style === 'sans' || style === 'mono'
+          ? ['span', { 'data-latex-font': style }, 0]
+          : [style === 'strong' ? 'strong' : 'em', 0];
+      },
     })
     .update('code', {
       ...baseSchema.spec.marks.get('code'),
