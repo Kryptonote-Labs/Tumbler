@@ -140,15 +140,19 @@ test('PGFPlots reserves room for labels before sizing the axis', () => {
   for (const axisOnly of [false, true]) {
     const drawing = readLatexDrawing(
       String.raw`\begin{axis}[width=200pt,height=150pt${axisOnly ? ',scale only axis' : ''}]
-      \addplot coordinates {(1,24) (4,30)};
+      \addplot+[mark=*] coordinates {(1,24) (4,30)};
       \end{axis}`,
     );
     expect(drawing?.kind).toBe('axis');
-    const frame = layoutLatexDrawing(drawing!, 500, 96 / 7.227)?.primitives[0];
+    const scene = layoutLatexDrawing(drawing!, 500, 96 / 7.227);
+    const frame = scene?.primitives[0];
     expect(frame?.kind).toBe('rect');
     if (frame?.kind !== 'rect') throw new Error('Expected a rectangular plot frame');
     const allowance = axisOnly ? 0 : 45;
     expect(frame.width).toBeCloseTo((200 - allowance) * 96 / 72.27, 5);
     expect(frame.height).toBeCloseTo((150 - allowance) * 96 / 72.27, 5);
+    const firstMark = scene?.primitives.find(primitive => primitive.kind === 'dot');
+    expect(firstMark?.x).toBeCloseTo(frame.x + frame.width / 12, 5);
+    expect(firstMark?.y).toBeCloseTo(frame.y + frame.height * 11 / 12, 5);
   }
 });

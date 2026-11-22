@@ -4,13 +4,19 @@ import { latexLength } from './latex-lengths';
 import { argumentAt, commandEnd, environmentAt, groupAt, latexCommands, whitespaceEnd } from './latex-syntax';
 
 type Point = { x: number; y: number };
+const legendPositions = new Map([
+  ['south west', { x: 0.03, y: 0.97, west: true, north: false }],
+  ['south east', { x: 0.97, y: 0.97, west: false, north: false }],
+  ['north west', { x: 0.03, y: 0.03, west: true, north: true }],
+  ['north east', { x: 0.97, y: 0.03, west: false, north: true }],
+]);
 type PictureObject = Point & (
   | { kind: 'label'; text: string; height: number }
   | { kind: 'rectangle'; width: number; height: number }
 );
 type Drawing =
   | { kind: 'picture'; width: number; height: number; objects: PictureObject[]; end: number }
-  | { kind: 'axis'; width: string; height: number; xLabel: string; yLabel: string; scaleOnlyAxis: boolean; xTicks: number[]; yTicks: number[]; plots: { points: Point[]; marker: 'circle' | 'triangle' | 'none'; legend?: string }[]; end: number };
+  | { kind: 'axis'; width: string; height: number; xLabel: string; yLabel: string; scaleOnlyAxis: boolean; padding: Point; legendPosition?: string; xTicks: number[]; yTicks: number[]; plots: { points: Point[]; marker: 'circle' | 'triangle' | 'none'; legend?: string }[]; end: number };
 
 const pair = /\(\s*([+-]?\d*\.?\d+)\s*,\s*([+-]?\d*\.?\d+)\s*\)/g;
 const text = (source: string) => source.replace(/\\([%&#_$])/g, '$1');
@@ -66,6 +72,11 @@ function axis(source: string, environment: NonNullable<ReturnType<typeof environ
   if ([...xTicks, ...yTicks].some(value => !Number.isFinite(value))) return;
   const scaleOnlyAxis = values.get('scale only axis') === 'true' ||
     /(?:^|,)\s*scale only axis\s*(?:,|$)/.test(settings);
+  const padding = (name: string) => {
+    const value = values.get(name) ?? values.get('enlargelimits') ?? 'auto';
+    if (value === 'false') return 0;
+    return /^(?:\d+(?:\.\d*)?|\.\d+)$/.test(value) ? Number(value) : 0.1;
+  };
   const plots: Extract<Drawing, { kind: 'axis' }>['plots'] = [];
   const body = source.slice(option?.end ?? environment.from, environment.to);
   for (const command of latexCommands(body)) {
@@ -89,6 +100,8 @@ function axis(source: string, environment: NonNullable<ReturnType<typeof environ
   }
   if (plots.length) return {
     kind: 'axis', width: values.get('width') ?? '8cm', height, xTicks, yTicks, scaleOnlyAxis, plots,
+    padding: { x: padding('enlarge x limits'), y: padding('enlarge y limits') },
+    legendPosition: values.get('legend pos'),
     xLabel: text(values.get('xlabel') ?? ''), yLabel: text(values.get('ylabel') ?? ''),
     end: environment.end,
   };
@@ -139,18 +152,19 @@ export function layoutLatexDrawing(drawing: Drawing, bodyWidth: number, em: numb
   }), { xMin: Infinity, xMax: -Infinity, yMin: Infinity, yMax: -Infinity });
   const xRange = bounds.xMax - bounds.xMin || 1;
   const yRange = bounds.yMax - bounds.yMin || 1;
-  const tick = (min: number, max: number, span: number) => {
+  const { x: xPad, y: yPad } = drawing.padding;
+  const tick = (min: number, max: number, span: number, relativePadding: number) => {
     const desired = Math.max(4, Math.floor(span / (35 * texPoint)));
-    const raw = (max - min) * 1.1 / (desired - 1) || 1;
+    const raw = (max - min) * (1 + 2 * relativePadding) / (desired - 1) || 1;
     const base = 10 ** Math.floor(Math.log10(raw));
     const multiple = raw / base;
     const step = (multiple < 1.5 ? 1 : multiple < 3.5 ? 2 : multiple < 7.5 ? 5 : 10) * base;
-    const padding = (max - min) * 0.05;
+    const padding = (max - min) * relativePadding;
     const first = Math.ceil((min - padding) / step) * step;
     return Array.from({ length: Math.floor((max + padding - first) / step) + 1 }, (_, i) =>
       Number((first + i * step).toPrecision(10)));
   };
-  const yTicks = drawing.yTicks.length ? drawing.yTicks : tick(bounds.yMin, bounds.yMax, axisHeight);
+  const yTicks = drawing.yTicks.length ? drawing.yTicks : tick(bounds.yMin, bounds.yMax, axisHeight, yPad);
   const tickLabel = Math.max(0, ...yTicks.map(value => measureLatexRoman(String(value), 'cmr10', em) ?? String(value).length * em / 2));
   const tickInset = 5 * texPoint;
   const left = tickInset + tickLabel + (drawing.yLabel ? em + tickInset * 2 : 0);
@@ -159,11 +173,11 @@ export function layoutLatexDrawing(drawing: Drawing, bodyWidth: number, em: numb
   const bottom = top + axisHeight;
   const width = right + top;
   const height = bottom + (drawing.xLabel ? 2.7 : 1.2) * em;
-  const x = (value: number) => left + ((value - bounds.xMin) / xRange + 0.05) / 1.1 * axisWidth;
-  const y = (value: number) => bottom - ((value - bounds.yMin) / yRange + 0.05) / 1.1 * axisHeight;
+  const x = (value: number) => left + ((value - bounds.xMin) / xRange + xPad) / (1 + 2 * xPad) * axisWidth;
+  const y = (value: number) => bottom - ((value - bounds.yMin) / yRange + yPad) / (1 + 2 * yPad) * axisHeight;
   const line = (a: Point, b: Point) => primitives.push({ kind: 'path', points: [a, b], stroke: '#212121', width: 0.5 });
   primitives.push({ kind: 'rect', x: left, y: top, width: axisWidth, height: axisHeight, stroke: '#000' });
-  for (const value of drawing.xTicks.length ? drawing.xTicks : tick(bounds.xMin, bounds.xMax, axisWidth)) {
+  for (const value of drawing.xTicks.length ? drawing.xTicks : tick(bounds.xMin, bounds.xMax, axisWidth, xPad)) {
     if (x(value) < left || x(value) > right) continue;
     line({ x: x(value), y: bottom }, { x: x(value), y: bottom - 5 });
     line({ x: x(value), y: top }, { x: x(value), y: top + 5 });
@@ -176,8 +190,8 @@ export function layoutLatexDrawing(drawing: Drawing, bodyWidth: number, em: numb
     primitives.push({ kind: 'text', x: left - tickInset, y: y(value), text: String(value), align: 'right' });
   }
   primitives.push(
-    { kind: 'text', x: (left + right) / 2, y: bottom + 1.9 * em, text: drawing.xLabel, align: 'center' },
-    { kind: 'text', x: em * .4, y: (top + bottom) / 2, text: drawing.yLabel, align: 'center', rotate: true },
+    { kind: 'text', x: (left + right) / 2, y: bottom + 2.2 * em, text: drawing.xLabel, align: 'center' },
+    { kind: 'text', x: em * .85, y: (top + bottom) / 2, text: drawing.yLabel, align: 'center', rotate: true },
   );
   const cycle = ['#0000ff', '#ff0000', '#000000', '#757500'];
   const labels: { text: string; colour: string; marker: 'triangle'|'circle'|'none' }[] = [];
@@ -190,16 +204,34 @@ export function layoutLatexDrawing(drawing: Drawing, bodyWidth: number, em: numb
     if (plot.legend) labels.push({ text: plot.legend, colour: stroke, marker: plot.marker });
   });
   if (labels.length) {
-    const legendWidth = Math.max(...labels.map(label => label.text.length)) * em * .51 + 2.35 * em;
-    const legendHeight = (labels.length + .55) * em;
-    const origin = { x: right - legendWidth - .4 * em, y: bottom - legendHeight - .4 * em };
+    const swatch = latexLength('0.6cm')!;
+    const inset = 5 * texPoint;
+    const gap = 4 * texPoint;
+    const rowHeight = 0.84 * em + gap;
+    const widths = labels.map(label =>
+      label.text.split(/ +/).reduce(
+        (sum, word, index) => sum + (index ? em / 3 : 0) +
+          (measureLatexRoman(word, 'cmr10', em) ?? word.length * em / 2),
+        0,
+      ));
+    const labelWidth = Math.max(...widths);
+    const legendWidth = 2 * inset + swatch + gap + labelWidth;
+    const legendHeight = labels.length * rowHeight + 4 * texPoint;
+    const position = legendPositions.get(drawing.legendPosition ?? '') ??
+      { x: 0.98, y: 0.02, west: false, north: true };
+    const origin = {
+      x: left + position.x * axisWidth - (position.west ? 0 : legendWidth),
+      y: top + position.y * axisHeight - (position.north ? 0 : legendHeight),
+    };
     primitives.push({ kind: 'rect', ...origin, width: legendWidth, height: legendHeight, fill: '#fff', stroke: '#000' });
     labels.forEach((label, index) => {
-      const y = origin.y + (.78 + index) * em;
-      const start = origin.x + .28 * em;
-      primitives.push({ kind: 'path', points: [{ x:start,y },{ x:start+1.3*em,y }], stroke: label.colour });
-      if (label.marker !== 'none') primitives.push({ kind:'dot', marker:label.marker, x:start+.65*em, y, colour:label.colour });
-      primitives.push({ kind:'text', x:start+1.55*em, y, text:label.text });
+      const y = origin.y + 2 * texPoint + (index + 0.5) * rowHeight;
+      const start = origin.x + inset;
+      primitives.push({ kind: 'path', points: [{ x: start, y }, { x: start + swatch, y }], stroke: label.colour });
+      if (label.marker !== 'none')
+        primitives.push({ kind: 'dot', marker: label.marker, x: start + swatch / 2, y, colour: label.colour });
+      const x = start + swatch + gap + (labelWidth - widths[index]!) / 2;
+      primitives.push({ kind: 'text', x, y, text: label.text });
     });
   }
   return { width, height, primitives };
