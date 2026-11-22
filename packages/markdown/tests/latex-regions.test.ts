@@ -3,7 +3,7 @@ import { noteSchema } from '../src';
 import {
   latexPageLayout,
   latexNaturalColumns,
-  materializeLatexRegions,
+  materializeLatexStructures,
   paginateLatexRegions,
   parseLatex,
   readLatexBeamerFrame,
@@ -28,7 +28,7 @@ After.`;
     source: source.slice(source.indexOf('\\begin'), source.indexOf('\nAfter.')),
   });
   const legacy = parsed.type.create(parsed.attrs, [parsed.child(0), opaque, parsed.child(2)]);
-  const native = materializeLatexRegions(legacy).doc;
+  const native = materializeLatexStructures(legacy).doc;
   expect(native.eq(parsed)).toBe(true);
   expect(serializeLatex(native)).toBe(source);
 });

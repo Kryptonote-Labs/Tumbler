@@ -1,13 +1,22 @@
-import { commandEnd, groupAt, latexCommands, lineEnd, whitespaceEnd } from './latex-syntax';
+import { commandEnd, groupAt, latexCommands, lineEnd, whitespaceEnd } from "./latex-syntax";
 
-export type LatexTextStyle = 'strong' | 'em' | 'sans' | 'mono';
+export type LatexTextStyle = "strong" | "em" | "sans" | "mono";
 type Macro = { count: number; optional?: string; replacement: string };
 type Macros = ReadonlyMap<string, Macro>;
 
 const styles: ReadonlyMap<string, LatexTextStyle> = new Map([
-  ['textbf', 'strong'], ['emph', 'em'], ['textit', 'em'], ['textsf', 'sans'], ['texttt', 'mono'],
+  ["textbf", "strong"],
+  ["emph", "em"],
+  ["textit", "em"],
+  ["textsf", "sans"],
+  ["texttt", "mono"],
 ]);
-const declarations = new Set(['newcommand', 'renewcommand', 'providecommand', 'DeclareRobustCommand']);
+const declarations = new Set([
+  "newcommand",
+  "renewcommand",
+  "providecommand",
+  "DeclareRobustCommand",
+]);
 
 /** Read ordinary LaTeX command declarations in source order. */
 export function readLatexTextMacros(prefix: string): Macros {
@@ -15,22 +24,24 @@ export function readLatexTextMacros(prefix: string): Macros {
   let consumed = 0;
   for (const { name, start, end } of latexCommands(prefix)) {
     if (start < consumed || !declarations.has(name)) continue;
-    const declaration = whitespaceEnd(prefix, end + Number(prefix[end] === '*'));
+    const declaration = whitespaceEnd(prefix, end + Number(prefix[end] === "*"));
     const group = groupAt(prefix, declaration);
     const from = group?.from ?? declaration;
     const to = commandEnd(prefix, from);
     if (to === from || (group && to !== group.to)) continue;
     const command = prefix.slice(from + 1, to);
-    const arity = groupAt(prefix, whitespaceEnd(prefix, group?.end ?? to), '[', ']');
+    const arity = groupAt(prefix, whitespaceEnd(prefix, group?.end ?? to), "[", "]");
     const count = arity ? Number(prefix.slice(arity.from, arity.to)) : 0;
     if (!Number.isInteger(count) || count < 0 || count > 9) continue;
-    const fallback = arity && count > 0
-      ? groupAt(prefix, whitespaceEnd(prefix, arity.end), '[', ']')
-      : undefined;
-    const body = groupAt(prefix, whitespaceEnd(prefix, fallback?.end ?? arity?.end ?? group?.end ?? to));
+    const fallback =
+      arity && count > 0 ? groupAt(prefix, whitespaceEnd(prefix, arity.end), "[", "]") : undefined;
+    const body = groupAt(
+      prefix,
+      whitespaceEnd(prefix, fallback?.end ?? arity?.end ?? group?.end ?? to),
+    );
     if (!body) continue;
     consumed = body.end;
-    if (name === 'providecommand' && (macros.has(command) || styles.has(command))) continue;
+    if (name === "providecommand" && (macros.has(command) || styles.has(command))) continue;
     macros.set(command, {
       count,
       optional: fallback ? prefix.slice(fallback.from, fallback.to) : undefined,
@@ -57,24 +68,36 @@ export function latexFormattingAlias(command: string, macros: Macros) {
 export type LatexPrintedText = string | { style: LatexTextStyle; content: LatexPrintedText[] };
 
 const symbols = new Map([
-  ['$', '$'], ['%', '%'], ['#', '#'], ['&', '&'], ['_', '_'], ['{', '{'], ['}', '}'],
-  ['textbackslash', '\\'], ['textasciitilde', '~'], ['textasciicircum', '^'], [' ', '\u00a0'],
+  ["$", "$"],
+  ["%", "%"],
+  ["#", "#"],
+  ["&", "&"],
+  ["_", "_"],
+  ["{", "{"],
+  ["}", "}"],
+  ["textbackslash", "\\"],
+  ["textasciitilde", "~"],
+  ["textasciicircum", "^"],
+  [" ", "\u00a0"],
 ]);
 
 /** Expand a source-backed inline command into text and native formatting. */
 export function interpretLatexText(source: string, macros: Macros): LatexPrintedText[] | undefined {
   let remaining = 128;
+  // Bound the work of expanding a single inline object. Its authored source stays intact.
+  let remainingText = 65536;
   const active = new Set<string>();
   function read(input: string, depth: number): LatexPrintedText[] | undefined {
-    if (depth > 32) return;
+    remainingText -= input.length;
+    if (depth > 32 || remainingText < 0) return;
     const result: LatexPrintedText[] = [];
     for (let position = 0; position < input.length;) {
       const character = input[position];
-      if (character === '%') {
+      if (character === "%") {
         position = lineEnd(input, position) + 1;
         continue;
       }
-      if (character === '{') {
+      if (character === "{") {
         const group = groupAt(input, position);
         if (!group) return;
         const content = read(input.slice(group.from, group.to), depth + 1);
@@ -83,12 +106,12 @@ export function interpretLatexText(source: string, macros: Macros): LatexPrinted
         position = group.end;
         continue;
       }
-      if (character !== '\\') {
+      if (character !== "\\") {
         const end = /[\\\\{}%$#&_^]/g;
         end.lastIndex = position;
         const next = end.exec(input)?.index ?? input.length;
         if (next === position) return;
-        result.push(input.slice(position, next).replace(/~/g, '\u00a0'));
+        result.push(input.slice(position, next).replace(/~/g, "\u00a0"));
         position = next;
         continue;
       }
@@ -109,7 +132,7 @@ export function interpretLatexText(source: string, macros: Macros): LatexPrinted
       const args: string[] = [];
       const count = macro?.count ?? 1;
       if (macro?.optional !== undefined) {
-        const option = groupAt(input, position, '[', ']');
+        const option = groupAt(input, position, "[", "]");
         if (option) position = whitespaceEnd(input, option.end);
         args.push(option ? input.slice(option.from, option.to) : macro.optional);
       }
@@ -121,8 +144,15 @@ export function interpretLatexText(source: string, macros: Macros): LatexPrinted
       }
       if (macro) {
         active.add(command);
-        const replacement = macro.replacement.replace(/\\[A-Za-z@]+|\\[^\n]|##|#([1-9])/g,
-          (token, index) => index ? args[Number(index) - 1] ?? token : token,
+        let projectedSize = macro.replacement.length;
+        const parameters = /\\[A-Za-z@]+|\\[^\n]|##|#([1-9])/g;
+        for (const match of macro.replacement.matchAll(parameters)) {
+          if (!match[1]) continue;
+          projectedSize += (args[Number(match[1]) - 1]?.length ?? 2) - 2;
+        }
+        if (projectedSize > remainingText) return;
+        const replacement = macro.replacement.replace(parameters, (token, index) =>
+          index ? (args[Number(index) - 1] ?? token) : token,
         );
         const content = read(replacement, depth + 1);
         active.delete(command);
@@ -136,7 +166,7 @@ export function interpretLatexText(source: string, macros: Macros): LatexPrinted
     }
     return result;
   }
-  if (!source.startsWith('\\')) return;
+  if (!source.startsWith("\\")) return;
   const command = source.slice(1, commandEnd(source, 0));
   if (!macros.has(command) && !styles.has(command) && !symbols.has(command)) return;
   return read(source, 0);

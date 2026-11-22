@@ -67,3 +67,6 @@ Formatting aliases declared with `\newcommand` can keep their argument as editab
 and formatting for hosts that display source-backed commands. Import `@tumblerjs/markdown/latex-fonts.css`
 for the editable Computer Modern webfonts. Their outlines come from AMS Fonts under the
 included SIL Open Font License.
+
+`latexListOptions` reads local `enumitem` counter labels, starting values, and compact spacing
+for supported lists. The list items remain normal editable document nodes.
