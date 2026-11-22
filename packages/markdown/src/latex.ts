@@ -1,5 +1,9 @@
 export { interpretLatexText, readLatexTextMacros, type LatexPrintedText } from './latex-macros';
-import { readLatexEnumitem, usesLatexPackage } from './latex-list';
+import { readLatexEnumitem } from './latex-list';
+import { readLatexBookMatter, readLatexClass } from './latex-flow';
+import { latexLetterCommandAt } from './latex-letter';
+export type { LatexLetterPart } from './latex-letter';
+import { usesLatexPackage } from './latex-preamble';
 import { latexFormattingAlias, readLatexTextMacros } from './latex-macros';
 import { Fragment, type Mark, type Node } from 'prosemirror-model';
 import { Transform } from 'prosemirror-transform';
@@ -22,6 +26,8 @@ export { latexListOptions } from './latex-list';
 export { composeLatexParagraph, type LatexLine, type LatexTextMetrics } from './latex-lines';
 export { latexInlineFlow, latexParagraphText, type LatexParagraphSegment } from './latex-paragraph';
 export { measureLatexRoman, type LatexRomanFont } from './latex-font-metrics';
+export { latexLength } from './latex-lengths';
+export { latexTableGrid } from './latex-table-grid';
 export { latexHorizontalRule, latexNaturalColumns, latexNaturalTableWidths } from './latex-tables';
 export { hyphenateLatexEnglish } from './latex-hyphenation';
 export { latexBeamerLayout, readLatexBeamerFrame } from './latex-beamer';
@@ -30,7 +36,7 @@ export type { LatexTypography } from './latex-typography';
 export { latexLandscapeLayout, latexPageLayout, latexPaperSettings, paginateLatex } from './latex-layout';
 export { paginateLatexRegions, type LatexRegionBlock } from './latex-page-regions';
 export type { LatexPageLayout, PageBlock, PageBreak, PageLine } from './latex-layout';
-export { latexBreakCommand, latexFlow, latexPageNumbers, readLatexClass } from './latex-flow';
+export { latexBreakCommand, latexFlow, latexPageLabel, latexPageNumbers, readLatexBookMatter, readLatexClass } from './latex-flow';
 export type { LatexBlockFlow, LatexBreak, LatexPageNumber } from './latex-flow';
 export {
   latexFieldSource,
@@ -232,6 +238,9 @@ const blockCommands = new Set([
   '\\newpage',
   '\\clearpage',
   '\\cleardoublepage',
+  '\\frontmatter',
+  '\\mainmatter',
+  '\\backmatter',
 ]);
 
 // Bibliography commands set the reference list where they stand, so they are blocks. A style
@@ -264,7 +273,7 @@ function headingAt(source: string, position: number) {
   if (group) return { ...group, level };
 }
 
-function blockStart(source: string, position: number) {
+function blockStart(source: string, position: number, context: SourceContext) {
   if (source.startsWith('$$', position) || source.startsWith('\\[', position)) return true;
   if (source[position] !== '\\') return false;
   const command = source.slice(position, commandEnd(source, position));
@@ -272,17 +281,18 @@ function blockStart(source: string, position: number) {
     command === '\\begin' ||
     blockCommands.has(command) ||
     bibliographyCommands.has(command) ||
-    headingLevel(command.slice(1)) > 0
+    headingLevel(command.slice(1)) > 0 ||
+    (context.letter && !!latexLetterCommandAt(source, position))
   );
 }
 
-function paragraphEnd(source: string, position: number) {
+function paragraphEnd(source: string, position: number, context: SourceContext) {
   const blank = /\r?\n[^\S\r\n]*\r?\n/y;
   const unmatched = new Set<string>();
   for (let next = position; next < source.length; next++) {
     blank.lastIndex = next;
     if (blank.test(source)) return next;
-    if (next > position && blockStart(source, next)) return next;
+    if (next > position && blockStart(source, next, context)) return next;
     const character = source[next];
     if (character === '%') next = lineEnd(source, next);
     else if (character === '$' || source.startsWith('\\(', next)) {
@@ -302,7 +312,12 @@ function paragraphEnd(source: string, position: number) {
 type SourceContext = {
   macros: ReturnType<typeof readLatexTextMacros>;
   enumitem: boolean;
+  letter: boolean;
 };
+
+function sourceContext(prefix: string): SourceContext {
+  return { macros: readLatexTextMacros(prefix), enumitem: usesLatexPackage(prefix, 'enumitem'), letter: readLatexClass(prefix).name === 'letter' };
+}
 
 function listItems(source: string, context: SourceContext, depth: number): { items: Node[]; tail: string } | undefined {
   let position = whitespaceEnd(source, 0);
@@ -388,6 +403,19 @@ function environmentBlock(source: string, position: number, before: string, cont
         end,
       };
   }
+  if (context.letter && name === 'letter' && depth < 64) {
+    const recipient = groupAt(source, whitespaceEnd(source, from));
+    if (recipient && recipient.end <= to) {
+      const body = blocks(source.slice(recipient.end, to), context, depth + 1);
+      if (!body.nodes.length) body.nodes.push(schema.nodes.paragraph!.create({ before: '' }));
+      return {
+        node: schema.nodes.latex_container!.create({
+          before, open: source.slice(position, recipient.end), close: body.tail + close,
+        }, body.nodes),
+        end,
+      };
+    }
+  }
   // Text environments edit as native blocks. The open and close source keep the environment, and
   // an empty one, such as a new abstract, gets an empty paragraph to type into.
   if (textEnvironments.has(name) && depth < 64) {
@@ -422,6 +450,12 @@ function blocks(source: string, context: SourceContext, depth = 0): { nodes: Nod
     if (blockCommands.has(command)) {
       nodes.push(schema.nodes.latex_raw!.create({ before, source: command }));
       position = start + command.length;
+      continue;
+    }
+    const letterCommand = context.letter && latexLetterCommandAt(source, start);
+    if (letterCommand) {
+      nodes.push(schema.nodes.latex_raw!.create({ before, source: source.slice(start, letterCommand.end) }));
+      position = letterCommand.end;
       continue;
     }
     const bibliography = bibliographyCommands.has(command) ? bibliographyAt(source, start) : undefined;
@@ -474,7 +508,7 @@ function blocks(source: string, context: SourceContext, depth = 0): { nodes: Nod
       position = environment.end;
       continue;
     }
-    const end = paragraphEnd(source, start);
+    const end = paragraphEnd(source, start, context);
     const content = source.slice(start, end).trimEnd();
     nodes.push(schema.nodes.paragraph!.create({ before }, inline(content, context.macros)));
     position = start + content.length;
@@ -486,7 +520,7 @@ function blocks(source: string, context: SourceContext, depth = 0): { nodes: Nod
 export function parseLatex(source: string): Node {
   const body = documentBody(source);
   const prefix = body ? source.slice(0, body.from) : '';
-  const context: SourceContext = { macros: readLatexTextMacros(prefix), enumitem: usesLatexPackage(prefix, 'enumitem') };
+  const context = sourceContext(prefix);
   const { nodes, tail } = blocks(body ? source.slice(body.from, body.to) : source, context);
   const suffix = tail + (body ? source.slice(body.to) : '');
   if (!nodes.length) {
@@ -560,6 +594,7 @@ function blockSource(node: Node): string {
     case 'bullet_list':
     case 'ordered_list':
     case 'latex_landscape':
+    case 'latex_container':
     case 'blockquote': {
       const environment =
         node.type.name === 'bullet_list'
@@ -601,20 +636,27 @@ export function serializeLatex(document: Node) {
 export function materializeLatexStructures(document: Node): Transform {
   const transform = new Transform(document);
   const prefix = String(document.attrs.prefix ?? '');
-  const context: SourceContext = { macros: readLatexTextMacros(prefix), enumitem: usesLatexPackage(prefix, 'enumitem') };
+  const context = sourceContext(prefix);
   document.descendants((node, position) => {
-    if (node.type.name !== 'latex_raw') return;
-    const source = String(node.attrs.source);
-    if (!/^\\begin\s*\{(?:landscape|itemize|enumerate)\}/.test(source)) return;
+    const raw = node.type.name === 'latex_raw'
+      && /^\\begin\s*\{(?:landscape|itemize|enumerate|letter)\}/.test(node.attrs.source);
+    const matter = node.type.name === 'paragraph' && node.children.some(child =>
+      child.type.name === 'latex_inline' && readLatexBookMatter(child.attrs.source));
+    const letter = context.letter && node.type.name === 'paragraph' && node.children.some(child =>
+      child.type.name === 'latex_inline' && latexLetterCommandAt(child.attrs.source, 0));
+    if (!raw && !matter && !letter) return;
+    const source = blockSource(node);
     const parsed = blocks(source, context);
-    const [block] = parsed.nodes;
-    if (parsed.nodes.length !== 1 || !block || !['latex_landscape', 'ordered_list', 'bullet_list'].includes(block.type.name) ||
-        (block.attrs.before ?? '') + blockSource(block) + parsed.tail !== source) return;
+    if (!parsed.nodes.length || (raw && parsed.nodes.every(block => block.type.name === 'latex_raw'))) return;
+    const reparsed = parsed.nodes.map(block => (block.attrs.before ?? '') + blockSource(block)).join('') + parsed.tail;
+    if (reparsed !== source || parsed.tail) return;
+    const first = parsed.nodes[0]!;
+    parsed.nodes[0] = first.type.create({
+      ...first.attrs,
+      before: (node.attrs.before ?? '') + (first.attrs.before ?? ''),
+    }, first.content);
     const start = transform.mapping.map(position);
-    transform.replaceWith(start, start + node.nodeSize, block.type.create({
-      ...block.attrs,
-      before: node.attrs.before,
-    }, block.content));
+    transform.replaceWith(start, start + node.nodeSize, parsed.nodes);
   });
   return transform;
 }

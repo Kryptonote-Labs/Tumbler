@@ -1,3 +1,4 @@
+import { readLatexCellSpan } from './latex-table-grid';
 import { latexFieldSource, latexFieldText } from './latex-metadata';
 import { measureLatexRoman } from './latex-font-metrics';
 import type { LatexTypography } from './latex-typography';
@@ -95,7 +96,7 @@ export function latexNaturalTableWidths(table: LatexTabular, typography: LatexTy
 }
 
 const rule =
-  /^(?:\s*(?:\\(?:hline|toprule|midrule|bottomrule)\b|\\c(?:mid)?rule\s*(?:\([^)]*\))?\s*(?:\[[^\]]*\])?\s*\{[^}]*\}))+\s*/;
+  /^(?:\s*(?:\\(?:hline|toprule|midrule|bottomrule)\b|\\(?:cline|cmidrule)\s*(?:\([^)]*\))?\s*(?:\[[^\]]*\])?\s*\{[^}]*\}))+\s*/;
 
 /** Split column specification tokens such as `l`, `p{3cm}` or `|`, or undefined for `*{…}`. */
 function columnsOf(spec: string) {
@@ -296,25 +297,14 @@ export function readLatexTableBlock(source: string) {
 
 /** Read an ordinary multicolumn cell for the table layout, keeping its source intact. */
 export function readLatexMulticolumn(source: string) {
-  const start = whitespaceEnd(source, 0);
-  const command = commandEnd(source, start);
-  if (source.slice(start, command) !== '\\multicolumn') return;
-  const count = groupAt(source, whitespaceEnd(source, command));
-  const spec = count && groupAt(source, whitespaceEnd(source, count.end));
-  const value = spec && groupAt(source, whitespaceEnd(source, spec.end));
-  if (!count || !spec || !value || source.slice(value.end).trim()) return;
-  const columns = Number(source.slice(count.from, count.to));
-  if (!Number.isSafeInteger(columns) || columns < 1) return;
-  const align = /[lcr]/.exec(source.slice(spec.from, spec.to))?.[0];
-  return {
-    columns,
-    align,
-    text: latexFieldText(source.slice(value.from, value.to)) ?? source.slice(value.from, value.to),
-  };
+  const span = readLatexCellSpan(source);
+  if (span?.kind !== 'column') return;
+  return { columns: span.count, align: /[lcr]/.exec(span.spec)?.[0], text: latexFieldText(span.text) ?? span.text };
 }
 
 /** Text shown in a cell, or undefined when its TeX has to be edited as TeX. */
-export const latexTableCellText = (cell: Cell) => latexFieldText(cell.body);
+export const latexTableCellText = (cell: Cell) =>
+  latexFieldText(readLatexCellSpan(cell.body)?.text ?? cell.body);
 
 const rowSource = (row: Row) =>
   row.rules + row.cells.map((cell) => cell.lead + cell.body + cell.trail).join('&') + row.end;
@@ -332,6 +322,9 @@ export function setLatexTableCell(source: string, row: number, column: number, v
   const table = readLatexTabular(source);
   const cell = table?.rows[row]?.cells[column];
   if (!table || !cell) return source;
+  const text = tex ? value : latexFieldSource(value);
+  const span = readLatexCellSpan(cell.body);
+  const body = span ? splice(cell.body, span.from, span.to, text) : text;
   if (table.layout.kind === 'continuing') {
     const entry = table.rows[row]!;
     const preceding = entry.cells.slice(0, column).reduce(
@@ -339,7 +332,7 @@ export function setLatexTableCell(source: string, row: number, column: number, v
       0,
     );
     const start = table.rowStarts[row]! + entry.rules.length + preceding + cell.lead.length;
-    return splice(source, start, start + cell.body.length, tex ? value : latexFieldSource(value));
+    return splice(source, start, start + cell.body.length, body);
   }
   // A blank cell gets the usual ` & ` spacing; a written one keeps its own.
   if (!cell.body.trim()) {
@@ -347,7 +340,7 @@ export function setLatexTableCell(source: string, row: number, column: number, v
     cell.lead = column ? ' ' : '';
     cell.trail = ' ';
   }
-  cell.body = tex ? value : latexFieldSource(value);
+  cell.body = body;
   return splice(source, table.start, table.end, table.rows.map(rowSource).join('') + table.tail);
 }
 

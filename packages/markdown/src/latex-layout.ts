@@ -1,5 +1,7 @@
 import { readLatexClass, type LatexBlockFlow, type LatexBreak } from './latex-flow';
 import { latexTypography, texPoint, type LatexTypography } from './latex-typography';
+import { latexLength } from './latex-lengths';
+import { latexDriverUsesClassPaper } from './latex-preamble';
 import { commandEnd, groupAt } from './latex-syntax';
 
 const inch = 96;
@@ -47,27 +49,6 @@ export function latexLandscapeLayout(portrait: LatexPageLayout): LatexPageLayout
     footerBaseline: portrait.height - portrait.footerBaseline,
     rotated: true,
   };
-}
-
-function dimension(value: string | undefined, quad?: number) {
-  const match = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*(in|cm|mm|pt|bp|pc|sp|dd|cc|em)$/.exec(
-    value ?? '',
-  );
-  if (!match) return;
-  const units: Record<string, number> = {
-    in: inch,
-    cm: 10 * millimeter,
-    mm: millimeter,
-    pt: texPoint,
-    bp: inch / 72,
-    pc: texPoint * 12,
-    sp: texPoint / 65536,
-    dd: (texPoint * 1238) / 1157,
-    cc: (texPoint * 12 * 1238) / 1157,
-    em: quad ?? NaN,
-  };
-  const length = Number(match[1]) * (units[match[2]!] ?? 0);
-  if (Number.isFinite(length)) return length;
 }
 
 function readOptions(prefix: string) {
@@ -125,7 +106,7 @@ function length(value: string | undefined, quad: number, leading: number) {
     ?.trim();
   const skip = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+)?)\s*\\baselineskip$/.exec(measure ?? '');
   if (skip) return (skip[1] === '' || skip[1] === undefined ? 1 : Number(skip[1])) * leading;
-  return dimension(measure, quad);
+  return latexLength(measure, quad);
 }
 
 function packageOptions(source: string, position: number, name: string) {
@@ -136,8 +117,8 @@ function packageOptions(source: string, position: number, name: string) {
   return { options: found[1] ?? '', end: match.lastIndex };
 }
 
-function paragraphLengths(source: string, quad: number, defaultIndent: number, leading: number) {
-  const lengths = { parindent: defaultIndent, parskip: 0 };
+function paragraphLengths(source: string, quad: number, defaultIndent: number, leading: number, defaultSkip = 0) {
+  const lengths = { parindent: defaultIndent, parskip: defaultSkip };
   // Apply literal TeX registers, LaTeX length commands and the parskip package in source order.
   const assignments =
     /\\(?:(setlength|addtolength)\s*(?:\{\s*\\(parindent|parskip)\s*\}|\\(parindent|parskip)\b)\s*\{([^{}]*)\}|(parindent|parskip)\s*(?:=\s*)?([+-]?(?:\d+(?:\.\d*)?|\.\d+)\s*(?:in|cm|mm|pt|bp|pc|sp|dd|cc|em))\b)/y;
@@ -205,13 +186,14 @@ export function latexPageLayout(
   const { size: font, leading } = typography.text;
   // Standard Computer Modern classes set lengths using the font's quad.
   const quad = (fontSize === 12 ? 11.74988 : fontSize === 11 ? 10.95003 : 10) * texPoint;
+  const letter = documentClass === 'letter';
   const twoColumns = classOptions.includes('twocolumn');
   const defaultIndent = twoColumns
     ? quad
     : fontSize === 12
       ? 1.5 * quad
       : (fontSize === 11 ? 17 : 15) * texPoint;
-  const paragraphs = paragraphLengths(source, quad, defaultIndent, leading);
+  const paragraphs = paragraphLengths(source, quad, letter ? 0 : defaultIndent, leading, letter ? 0.7 * quad : 0);
 
   const sizes = new Map(
     geometryOptions.map((option) => {
@@ -219,8 +201,8 @@ export function latexPageLayout(
       return [name?.trim(), value?.trim()] as const;
     }),
   );
-  const paperWidth = dimension(sizes.get('paperwidth'));
-  const paperHeight = dimension(sizes.get('paperheight'));
+  const paperWidth = latexLength(sizes.get('paperwidth'));
+  const paperHeight = latexLength(sizes.get('paperheight'));
   if (paperWidth && paperWidth > 0) width = paperWidth;
   if (paperHeight && paperHeight > 0) height = paperHeight;
 
@@ -229,7 +211,7 @@ export function latexPageLayout(
     leading,
     Math.floor((height - 3.5 * inch) / leading) * leading + fontSize * texPoint,
   );
-  const classTop = inch + (height - 2 * inch - 67 * texPoint - body) / 2 + 37 * texPoint;
+  const classTop = letter ? inch + 84 * texPoint : inch + (height - 2 * inch - 67 * texPoint - body) / 2 + 37 * texPoint;
   const standardSide = Math.max(0, (width - Math.min(classWidth, width - 2 * inch)) / 2);
 
   let left = geometry ? width * 0.15 : standardSide;
@@ -241,7 +223,7 @@ export function latexPageLayout(
   for (const option of geometryOptions) {
     const [raw, value] = option.split('=');
     const name = raw?.trim();
-    const length = dimension(value?.trim());
+    const length = latexLength(value?.trim());
     if (length === undefined || length < 0) continue;
     if (name === 'margin' || name === 'left' || name === 'inner') explicit.set('left', length);
     if (name === 'margin' || name === 'right' || name === 'outer') explicit.set('right', length);
@@ -249,9 +231,9 @@ export function latexPageLayout(
     if (name === 'margin' || name === 'bottom') explicit.set('bottom', length);
   }
   const horizontal =
-    dimension(sizes.get('textwidth')) ?? dimension(sizes.get('width')) ?? width * 0.7;
+    latexLength(sizes.get('textwidth')) ?? latexLength(sizes.get('width')) ?? width * 0.7;
   const vertical =
-    dimension(sizes.get('textheight')) ?? dimension(sizes.get('height')) ?? height * 0.7;
+    latexLength(sizes.get('textheight')) ?? latexLength(sizes.get('height')) ?? height * 0.7;
   if (geometry) {
     left = right = Math.max(0, (width - horizontal) / 2);
     top = Math.max(0, (height - vertical) * 0.4);
@@ -277,7 +259,7 @@ export function latexPageLayout(
   }
   // A driver can ship a physical sheet independently of the lengths set by the class.
   // Geometry uses the paper primitives and replaces that driver default.
-  if (!slide && !geometry && output.defaultPaper) {
+  if (!slide && !geometry && output.defaultPaper && !latexDriverUsesClassPaper(prefix, classOptions)) {
     const [sheetWidth, sheetHeight] = paperSizes.get(output.defaultPaper)!;
     right += sheetWidth! - width;
     bottom += sheetHeight! - height;
@@ -285,8 +267,8 @@ export function latexPageLayout(
     height = sheetHeight!;
   }
   const outputDimensions = {
-    width: dimension(/\\pdfpagewidth\s*=?\s*([\d.]+\s*[a-z]+)/.exec(source)?.[1]),
-    height: dimension(/\\pdfpageheight\s*=?\s*([\d.]+\s*[a-z]+)/.exec(source)?.[1]),
+    width: latexLength(/\\pdfpagewidth\s*=?\s*([\d.]+\s*[a-z]+)/.exec(source)?.[1]),
+    height: latexLength(/\\pdfpageheight\s*=?\s*([\d.]+\s*[a-z]+)/.exec(source)?.[1]),
   };
   if (outputDimensions.width && outputDimensions.width > 0) {
     right += outputDimensions.width - width;
@@ -306,9 +288,9 @@ export function latexPageLayout(
     gap: 24,
     fontSize: font,
     leading,
-    typography: ['article', 'report', 'book'].includes(documentClass) ? typography : undefined,
+    typography: ['article', 'report', 'book', 'letter'].includes(documentClass) ? typography : undefined,
     firstBaseline: slide ? leading / 2 + font * 0.4 : fontSize * texPoint,
-    footerBaseline: height - bottom + (dimension(sizes.get('footskip')) ?? 30 * texPoint),
+    footerBaseline: height - bottom + (latexLength(sizes.get('footskip')) ?? (letter ? 25 : 30) * texPoint),
     paragraphIndent: paragraphs.parindent,
     paragraphSpacing: paragraphs.parskip,
     columns: twoColumns ? 2 : 1,

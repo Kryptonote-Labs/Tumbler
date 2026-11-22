@@ -1,27 +1,9 @@
-import { commandEnd, groupAt, latexCommands, whitespaceEnd } from "./latex-syntax";
+import { commandEnd, groupAt, whitespaceEnd } from "./latex-syntax";
 
 const counterNames = ["arabic", "alph", "Alph", "roman", "Roman"] as const;
 const counters = new Set<string>(counterNames);
 type Counter = (typeof counterNames)[number];
 type Label = { before: string; counter: Counter; after: string };
-
-export function usesLatexPackage(prefix: string, name: string) {
-  for (const command of latexCommands(prefix)) {
-    if (command.name !== "usepackage" && command.name !== "RequirePackage") continue;
-    const at = whitespaceEnd(prefix, command.end);
-    const option = groupAt(prefix, at, "[", "]");
-    const names = groupAt(prefix, option ? whitespaceEnd(prefix, option.end) : at);
-    if (
-      names &&
-      prefix
-        .slice(names.from, names.to)
-        .split(",")
-        .some((value) => value.trim() === name)
-    )
-      return true;
-  }
-  return false;
-}
 
 /** An enumitem label expressible as ordinary text around the current item's counter. */
 function listLabel(value: string): Label | undefined {

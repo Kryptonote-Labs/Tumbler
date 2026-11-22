@@ -8,6 +8,7 @@ export const latexStructureNodes = [
   'list_item',
   'blockquote',
   'latex_landscape',
+  'latex_container',
 ] as const;
 
 export const latexBlockAttrs = {
@@ -42,6 +43,17 @@ function atomDOM(node: Node, className: string) {
 }
 
 export const latexNodes = {
+  latex_container: {
+    group: 'block',
+    content: 'block+',
+    defining: true,
+    attrs: latexBlockAttrs,
+    toDOM: (node) => ['div', {
+      class: 'latex-container',
+      'data-latex-container': /^\\begin\s*\{([^}]+)\}/.exec(node.attrs.open ?? '')?.[1] ?? '',
+    }, 0],
+    parseDOM: [{ tag: 'div[data-latex-container]' }],
+  },
   latex_landscape: {
     group: 'block',
     content: 'block+',

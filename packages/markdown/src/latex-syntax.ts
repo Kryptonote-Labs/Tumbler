@@ -76,7 +76,7 @@ function environmentTag(source: string, position: number) {
   };
 }
 
-const verbatimEnvironments = new Set(['verbatim', 'verbatim*', 'lstlisting', 'minted', 'Verbatim']);
+const verbatimEnvironments = new Set(['verbatim', 'verbatim*', 'lstlisting', 'minted', 'Verbatim', 'filecontents', 'filecontents*']);
 
 export function environmentAt(source: string, position: number) {
   const first = environmentTag(source, position);

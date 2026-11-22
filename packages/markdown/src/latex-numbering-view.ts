@@ -1,6 +1,8 @@
 import type { Node } from 'prosemirror-model';
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
+import { readLatexClass } from './latex-flow';
+import { readLatexLetterParts, type LatexLetterPart } from './latex-letter';
 import { latexNumbering } from './latex-numbering';
 
 /**
@@ -50,9 +52,14 @@ function decorate(document: Node) {
     decorations.push(
       Decoration.node(position, position + document.nodeAt(position)!.nodeSize, {}, spec),
     );
+  if (readLatexClass(String(document.attrs.prefix ?? '')).name === 'letter')
+    for (const [position, part] of readLatexLetterParts(document)) {
+      const node = document.nodeAt(position);
+      if (node) decorations.push(Decoration.node(position, position + node.nodeSize, {}, { latexLetterPart: part }));
+    }
   if (numbers) {
     for (const [position, { number, command }] of numbers.headings)
-      decorations.push(
+      if (number) decorations.push(
         Decoration.widget(position + 1, headingNumber(number, command), {
           side: -1,
           key: command + ':' + number,
@@ -103,5 +110,13 @@ export function latexNumberSpec(decorations: readonly Decoration[]) {
       'latexFootnote' in spec
     )
       return spec as LatexNumberSpec;
+  }
+}
+
+export function latexLetterPartSpec(decorations: readonly Decoration[]): LatexLetterPart | undefined {
+  for (const decoration of decorations) {
+    const part: unknown = decoration.spec.latexLetterPart;
+    if (part && typeof part === 'object' && 'kind' in part)
+      return decoration.spec.latexLetterPart;
   }
 }

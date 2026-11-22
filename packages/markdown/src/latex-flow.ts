@@ -1,7 +1,9 @@
+import { latexRomanNumber } from './latex-number-format';
 import type { Node } from 'prosemirror-model';
 import { commandEnd, groupAt, latexCommands, whitespaceEnd } from './latex-syntax';
 
 export type LatexBreak = 'column' | 'page' | 'recto';
+type FolioStyle = 'roman' | 'arabic';
 
 /** A source command can occupy no space, or constrain where visible content flows. */
 export type LatexBlockFlow =
@@ -11,9 +13,22 @@ export type LatexBlockFlow =
       before?: LatexBreak;
       after?: LatexBreak;
       folio?: { visible: false; restartAfter: boolean };
+      numbering?: FolioStyle;
     };
 
-export type LatexPageNumber = { number: number; visible: boolean };
+export type LatexPageNumber = { number: number; visible: boolean; style?: 'roman' };
+
+export function latexPageLabel(folio: LatexPageNumber) {
+  return folio.style === 'roman' ? latexRomanNumber(folio.number).toLowerCase() : String(folio.number);
+}
+
+export function readLatexBookMatter(source: string) {
+  switch (source.trim()) {
+    case '\\frontmatter': return 'front';
+    case '\\mainmatter': return 'main';
+    case '\\backmatter': return 'back';
+  }
+}
 
 export function readLatexClass(source: string): { name: string; options: string[] } {
   for (const { name, end } of latexCommands(source)) {
@@ -67,43 +82,56 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
   const titlePage = standard && (titleOption ? titleOption === 'titlepage' : chapters);
   const flow = new Map<number, LatexBlockFlow>();
   let titlePrinted = false;
+  let numbering: FolioStyle | undefined;
 
   document.descendants((node, position) => {
+    const source = node.type.name === 'latex_raw' ? String(node.attrs.source).trim() : '';
+    const matter = name === 'book' && readLatexBookMatter(source);
+    if (matter) {
+      flow.set(position, { kind: 'break', boundary: matter === 'back' ? chapterBoundary : recto ? 'recto' : 'page' });
+      if (matter !== 'back') numbering = matter === 'front' ? 'roman' : 'arabic';
+      return false;
+    }
+    const explicit = latexBreakCommand(source);
+    if (explicit) {
+      flow.set(position, { kind: 'break', boundary: explicit === 'recto' && !recto ? 'page' : explicit });
+      return false;
+    }
+    if (numbering && node.isBlock && (node.isAtom || node.isTextblock)) {
+      flow.set(position, { kind: 'content', numbering });
+      numbering = undefined;
+    }
+    const effect = (change: Omit<Extract<LatexBlockFlow, { kind: 'content' }>, 'kind'>) => {
+      flow.set(position, { ...flow.get(position), ...change, kind: 'content' });
+    };
     if (node.type.name === 'heading' && chapters) {
       const open = String(node.attrs.open ?? '');
       const command = open.slice(1, commandEnd(open, 0));
       if (command === 'chapter' || command === 'part') {
-        flow.set(
-          position,
-          command === 'chapter'
-            ? { kind: 'content', before: chapterBoundary }
-            : { kind: 'content', before: chapterBoundary, after: chapterBoundary },
-        );
+        effect(command === 'chapter'
+          ? { before: chapterBoundary }
+          : { before: chapterBoundary, after: chapterBoundary });
       }
     } else if (node.type.name === 'latex_raw') {
-      const source = String(node.attrs.source).trim();
+      if (name === 'letter' && /^\\opening\s*\{/.test(source)) {
+        effect({ before: 'page', numbering: 'arabic', folio: { visible: false, restartAfter: false } });
+        return;
+      }
       if (name === 'beamer' && /^\\begin\s*\{frame\}/.test(source)) {
-        flow.set(position, { kind: 'content', before: 'page', after: 'page' });
+        effect({ before: 'page', after: 'page' });
         return;
       }
       const command = source.slice(1, commandEnd(source, 0));
       if (source !== '\\' + command) return;
-      const boundary = latexBreakCommand(source);
-      if (boundary) {
-        flow.set(position, {
-          kind: 'break',
-          boundary: boundary === 'recto' && !recto ? 'page' : boundary,
-        });
-      } else if (command === 'maketitle' && titlePage && !titlePrinted) {
+      if (command === 'maketitle' && titlePage && !titlePrinted) {
         titlePrinted = true;
-        flow.set(position, {
-          kind: 'content',
-          before: 'page',
+        effect({
+          before: name === 'book' && recto ? 'recto' : 'page',
           after: 'page',
           folio: { visible: false, restartAfter: !recto },
         });
       } else if (chapters && chapterLists.has(command)) {
-        flow.set(position, { kind: 'content', before: chapterBoundary });
+        effect({ before: chapterBoundary });
       }
     }
   });
@@ -116,15 +144,23 @@ export function latexPageNumbers(
   pageStarts: readonly number[],
 ): LatexPageNumber[] {
   const overrides = new Map<number, { visible: false; restartAfter: boolean }>();
+  const resets = new Map<number, FolioStyle>();
   for (const [position, effect] of flow) {
-    if (effect.kind !== 'content' || !effect.folio) continue;
-    const next = pageStarts.findIndex((start) => start > position);
-    overrides.set(next < 0 ? pageStarts.length : next, effect.folio);
+    if (effect.kind !== 'content') continue;
+    const page = pageStarts.findLastIndex(start => start <= position) + 1;
+    if (effect.folio) overrides.set(page, effect.folio);
+    if (effect.numbering) resets.set(page, effect.numbering);
   }
   let number = 1;
+  let style: FolioStyle = 'arabic';
   return Array.from({ length: pageStarts.length + 1 }, (_, page) => {
     const override = overrides.get(page);
-    const folio = { number, visible: override?.visible ?? true };
+    const reset = resets.get(page);
+    if (reset) {
+      style = reset;
+      number = 1;
+    }
+    const folio: LatexPageNumber = { number, visible: override?.visible ?? true, ...(style === 'roman' ? { style } : {}) };
     number = override?.restartAfter ? 1 : number + 1;
     return folio;
   });
