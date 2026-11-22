@@ -123,10 +123,14 @@ export const noteSchema = new Schema({
         close: { validate: 'string' },
         style: { validate: 'string' },
         order: { validate: 'number' },
+        colour: { default: null, validate: 'string|null' },
       },
       excludes: '',
       toDOM: (mark) => {
         const style = mark.attrs.style;
+        const colour: unknown = mark.attrs.colour;
+        if (style === 'colour' && typeof colour === 'string' && /^#[a-f0-9]{6}$/.test(colour))
+          return ['span', { 'data-latex-colour': colour, style: 'color:' + colour }, 0];
         return style === 'sans' || style === 'mono'
           ? ['span', { 'data-latex-font': style }, 0]
           : [style === 'strong' ? 'strong' : 'em', 0];

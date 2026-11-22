@@ -14,7 +14,8 @@ export type LatexNumberSpec =
   | { latexEquation: (string | null)[] }
   | { latexFloat: string }
   | { latexReference: string | undefined }
-  | { latexFootnote: string };
+  | { latexFootnote: string }
+  | { latexListing: string };
 
 const key = new PluginKey<DecorationSet>('latex-numbering');
 const reference = /^\\(eq)?ref\s*\{([^{}]+)\}$/;
@@ -58,6 +59,13 @@ function decorate(document: Node) {
       if (node) decorations.push(Decoration.node(position, position + node.nodeSize, {}, { latexLetterPart: part }));
     }
   if (numbers) {
+    for (const [position, { title, kind }] of numbers.containers) {
+      const node = document.nodeAt(position);
+      if (node) decorations.push(Decoration.node(position, position + node.nodeSize, {
+        'data-latex-container-title': title,
+        'data-latex-container-kind': kind,
+      }));
+    }
     for (const [position, { number, command }] of numbers.headings)
       if (number) decorations.push(
         Decoration.widget(position + 1, headingNumber(number, command), {
@@ -69,6 +77,7 @@ function decorate(document: Node) {
     for (const [position, rows] of numbers.equations) around(position, { latexEquation: rows });
     for (const [position, { kind, number }] of numbers.floats)
       around(position, { latexFloat: (kind === 'figure' ? 'Figure ' : 'Table ') + number });
+    for (const [position, number] of numbers.listings) around(position, { latexListing: number });
     for (const [position, number] of numbers.footnotes) around(position, { latexFootnote: number });
   }
   document.descendants((node, position) => {
@@ -107,7 +116,7 @@ export function latexNumberSpec(decorations: readonly Decoration[]) {
       'latexEquation' in spec ||
       'latexFloat' in spec ||
       'latexReference' in spec ||
-      'latexFootnote' in spec
+      'latexFootnote' in spec || 'latexListing' in spec
     )
       return spec as LatexNumberSpec;
   }

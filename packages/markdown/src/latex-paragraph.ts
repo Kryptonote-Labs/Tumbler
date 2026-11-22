@@ -1,8 +1,11 @@
+import { latexLength } from './latex-lengths';
+import { commandEnd, groupAt, whitespaceEnd } from './latex-syntax';
 import type { Node } from 'prosemirror-model';
 
 export type LatexInlineFlow = 'no-indent' | 'line-break';
 
 export function latexInlineFlow(source: string): LatexInlineFlow | undefined {
+  if (latexLineBreakSkip(source) !== undefined) return 'line-break';
   switch (source.trim()) {
     case '\\noindent':
       return 'no-indent';
@@ -11,6 +14,30 @@ export function latexInlineFlow(source: string): LatexInlineFlow | undefined {
     case '\\newline':
       return 'line-break';
   }
+}
+
+/** A line end with an authored vertical skip. */
+export function latexLineBreakSkip(source: string, em?: number) {
+  const match = /^\\\\\*?\s*\[([^\]]*)\]\s*$/.exec(source.trim());
+  return match && /^[-+]?\d*\.?\d+\s*em$/.test(match[1]!.trim()) && em === undefined
+    ? 0
+    : match ? latexLength(match[1], em) : undefined;
+}
+
+export function latexInlineRule(source: string, em = 10 * 96 / 72.27) {
+  const start = whitespaceEnd(source, 0);
+  const command = commandEnd(source, start);
+  if (source.slice(start, command) !== '\\rule') return;
+  const at = whitespaceEnd(source, command);
+  const raised = groupAt(source, at, '[', ']');
+  const width = groupAt(source, whitespaceEnd(source, raised?.end ?? at));
+  const height = width && groupAt(source, whitespaceEnd(source, width.end));
+  if (!width || !height || source.slice(height.end).trim()) return;
+  const w = latexLength(source.slice(width.from, width.to), em);
+  const h = latexLength(source.slice(height.from, height.to), em);
+  const raise = raised ? latexLength(source.slice(raised.from, raised.to), em) : 0;
+  if (w !== undefined && h !== undefined && raise !== undefined && w >= 0 && h >= 0)
+    return { width: w, height: h, raise };
 }
 
 type RunRange = { from: number; to: number; position: number };
@@ -43,7 +70,7 @@ export function latexParagraphText(node: Node, resolvedInline?: (source: string)
       return;
     }
     if (child.type.name === 'latex_math' ||
-        (child.type.name === 'latex_inline' && child.attrs.label == null && resolvedInline?.(child.attrs.source))) {
+        (child.type.name === 'latex_inline' && child.attrs.label == null && (latexInlineRule(child.attrs.source) || resolvedInline?.(child.attrs.source)))) {
       const from = segment.text.length;
       segment.text += '\ufffc';
       segment.runs.push({ kind: 'math', from, to: from + 1, position });

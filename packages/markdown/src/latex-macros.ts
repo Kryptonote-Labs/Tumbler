@@ -1,3 +1,4 @@
+import { usesLatexPackage } from './latex-preamble';
 import { commandEnd, groupAt, latexCommands, lineEnd, whitespaceEnd } from "./latex-syntax";
 
 export type LatexTextStyle = "strong" | "em" | "sans" | "mono";
@@ -19,11 +20,42 @@ const declarations = new Set([
 ]);
 
 /** Read ordinary LaTeX command declarations in source order. */
+const documentDeclarations = new Set([
+  'NewDocumentCommand', 'RenewDocumentCommand', 'ProvideDocumentCommand', 'DeclareDocumentCommand',
+]);
+
+function documentArguments(signature: string) {
+  let position = whitespaceEnd(signature, 0);
+  let optional: string | undefined;
+  let count = 0;
+  if (signature[position] === 'O') {
+    const fallback = groupAt(signature, whitespaceEnd(signature, position + 1));
+    if (!fallback) return;
+    optional = signature.slice(fallback.from, fallback.to);
+    position = whitespaceEnd(signature, fallback.end);
+    count++;
+  }
+  while (signature[position] === 'm') {
+    count++;
+    position = whitespaceEnd(signature, position + 1);
+  }
+  if (position === signature.length && count <= 9) return { count, optional };
+}
+
 export function readLatexTextMacros(prefix: string): Macros {
   const macros = new Map<string, Macro>();
+  if (usesLatexPackage(prefix, 'siunitx')) {
+    for (const name of ['qty', 'SI']) macros.set(name, { count: 2, replacement: '#1~#2' });
+    macros.set('num', { count: 1, replacement: '#1' });
+    for (const [name, replacement] of Object.entries({
+      ampere: 'A', volt: 'V', watt: 'W', joule: 'J', kelvin: 'K',
+      degreeCelsius: '°C', metre: 'm', second: 's', kilogram: 'kg', percent: '%',
+    })) macros.set(name, { count: 0, replacement: replacement === '%' ? '\\%' : replacement });
+  }
   let consumed = 0;
   for (const { name, start, end } of latexCommands(prefix)) {
-    if (start < consumed || !declarations.has(name)) continue;
+    const documentCommand = documentDeclarations.has(name);
+    if (start < consumed || (!declarations.has(name) && !documentCommand)) continue;
     const declaration = whitespaceEnd(prefix, end + Number(prefix[end] === "*"));
     const group = groupAt(prefix, declaration);
     const from = group?.from ?? declaration;

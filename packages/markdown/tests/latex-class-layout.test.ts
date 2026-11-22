@@ -86,3 +86,23 @@ test('merged table cells keep authored targets and partial rules stay in the uns
   expect(grid[2]?.[2]?.width).toBeCloseTo(55 * 96 / 25.4, 6);
   expect(setLatexTableCell(source, 1, 0, 'Workshop', false)).toBe(source.replace('{Bench}', '{Workshop}'));
 });
+
+test('numbered theorem bodies and description items become native editable content', () => {
+  const source = String.raw`\documentclass{article}
+\usepackage{amsthm}
+\newtheorem{lemma}{Lemma}[section]
+\begin{document}
+\section{Estimates}
+\begin{lemma}
+\label{lem:sample}The sample variance is positive.
+\end{lemma}
+\begin{description}
+\item[Variance] Mean squared deviation.
+\end{description}
+\end{document}`;
+  const doc = parseLatex(source);
+  expect(serializeLatex(doc)).toBe(source);
+  expect(doc.child(1).firstChild?.textContent).toContain('The sample variance');
+  expect(doc.child(2).firstChild?.textContent).toBe('Mean squared deviation.');
+  expect(latexNumbering(doc)?.labels.get('lem:sample')).toBe('1.1');
+});

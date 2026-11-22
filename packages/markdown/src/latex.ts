@@ -1,7 +1,10 @@
 export { interpretLatexText, readLatexTextMacros, type LatexPrintedText } from './latex-macros';
 import { readLatexEnumitem } from './latex-list';
 import { readLatexBookMatter, readLatexClass } from './latex-flow';
+import { latexColourDefinition, readLatexColours } from './latex-colour';
+import { readLatexTheorems, latexBoxTitle, latexEnvironmentName } from './latex-environments';
 import { latexLetterCommandAt } from './latex-letter';
+export { latexColourDefinition } from './latex-colour';
 export type { LatexLetterPart } from './latex-letter';
 import { usesLatexPackage } from './latex-preamble';
 import { latexFormattingAlias, readLatexTextMacros } from './latex-macros';
@@ -22,10 +25,13 @@ import {
   whitespaceEnd,
 } from './latex-syntax';
 
-export { latexListOptions } from './latex-list';
+export { latexEnvironmentName, latexEnvironmentOption } from './latex-environments';
+export { latexItemLabel, latexListOptions } from './latex-list';
 export { composeLatexParagraph, type LatexLine, type LatexTextMetrics } from './latex-lines';
-export { latexInlineFlow, latexParagraphText, type LatexParagraphSegment } from './latex-paragraph';
+export { latexInlineFlow, latexInlineRule, latexLineBreakSkip, latexParagraphText, type LatexParagraphSegment } from './latex-paragraph';
 export { measureLatexRoman, type LatexRomanFont } from './latex-font-metrics';
+export { layoutLatexDrawing, readLatexDrawing } from './latex-drawings';
+export { readLatexCodeBlock } from './latex-code';
 export { latexLength } from './latex-lengths';
 export { latexTableGrid } from './latex-table-grid';
 export { latexHorizontalRule, latexNaturalColumns, latexNaturalTableWidths } from './latex-tables';
@@ -132,7 +138,7 @@ export function isLatex(document: Node) {
 
 function inline(
   source: string,
-  macros: ReturnType<typeof readLatexTextMacros>,
+  context: SourceContext,
   depth = 0,
   marks: readonly Mark[] = [],
   order = { next: 0 },
@@ -179,18 +185,21 @@ function inline(
       );
       end = formulaEnd + close.length;
     } else {
-      const style = latexFormattingAlias(command.slice(1), macros);
-      const argument = style && groupAt(source, whitespaceEnd(source, end));
+      const colourName = command === '\\textcolor' && groupAt(source, whitespaceEnd(source, end));
+      const colour = colourName && context.colours.get(source.slice(colourName.from, colourName.to).trim());
+      const style = colour ? 'colour' : latexFormattingAlias(command.slice(1), context.macros);
+      const argument = style && groupAt(source, whitespaceEnd(source, colourName ? colourName.end : end));
       if (argument && argument.from < argument.to) {
         const formatting = schema.marks.latex_style!.create({
           style,
+          ...(colour ? { colour } : {}),
           order: order.next++,
           open: source.slice(position, argument.from),
           close: '}',
         });
         inline(
           source.slice(argument.from, argument.to),
-          macros,
+          context,
           depth + 1,
           [...marks, formatting],
           order,
@@ -282,7 +291,8 @@ function blockStart(source: string, position: number, context: SourceContext) {
     blockCommands.has(command) ||
     bibliographyCommands.has(command) ||
     headingLevel(command.slice(1)) > 0 ||
-    (context.letter && !!latexLetterCommandAt(source, position))
+    (context.letter && !!latexLetterCommandAt(source, position)) ||
+    (command === '\\definecolor' && !!latexColourDefinition(source, position))
   );
 }
 
@@ -313,13 +323,18 @@ type SourceContext = {
   macros: ReturnType<typeof readLatexTextMacros>;
   enumitem: boolean;
   letter: boolean;
+  colours: ReturnType<typeof readLatexColours>;
+  theorems: ReturnType<typeof readLatexTheorems>;
+  proof: boolean;
+  boxes: boolean;
 };
 
 function sourceContext(prefix: string): SourceContext {
-  return { macros: readLatexTextMacros(prefix), enumitem: usesLatexPackage(prefix, 'enumitem'), letter: readLatexClass(prefix).name === 'letter' };
+  return { macros: readLatexTextMacros(prefix), enumitem: usesLatexPackage(prefix, 'enumitem'), letter: readLatexClass(prefix).name === 'letter', colours: readLatexColours(prefix), theorems: readLatexTheorems(prefix),
+    proof: usesLatexPackage(prefix, 'amsthm'), boxes: usesLatexPackage(prefix, 'tcolorbox') };
 }
 
-function listItems(source: string, context: SourceContext, depth: number): { items: Node[]; tail: string } | undefined {
+function listItems(source: string, context: SourceContext, depth: number, description = false): { items: Node[]; tail: string } | undefined {
   let position = whitespaceEnd(source, 0);
   let before = source.slice(0, position);
   const items: Node[] = [];
@@ -329,8 +344,8 @@ function listItems(source: string, context: SourceContext, depth: number): { ite
     if (source.slice(position, command) !== '\\item') return;
     const optionStart = whitespaceEnd(source, command);
     const option = groupAt(source, optionStart, '[', ']');
-    if (option) return; // Custom item labels need the original list layout.
-    const start = whitespaceEnd(source, command);
+    if (option && !description) return;
+    const start = whitespaceEnd(source, option?.end ?? command);
     let next = start;
     while (next < source.length) {
       if (source[next] === '%') next = lineEnd(source, next);
@@ -388,25 +403,29 @@ function environmentBlock(source: string, position: number, before: string, cont
       node: schema.nodes.latex_display_math!.create({ before, open, close, source: content }),
       end,
     };
-  if ((name === 'itemize' || name === 'enumerate') && depth < 64) {
+  const description = name === 'description';
+  if ((name === 'itemize' || name === 'enumerate' || description) && depth < 64) {
     const option = context.enumitem && groupAt(source, whitespaceEnd(source, from), '[', ']');
-    const spec = option && readLatexEnumitem(source.slice(option.from, option.to));
-    const valid = !option || (option.end <= to && spec && (name === 'enumerate' || (!spec.label && spec.start === undefined)));
+    const settings = option ? source.slice(option.from, option.to) : '';
+    const spec = option && !description && readLatexEnumitem(settings);
+    const valid = !option || (option.end <= to && (
+      description ? /^style\s*=\s*nextline$/.test(settings.trim()) :
+        spec && (name === 'enumerate' || (!spec.label && spec.start === undefined))
+    ));
     const bodyStart = option ? option.end : from;
-    const list = valid && listItems(source.slice(bodyStart, to), context, depth);
-    if (list)
-      return {
-        node: schema.nodes[name === 'itemize' ? 'bullet_list' : 'ordered_list']!.create(
-          { before, open: source.slice(position, bodyStart), close: list.tail + close, ...(spec && spec.start !== undefined ? {order: spec.start} : {}) },
-          list.items,
-        ),
-        end,
-      };
+    const list = valid && listItems(source.slice(bodyStart, to), { ...context, colours: new Map(context.colours) }, depth, description);
+    if (list) return {
+      node: schema.nodes[name === 'enumerate' ? 'ordered_list' : 'bullet_list']!.create(
+        { before, open: source.slice(position, bodyStart), close: list.tail + close, ...(spec && spec.start !== undefined ? {order: spec.start} : {}) },
+        list.items,
+      ),
+      end,
+    };
   }
   if (context.letter && name === 'letter' && depth < 64) {
     const recipient = groupAt(source, whitespaceEnd(source, from));
     if (recipient && recipient.end <= to) {
-      const body = blocks(source.slice(recipient.end, to), context, depth + 1);
+      const body = blocks(source.slice(recipient.end, to), { ...context, colours: new Map(context.colours) }, depth + 1);
       if (!body.nodes.length) body.nodes.push(schema.nodes.paragraph!.create({ before: '' }));
       return {
         node: schema.nodes.latex_container!.create({
@@ -416,10 +435,25 @@ function environmentBlock(source: string, position: number, before: string, cont
       };
     }
   }
+  const theorem = context.theorems.has(name) || (context.proof && name === 'proof');
+  const box = context.boxes && name === 'tcolorbox';
+  if ((theorem || box) && depth < 64) {
+    const option = groupAt(source, whitespaceEnd(source, from), '[', ']');
+    const bodyStart = option?.end ?? from;
+    const opener = source.slice(position, bodyStart);
+    if (bodyStart <= to && (!box || !option || latexBoxTitle(opener) !== undefined)) {
+      const body = blocks(source.slice(bodyStart, to), { ...context, colours: new Map(context.colours) }, depth + 1);
+      if (!body.nodes.length) body.nodes.push(schema.nodes.paragraph!.create({ before: '' }));
+      return {
+        node: schema.nodes.latex_container!.create({ before, open: opener, close: body.tail + close }, body.nodes),
+        end,
+      };
+    }
+  }
   // Text environments edit as native blocks. The open and close source keep the environment, and
   // an empty one, such as a new abstract, gets an empty paragraph to type into.
   if (textEnvironments.has(name) && depth < 64) {
-    const quote = blocks(content, context, depth + 1);
+    const quote = blocks(content, { ...context, colours: new Map(context.colours) }, depth + 1);
     if (!quote.nodes.length) quote.nodes.push(schema.nodes.paragraph!.create({ before: '' }));
     return {
       node: schema.nodes[name === 'landscape' ? 'latex_landscape' : 'blockquote']!.create(
@@ -452,6 +486,13 @@ function blocks(source: string, context: SourceContext, depth = 0): { nodes: Nod
       position = start + command.length;
       continue;
     }
+    const colour = command === '\\definecolor' && latexColourDefinition(source, start);
+    if (colour) {
+      context.colours.set(colour.name, colour.colour);
+      nodes.push(schema.nodes.latex_raw!.create({ before, source: source.slice(start, colour.end) }));
+      position = colour.end;
+      continue;
+    }
     const letterCommand = context.letter && latexLetterCommandAt(source, start);
     if (letterCommand) {
       nodes.push(schema.nodes.latex_raw!.create({ before, source: source.slice(start, letterCommand.end) }));
@@ -474,7 +515,7 @@ function blocks(source: string, context: SourceContext, depth = 0): { nodes: Nod
             open: source.slice(start, heading.from),
             close: '}',
           },
-          inline(source.slice(heading.from, heading.to), context.macros),
+          inline(source.slice(heading.from, heading.to), context),
         ),
       );
       position = heading.end;
@@ -510,7 +551,7 @@ function blocks(source: string, context: SourceContext, depth = 0): { nodes: Nod
     }
     const end = paragraphEnd(source, start, context);
     const content = source.slice(start, end).trimEnd();
-    nodes.push(schema.nodes.paragraph!.create({ before }, inline(content, context.macros)));
+    nodes.push(schema.nodes.paragraph!.create({ before }, inline(content, context)));
     position = start + content.length;
   }
   return { nodes, tail: '' };
@@ -638,19 +679,30 @@ export function materializeLatexStructures(document: Node): Transform {
   const prefix = String(document.attrs.prefix ?? '');
   const context = sourceContext(prefix);
   document.descendants((node, position) => {
-    const raw = node.type.name === 'latex_raw'
-      && /^\\begin\s*\{(?:landscape|itemize|enumerate|letter)\}/.test(node.attrs.source);
+    const environment = node.type.name === 'latex_raw' ? latexEnvironmentName(node.attrs.source) : undefined;
+    const raw = !!environment && (
+      ['landscape', 'itemize', 'enumerate', 'description'].includes(environment) ||
+      (context.letter && environment === 'letter') || (context.boxes && environment === 'tcolorbox') ||
+      (context.proof && environment === 'proof') || context.theorems.has(environment)
+    );
     const matter = node.type.name === 'paragraph' && node.children.some(child =>
       child.type.name === 'latex_inline' && readLatexBookMatter(child.attrs.source));
     const letter = context.letter && node.type.name === 'paragraph' && node.children.some(child =>
       child.type.name === 'latex_inline' && latexLetterCommandAt(child.attrs.source, 0));
-    if (!raw && !matter && !letter) return;
+    if (node.type.name === 'latex_raw' && typeof node.attrs.source === 'string') {
+      const colour = latexColourDefinition(node.attrs.source);
+      if (colour) context.colours.set(colour.name, colour.colour);
+    }
+    const styled = node.type.name === 'paragraph' && node.children.some(child =>
+      child.type.name === 'latex_inline' && /^\\(?:definecolor|textcolor)\b/.test(child.attrs.source));
+    if (!raw && !matter && !letter && !styled) return;
     const source = blockSource(node);
     const parsed = blocks(source, context);
     if (!parsed.nodes.length || (raw && parsed.nodes.every(block => block.type.name === 'latex_raw'))) return;
     const reparsed = parsed.nodes.map(block => (block.attrs.before ?? '') + blockSource(block)).join('') + parsed.tail;
     if (reparsed !== source || parsed.tail) return;
     const first = parsed.nodes[0]!;
+    if (parsed.nodes.length === 1 && first.type === node.type && first.content.eq(node.content)) return;
     parsed.nodes[0] = first.type.create({
       ...first.attrs,
       before: (node.attrs.before ?? '') + (first.attrs.before ?? ''),

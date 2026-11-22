@@ -57,3 +57,10 @@ export function latexListOptions(open: string) {
   const options = environment && groupAt(open, whitespaceEnd(open, environment.end), "[", "]");
   return options && readLatexEnumitem(open.slice(options.from, options.to));
 }
+
+export function latexItemLabel(open: string) {
+  const end = commandEnd(open, 0);
+  if (open.slice(0, end) !== '\\item') return;
+  const label = groupAt(open, whitespaceEnd(open, end), '[', ']');
+  if (label) return open.slice(label.from, label.to);
+}

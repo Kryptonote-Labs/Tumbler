@@ -1,0 +1,41 @@
+import { groupAt, latexCommands, whitespaceEnd } from './latex-syntax';
+
+export function latexEnvironmentName(open: string) {
+  return /^\\begin\s*\{([^}]+)\}/.exec(open)?.[1];
+}
+
+type Theorem = { title: string; counter?: string; within?: string };
+
+export function readLatexTheorems(prefix: string) {
+  const definitions = new Map<string, Theorem>();
+  for (const { name, end } of latexCommands(prefix)) {
+    if (name !== 'newtheorem') continue;
+    const starred = prefix[end] === '*';
+    const environment = groupAt(prefix, whitespaceEnd(prefix, end + Number(starred)));
+    if (!environment) continue;
+    const shared = groupAt(prefix, whitespaceEnd(prefix, environment.end), '[', ']');
+    const title = groupAt(prefix, whitespaceEnd(prefix, shared?.end ?? environment.end));
+    if (!title) continue;
+    const scope = groupAt(prefix, whitespaceEnd(prefix, title.end), '[', ']');
+    const key = prefix.slice(environment.from, environment.to);
+    definitions.set(key, {
+      title: prefix.slice(title.from, title.to),
+      counter: starred ? undefined : shared ? prefix.slice(shared.from, shared.to) : key,
+      within: scope ? prefix.slice(scope.from, scope.to) : undefined,
+    });
+  }
+  return definitions;
+}
+
+export function latexEnvironmentOption(open: string) {
+  const tag = /^\\begin\s*\{[^}]+\}/.exec(open);
+  if (!tag) return;
+  const option = groupAt(open, whitespaceEnd(open, tag[0].length), '[', ']');
+  if (option) return open.slice(option.from, option.to);
+}
+
+export function latexBoxTitle(open: string) {
+  const option = latexEnvironmentOption(open)?.trim();
+  const match = /^title\s*=\s*(?:\{([^{}]*)\}|([^{}]+))$/.exec(option ?? '');
+  return match?.[1] ?? match?.[2];
+}

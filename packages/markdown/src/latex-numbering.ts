@@ -1,3 +1,5 @@
+import { readLatexCodeBlock } from './latex-code';
+import { latexBoxTitle, latexEnvironmentName, latexEnvironmentOption, readLatexTheorems } from './latex-environments';
 import { latexRomanNumber } from './latex-number-format';
 import { readLatexBookMatter, readLatexClass } from './latex-flow';
 import type { Node } from 'prosemirror-model';
@@ -12,6 +14,8 @@ export type LatexNumbering = {
   floats: Map<number, { kind: 'figure' | 'table'; number: string }>;
   /** Label keys and the text `\ref` prints for them. */
   labels: Map<string, string>;
+  listings: Map<number, string>;
+  containers: Map<number, { title: string; kind: 'theorem' | 'proof' | 'box' }>;
   /** Inline `\footnote` positions and the mark LaTeX prints, while the count is known. */
   footnotes: Map<number, string>;
 };
@@ -62,16 +66,22 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
   const levels = ['part', 'chapter', ...latexHeadings];
   const counters = new Map(levels.map((name) => [name, 0]));
   let equation = 0;
+  let listing = 0;
   const floatCount = { figure: 0, table: 0 };
   let appendix = false;
   let mainMatter = true;
   let current = '';
+  const theoremDefinitions = readLatexTheorems(prefix);
+  const theoremCounts = new Map<string, number>();
+  const labelScopes: { end: number; previous: string }[] = [];
   let opaque = false;
   const result: LatexNumbering = {
     headings: new Map(),
     equations: new Map(),
     floats: new Map(),
     labels: new Map(),
+    containers: new Map(),
+    listings: new Map(),
     footnotes: new Map(),
   };
   let footnote = 0;
@@ -93,7 +103,35 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
 
   document.descendants((node, position) => {
     if (opaque) return false;
+    while (labelScopes.length && position >= labelScopes.at(-1)!.end)
+      current = labelScopes.pop()!.previous;
     const type = node.type.name;
+    if (type === 'latex_container') {
+      const open = String(node.attrs.open ?? '');
+      const name = latexEnvironmentName(open);
+      const theorem = name && theoremDefinitions.get(name);
+      const option = latexEnvironmentOption(open);
+      if (name === 'proof') result.containers.set(position, { title: (option ?? 'Proof') + '.', kind: 'proof' });
+      else if (name === 'tcolorbox') result.containers.set(position, { title: latexBoxTitle(open) ?? '', kind: 'box' });
+      else if (theorem) {
+        let number = '';
+        if (theorem.counter) {
+          const within = theorem.within ?? theoremDefinitions.get(theorem.counter)?.within;
+          const scope = within && counters.has(within) ? value(within) : '';
+          const key = theorem.counter + ':' + scope;
+          const next = (theoremCounts.get(key) ?? 0) + 1;
+          theoremCounts.set(key, next);
+          number = scope ? scope + '.' + next : String(next);
+          labelScopes.push({ end: position + node.nodeSize, previous: current });
+          current = number;
+        }
+        result.containers.set(position, {
+          title: theorem.title + (number ? ' ' + number : '') + (option ? ' (' + option + ')' : '') + '.',
+          kind: 'theorem',
+        });
+      }
+      return true;
+    }
     if (type === 'heading') {
       const open = String(node.attrs.open ?? '');
       const [, name = latexHeadings[node.attrs.level - 1] ?? 'section', star] =
@@ -110,6 +148,7 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
       if (name !== 'part') for (const lower of levels.slice(level + 1)) counters.set(lower, 0);
       if (name === 'chapter') {
         equation = 0;
+        listing = 0;
         footnote = 0;
         floatCount.figure = floatCount.table = 0;
       }
@@ -156,6 +195,15 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
       if (source.trim() === '\\appendix') {
         appendix = true;
         counters.set(chapters ? 'chapter' : 'section', 0);
+        return false;
+      }
+      if (type === 'latex_raw' && /^\\begin\s*\{(?:lstlisting|verbatim\*?)\}/.test(source)) {
+        const code = readLatexCodeBlock(source);
+        if (code?.caption) {
+          const number = within(++listing);
+          result.listings.set(position, number);
+          if (code.label) result.labels.set(code.label, number);
+        }
         return false;
       }
       const environment = floatEnvironment.exec(source.trim())?.[1];
