@@ -151,7 +151,7 @@ export function layoutLatexDrawing(drawing: Drawing, bodyWidth: number, em: numb
       Number((first + i * step).toPrecision(10)));
   };
   const yTicks = drawing.yTicks.length ? drawing.yTicks : tick(bounds.yMin, bounds.yMax, axisHeight);
-  const tickLabel = Math.max(0, ...yTicks.map(value => measureLatexRoman(String(value), 'cmr10', em)));
+  const tickLabel = Math.max(0, ...yTicks.map(value => measureLatexRoman(String(value), 'cmr10', em) ?? String(value).length * em / 2));
   const tickInset = 5 * texPoint;
   const left = tickInset + tickLabel + (drawing.yLabel ? em + tickInset * 2 : 0);
   const right = left + axisWidth;
