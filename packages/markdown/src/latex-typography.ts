@@ -19,7 +19,9 @@ const classic = {
 
 export type LatexTypography = Readonly<{
   text: TextSize;
-  inTextFloat: Readonly<{ before: number; after: number; captionGap: number }>;
+  inTextFloat: Readonly<{ before: number; after: number; captionGap: number; captionShift: number }>;
+  subcaption: TextSize & { gap: number; shift: number };
+  hiddenLinks: boolean;
   sections: readonly [SectionSize, SectionSize, SectionSize];
   table: Readonly<{
     separation: number;
@@ -84,7 +86,12 @@ export function latexTypography(points: number, prefix: string, twoColumns = fal
     !/\\usepackage\s*(?:\[[^\]]*\]\s*)?\{[^}]*\b(?:fontenc|fontspec|lmodern|times|palatino|newtxtext|newpxtext)\b/.test(
       prefix,
     );
-  const microtype = readLatexPackages(prefix).find(item => item.name === 'microtype');
+  const packages = readLatexPackages(prefix);
+  const microtype = packages.find(item => item.name === 'microtype');
+  const caption = packages.some(item => item.name === 'caption' || item.name === 'subcaption');
+  const subcaption = points === 12 ? classic[11].text : points === 11 ? classic[10].text : textSize(9, 11);
+  // Caption packages add a strut whose baseline is at 70% of the line height.
+  const captionShift = ({ size, leading }: TextSize) => 0.2 * leading - 0.4 * size;
   const expansion = microtype && usesClassicRoman && !microtype.options.some(option => /^expansion\s*=\s*false$/.test(option))
     ? { stretch: 0.02, shrink: 0.02 } : undefined;
   const titleAscent = title.leading / 2 + 0.4 * title.size;
@@ -114,8 +121,11 @@ export function latexTypography(points: number, prefix: string, twoColumns = fal
     inTextFloat: {
       before: inTextSep - textDescent,
       after: inTextSep,
-      captionGap: 10 * texPoint + textDescent,
+      captionGap: 10 * texPoint + (caption ? 0 : textDescent),
+      captionShift: caption ? captionShift(text) : 0,
     },
+    subcaption: { ...subcaption, gap: 6 * texPoint, shift: captionShift(subcaption) },
+    hiddenLinks: packages.some(item => item.name === 'hyperref' && item.options.includes('hidelinks')),
     sections: [
       section(points === 12 ? textSize(17.28, 22) : textSize(14.4, 18), 3.5, 2.3),
       section(author, 3.25, 1.5),
