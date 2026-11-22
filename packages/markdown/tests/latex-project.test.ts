@@ -1,5 +1,6 @@
 import { expect, test } from 'bun:test';
 import { undo } from 'prosemirror-history';
+import { receiveTransaction, sendableSteps } from 'prosemirror-collab';
 import { latexState } from '../src/latex-editor';
 import {
   latexEffectivePrefix, latexFlow, latexNumbering, latexPageLayout, layoutLatexDrawing,
@@ -24,6 +25,23 @@ test('unlinking a chapter in Visual retains the most recent chapter file and can
   expect(snapshot?.files.get(chapter)).toBe(revised);
   expect(undo(state, transaction => { state = state.apply(transaction); })).toBe(true);
   expect(serializeLatexProject(state.doc)?.files.get(entry)).toContain('\\input{chapter}');
+});
+
+test('unlinking an include retains a chapter edit received during collaboration rebase', () => {
+  const entry = 'main.tex';
+  const chapter = 'chapter.tex';
+  const document = parseLatexProject(entry, new Map([
+    [entry, String.raw`\begin{document}\input{chapter}\end{document}`],
+    [chapter, 'Original text.\n'],
+  ]));
+  const editor = latexState(document, 0, 'editor');
+  const edited = editor.apply(editor.tr.insertText('Revised', 2, 10));
+  const incoming = sendableSteps(edited)!.steps;
+  const remover = latexState(document, 0, 'remover');
+  const unlinked = remover.apply(remover.tr.delete(0, document.firstChild!.nodeSize));
+  const rebased = unlinked.apply(receiveTransaction(unlinked, incoming, ['editor']));
+  expect(serializeLatexProject(rebased.doc)?.files.get(entry)).not.toContain('\\input');
+  expect(serializeLatexProject(rebased.doc)?.files.get(chapter)).toBe('Revised text.\n');
 });
 
 test('an included chapter edits its original file and keeps the local class and labels', () => {

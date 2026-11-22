@@ -75,6 +75,28 @@ test('replacing a project selection with its clipboard keeps the included file s
   });
 });
 
+test('pasting an include into a new entry directory keeps its text readable', async () => {
+  const source = parseLatexProject('paper/main.tex', new Map([
+    ['paper/main.tex', String.raw`\begin{document}\input{../shared/intro}\end{document}`],
+    ['shared/intro.tex', 'Shared introduction.\n'],
+  ]));
+  let clipboard = '';
+  await withLatexEditor(source, (view) => {
+    view.dispatch(view.state.tr.setSelection(new AllSelection(view.state.doc)));
+    clipboard = view.serializeForClipboard(view.state.selection.content()).dom.innerHTML;
+  });
+  const target = parseLatexProject('main.tex', new Map([
+    ['main.tex', String.raw`\begin{document}Target.\end{document}`],
+  ]));
+  await withLatexEditor(target, (view) => {
+    view.dispatch(view.state.tr.setSelection(new AllSelection(view.state.doc)));
+    expect(view.pasteHTML(clipboard)).toBe(true);
+    const main = serializeLatexProject(view.state.doc)?.files.get('main.tex');
+    expect(main).toContain('Shared introduction.');
+    expect(main).not.toContain('\\input');
+  });
+});
+
 test.each(['LF', 'CRLF'])(
   'editing rendered text preserves an existing %s source line break',
   async (ending) => {

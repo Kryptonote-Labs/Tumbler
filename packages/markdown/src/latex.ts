@@ -11,7 +11,7 @@ import { latexFormattingAlias, readLatexParagraphMacro, readLatexTextMacros } fr
 import { Fragment, type Mark, type Node } from 'prosemirror-model';
 import { Transform } from 'prosemirror-transform';
 import { updateLatexBoundary, updateLatexNodeSource } from './latex-boundary-step';
-import { updateLatexProjectFile } from './latex-project-step';
+import { LatexProjectFileStep, updateLatexProjectFile } from './latex-project-step';
 export { updateLatexBoundary, updateLatexNodeSource } from './latex-boundary-step';
 import { noteSchema as schema } from './index';
 import {
@@ -794,32 +794,61 @@ export function serializeLatexProject(document: Node) {
   return { entry: project.entry, files };
 }
 
-/** Removing an include reference detaches its source file from the document body. */
-export function retainDetachedLatexFiles(transform: Transform, before: Node) {
-  const original: LatexProject | null = before.attrs.latexProject;
-  const project: LatexProject | null = transform.doc.attrs.latexProject;
-  if (!original || project?.entry !== original.entry) return;
-  const from = before.content.findDiffStart(transform.doc.content);
-  const to = before.content.findDiffEnd(transform.doc.content)?.a;
-  if (from === null || to === undefined || from >= to) return;
+function removedLatexIncludes(before: Node, after: Node) {
+  const from = before.content.findDiffStart(after.content);
+  const to = before.content.findDiffEnd(after.content)?.a;
+  if (from === null || to === undefined || from >= to) return [];
   const candidates: Node[] = [];
   before.nodesBetween(from, to, (node, position) => {
     if (node.type.name === 'latex_include' && position >= from && position + node.nodeSize <= to)
       candidates.push(node);
     return !node.isTextblock;
   });
-  if (!candidates.length) return;
+  if (!candidates.length) return candidates;
   const active = new Set<string>();
-  transform.doc.descendants(node => {
+  after.descendants(node => {
     if (node.type.name === 'latex_include') active.add(node.attrs.path);
     return !node.isTextblock;
   });
-  for (const node of candidates) {
+  return candidates.filter(node => !active.has(node.attrs.path));
+}
+
+/** Removing an include reference detaches its source file from the document body. */
+export function retainDetachedLatexFiles(transform: Transform, before: Node) {
+  const original: LatexProject | null = before.attrs.latexProject;
+  const project: LatexProject | null = transform.doc.attrs.latexProject;
+  if (!original || project?.entry !== original.entry) return;
+  for (const node of removedLatexIncludes(before, transform.doc)) {
     const path: string = node.attrs.path;
-    if (!active.has(path) && path !== project.entry && project.files[path] === original.files[path]) {
+    if (path !== project.entry && project.files[path] === original.files[path]) {
       const source = childrenSource(node) + (node.attrs.close ?? '');
-      updateLatexProjectFile(transform, path, source);
+      updateLatexProjectFile(transform, path, source, true);
     }
+  }
+}
+
+/** A replayed unlink must save the chapter as it was after receiving other editors' changes. */
+export function refreshRebasedLatexFiles(transform: Transform, rebased: Transform) {
+  const snapshots = new Map<string, LatexProjectFileStep>();
+  for (const step of rebased.steps) {
+    if (!(step instanceof LatexProjectFileStep)) continue;
+    if (step.retaining) snapshots.set(step.path, step);
+    else snapshots.delete(step.path);
+  }
+  if (!snapshots.size) return;
+  const recovered = new Map<string, Node>();
+  for (let index = 0; index < rebased.steps.length; index++) {
+    const before = rebased.docs[index]!;
+    const after = rebased.docs[index + 1] ?? rebased.doc;
+    for (const node of removedLatexIncludes(before, after)) {
+      const path: string = node.attrs.path;
+      if (snapshots.has(path)) recovered.set(path, node);
+    }
+  }
+  const project: LatexProject | null = transform.doc.attrs.latexProject;
+  for (const [path, node] of recovered) {
+    if (project?.files[path] === snapshots.get(path)?.after)
+      updateLatexProjectFile(transform, path, childrenSource(node) + (node.attrs.close ?? ''), true);
   }
 }
 
@@ -834,8 +863,11 @@ export function replaceLatexSource(document: Node, source: string, file?: string
   const previousProject: LatexProject | null = document.attrs.latexProject;
   const nextProject: LatexProject | null = next.attrs.latexProject;
   if (previousProject && nextProject) {
-    for (const path of new Set([...Object.keys(previousProject.files), ...Object.keys(nextProject.files)]))
-      updateLatexProjectFile(transform, path, Object.hasOwn(nextProject.files, path) ? nextProject.files[path]! : null);
+    for (const path of new Set([...Object.keys(previousProject.files), ...Object.keys(nextProject.files)])) {
+      const value = Object.hasOwn(nextProject.files, path) ? nextProject.files[path]! : null;
+      const detaching = value !== null && !Object.hasOwn(previousProject.files, path) && path !== file;
+      updateLatexProjectFile(transform, path, value, detaching);
+    }
   }
 
   const from = document.content.findDiffStart(next.content);

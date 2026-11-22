@@ -10,7 +10,7 @@ import {
 } from 'prosemirror-model';
 import type { EditorView } from 'prosemirror-view';
 import { latexAtomPasteRules, latexStructureNodes } from './latex-spec';
-import { isLatexProjectPath, readLatexInclude, type LatexProject } from './latex-project';
+import { isLatexProjectPath, readLatexInclude, resolveLatexProjectPath, type LatexProject } from './latex-project';
 
 // HTML carries its ordinary heading/list/emphasis semantics to other editors.
 // Preserve the original TeX spelling as well when both sides understand it.
@@ -49,12 +49,22 @@ function pasteLatexIncludes(slice: Slice, view: EditorView) {
   const project: LatexProject | null = doc.attrs.latexProject;
   const used = new Set(Object.keys(project?.files ?? {}));
   if (project) used.add(project.entry);
+  const existing = new Set(used);
   doc.descendants((node, position) => {
-    if (node.type.name === 'latex_include' && (position < selection.from || position + node.nodeSize > selection.to))
-      used.add(node.attrs.path);
+    if (node.type.name === 'latex_include') {
+      existing.add(node.attrs.path);
+      if (position < selection.from || position + node.nodeSize > selection.to) used.add(node.attrs.path);
+    }
     return !node.isTextblock;
   });
-  function copy(fragment: Fragment): Node[] {
+  let from = project?.entry ?? '';
+  for (let index = selection.$from.depth; index > 0; index--) {
+    const parent = selection.$from.node(index);
+    if (parent.type.name !== 'latex_include') continue;
+    from = parent.attrs.path;
+    break;
+  }
+  function copy(fragment: Fragment, from: string): Node[] {
     const result: Node[] = [];
     fragment.forEach(node => {
       if (node.isTextblock || node.isLeaf) {
@@ -62,9 +72,18 @@ function pasteLatexIncludes(slice: Slice, view: EditorView) {
         return;
       }
       const path: string | undefined = node.type.name === 'latex_include' ? node.attrs.path : undefined;
-      const retain = path !== undefined && project && !used.has(path);
-      if (retain) used.add(path);
-      const children = copy(node.content);
+      const reference = path === undefined ? undefined : readLatexInclude(node.attrs.open ?? '', 0);
+      const name = reference?.name.endsWith('.tex') ? reference.name : reference && reference.name + '.tex';
+      const root = project && name ? resolveLatexProjectPath(project.entry, name) : undefined;
+      const destination = root && (root === path || existing.has(root))
+        ? root
+        : name && resolveLatexProjectPath(from, name);
+      const retain = path !== undefined && project && !used.has(path) && destination === path;
+      if (retain) {
+        used.add(path);
+        existing.add(path);
+      }
+      const children = copy(node.content, retain ? path : from);
       if (path !== undefined && !retain) {
         const first = children[0];
         if (first) children[0] = first.type.create({
@@ -76,7 +95,7 @@ function pasteLatexIncludes(slice: Slice, view: EditorView) {
     });
     return result;
   }
-  const content = Fragment.fromArray(copy(slice.content));
+  const content = Fragment.fromArray(copy(slice.content, from));
   const max = Slice.maxOpen(content);
   return new Slice(content, Math.min(slice.openStart, max.openStart), Math.min(slice.openEnd, max.openEnd));
 }

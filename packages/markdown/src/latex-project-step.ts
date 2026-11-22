@@ -9,11 +9,12 @@ function fileSource(project: LatexProject, path: string): string | null {
 }
 
 /** Keep edits to distinct detached files independent when collaborative steps are rebased. */
-class LatexProjectFileStep extends Step {
+export class LatexProjectFileStep extends Step {
   constructor(
     readonly path: string,
     readonly before: string | null,
     readonly after: string | null,
+    readonly retaining = false,
   ) {
     super();
   }
@@ -42,7 +43,7 @@ class LatexProjectFileStep extends Step {
   }
 
   toJSON() {
-    return { stepType, path: this.path, before: this.before, after: this.after };
+    return { stepType, path: this.path, before: this.before, after: this.after, retaining: this.retaining };
   }
 
   static override fromJSON(_schema: Schema, value: unknown) {
@@ -51,7 +52,7 @@ class LatexProjectFileStep extends Step {
         !('before' in value) || (value.before !== null && typeof value.before !== 'string') ||
         !('after' in value) || (value.after !== null && typeof value.after !== 'string'))
       throw new RangeError('Invalid LaTeX project file change.');
-    return new LatexProjectFileStep(value.path, value.before, value.after);
+    return new LatexProjectFileStep(value.path, value.before, value.after, 'retaining' in value && value.retaining === true);
   }
 }
 
@@ -64,9 +65,9 @@ else {
   registry[registration] = LatexProjectFileStep;
 }
 
-export function updateLatexProjectFile(transform: Transform, path: string, source: string | null) {
+export function updateLatexProjectFile(transform: Transform, path: string, source: string | null, retaining = false) {
   const project: LatexProject | null = transform.doc.attrs.latexProject;
   if (!project) return;
   const before = fileSource(project, path);
-  if (before !== source) transform.step(new LatexProjectFileStep(path, before, source));
+  if (before !== source) transform.step(new LatexProjectFileStep(path, before, source, retaining));
 }
