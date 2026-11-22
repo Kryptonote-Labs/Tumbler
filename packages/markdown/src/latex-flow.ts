@@ -1,3 +1,4 @@
+import { latexEffectivePrefix } from './latex-project';
 import { latexColourDefinition } from './latex-colour';
 import { latexLetterCommandAt } from './latex-letter';
 import { latexRomanNumber } from './latex-number-format';
@@ -14,6 +15,7 @@ export type LatexBlockFlow =
   | {
       kind: 'content';
       before?: LatexBreak;
+      wideFloat?: true;
       after?: LatexBreak;
       folio?: { visible: false; restartAfter: boolean };
       numbering?: FolioStyle;
@@ -71,8 +73,9 @@ const chapterLists = new Set(['tableofcontents', 'listoffigures', 'listoftables'
 /** Resolve source directives into layout effects at editor positions. Unknown classes keep
  * explicit break commands. The measured layout and edit history remain independent. */
 export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
-  const { name, options } = readLatexClass(String(document.attrs.prefix ?? ''));
+  const { name, options } = readLatexClass(latexEffectivePrefix(document));
   const chapters = name === 'report' || name === 'book';
+  const columns = options.includes('twocolumn');
   const standard = chapters || name === 'article';
   const openRight = options.findLast((option) => option === 'openright' || option === 'openany');
   const twoSided = options.findLast((option) => option === 'twoside' || option === 'oneside');
@@ -84,10 +87,13 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
   );
   const titlePage = standard && (titleOption ? titleOption === 'titlepage' : chapters);
   const flow = new Map<number, LatexBlockFlow>();
+  const included: { node: Node; position: number }[] = [];
   let titlePrinted = false;
   let numbering: FolioStyle | undefined;
 
   document.descendants((node, position) => {
+    if (node.type.name === 'latex_include' && /^\\include\b/.test(node.attrs.open ?? ''))
+      included.push({ node, position });
     const source = node.type.name === 'latex_raw' ? String(node.attrs.source).trim() : '';
     const letterCommand = name === 'letter' && latexLetterCommandAt(source, 0);
     if ((standard && source === '\\appendix') || latexColourDefinition(source) || (letterCommand && ['address', 'signature', 'name', 'date'].includes(letterCommand.command))) {
@@ -129,6 +135,10 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
         effect({ before: 'page', after: 'page' });
         return;
       }
+      if (columns && /^\\begin\s*\{figure\*\}/.test(source)) {
+        effect({ wideFloat: true });
+        return;
+      }
       const command = source.slice(1, commandEnd(source, 0));
       if (source !== '\\' + command) return;
       if (command === 'maketitle' && titlePage && !titlePrinted) {
@@ -143,6 +153,25 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
       }
     }
   });
+  for (const { node, position } of included) {
+    let first: number | undefined;
+    let last: number | undefined;
+    node.descendants((child, relative) => {
+      if (!child.isBlock || (!child.isAtom && !child.isTextblock)) return;
+      const at = position + relative + 1;
+      const rule = flow.get(at);
+      if (!rule || rule.kind === 'content') {
+        first ??= at;
+        last = at;
+      }
+      return false;
+    });
+    if (first === undefined || last === undefined) continue;
+    const start = flow.get(first);
+    flow.set(first, { ...start, kind: 'content', before: start?.kind === 'content' && start.before === 'recto' ? 'recto' : 'page' });
+    const end = flow.get(last);
+    flow.set(last, { ...end, kind: 'content', after: end?.kind === 'content' && end.after === 'recto' ? 'recto' : 'page' });
+  }
   return flow;
 }
 

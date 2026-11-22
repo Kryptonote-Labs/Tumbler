@@ -1,9 +1,70 @@
 import { latexFieldSource, latexFieldText } from './latex-metadata';
 import { findLatexCommand, splice } from './latex-scan';
+import { latexLength } from './latex-lengths';
+import { environmentAt, groupAt, latexCommands, whitespaceEnd } from './latex-syntax';
+
+function panelRanges(source: string) {
+  const panels: { from: number; to: number; width: string; body: string }[] = [];
+  let covered = 0;
+  for (const { name, start, end } of latexCommands(source)) {
+    if (start < covered || name !== 'begin') continue;
+    const tag = groupAt(source, whitespaceEnd(source, end));
+    if (!tag || !/^sub(?:figure|table)$/.test(source.slice(tag.from, tag.to))) continue;
+    const environment = environmentAt(source, start);
+    if (!environment) continue;
+    let argument = whitespaceEnd(source, environment.from);
+    while (source[argument] === '[') {
+      const option = groupAt(source, argument, '[', ']');
+      if (!option) break;
+      argument = whitespaceEnd(source, option.end);
+    }
+    const width = groupAt(source, argument);
+    if (!width) continue;
+    covered = environment.end;
+    panels.push({
+      from: start,
+      to: covered,
+      width: source.slice(width.from, width.to).trim(),
+      body: source.slice(width.end, environment.to),
+    });
+  }
+  return panels;
+}
+
+function outsidePanels(source: string, name: string) {
+  const panels = panelRanges(source);
+  let after = 0;
+  let command = findLatexCommand(source, name, after);
+  for (const panel of panels) {
+    if (!command || command.start < panel.from) return command;
+    if (command.start < panel.to) {
+      after = panel.to;
+      command = findLatexCommand(source, name, after);
+    }
+  }
+  return command;
+}
+
+export function readLatexSubfigures(source: string) {
+  return panelRanges(source).map(panel => {
+    const graphic = findLatexCommand(panel.body, 'includegraphics');
+    const rule = findLatexCommand(panel.body, 'rule');
+    const height = rule && groupAt(panel.body, whitespaceEnd(panel.body, rule.end));
+    return {
+      ...panel,
+      caption: readLatexCaption(panel.body),
+      label: findLatexCommand(panel.body, 'label')?.body.text.trim(),
+      graphic: graphic?.body.text.trim(),
+      rule: rule && height
+        ? { width: latexLength(rule.body.text), height: latexLength(panel.body.slice(height.from, height.to)) }
+        : undefined,
+    };
+  });
+}
 
 /** A caption's editable text, or its TeX when text would not keep it. */
 export function readLatexCaption(source: string) {
-  const caption = findLatexCommand(source, 'caption');
+  const caption = outsidePanels(source, 'caption');
   if (!caption) return;
   const text = latexFieldText(caption.body.text);
   return { ...caption, text, tex: text === undefined };
@@ -12,7 +73,7 @@ export function readLatexCaption(source: string) {
 /** Write a caption, adding one after `after` (an index in `source`) when there is none. */
 export function setLatexCaption(source: string, value: string, tex: boolean, after: number) {
   const body = tex ? value : latexFieldSource(value);
-  const caption = findLatexCommand(source, 'caption');
+  const caption = outsidePanels(source, 'caption');
   if (caption) {
     if (!value.trim()) {
       // An empty caption is removed, with the label that depends on it kept in place.
@@ -28,8 +89,9 @@ export function setLatexCaption(source: string, value: string, tex: boolean, aft
 
 /** The picture in a figure: its file and its width as a share of the text width. */
 export function readLatexFigure(source: string) {
-  if (!/^\s*\\begin\s*\{figure\*?\}/.test(source)) return;
-  const graphic = findLatexCommand(source, 'includegraphics');
+  const environment = /^\s*\\begin\s*\{(figure\*?)\}/.exec(source);
+  if (!environment) return;
+  const graphic = outsidePanels(source, 'includegraphics');
   const width = graphic?.option
     ? /(?:^|,)\s*width\s*=\s*([\d.]*)\s*\\(?:linewidth|textwidth|columnwidth)\s*(?:,|$)/.exec(
         graphic.option.text,
@@ -38,6 +100,8 @@ export function readLatexFigure(source: string) {
   const page = /(?:^|,)\s*page\s*=\s*(\d+)\s*(?:,|$)/.exec(graphic?.option?.text ?? '');
   return {
     graphic,
+    wide: environment[1] === 'figure*',
+    panels: readLatexSubfigures(source),
     path: graphic?.body.text.trim(),
     page: page ? Number(page[1]) : 1,
     /** Undefined when the width is not a share of the line, such as `5cm`. */
@@ -48,7 +112,7 @@ export function readLatexFigure(source: string) {
 
 /** Set a figure's width as a share of the line, keeping any other graphic options. */
 export function setLatexFigureWidth(source: string, share: number) {
-  const graphic = findLatexCommand(source, 'includegraphics');
+  const graphic = outsidePanels(source, 'includegraphics');
   if (!graphic) return source;
   const width =
     'width=' +
@@ -69,7 +133,7 @@ export function setLatexFigureWidth(source: string, share: number) {
 
 /** Point a figure at another file. */
 export function setLatexFigureImage(source: string, path: string) {
-  const graphic = findLatexCommand(source, 'includegraphics');
+  const graphic = outsidePanels(source, 'includegraphics');
   if (!graphic) return source;
   return splice(source, graphic.body.start, graphic.body.end, path);
 }

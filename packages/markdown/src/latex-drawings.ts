@@ -1,6 +1,7 @@
 import { measureLatexRoman } from './latex-font-metrics';
 import { texPoint } from './latex-typography';
 import { latexLength } from './latex-lengths';
+import { latexPlotPoints, latexPlotTable, type LatexPlotTable } from './latex-plot-table';
 import { argumentAt, commandEnd, environmentAt, groupAt, latexCommands, whitespaceEnd } from './latex-syntax';
 
 type Point = { x: number; y: number };
@@ -14,9 +15,13 @@ type PictureObject = Point & (
   | { kind: 'label'; text: string; height: number }
   | { kind: 'rectangle'; width: number; height: number }
 );
+type Plot = ({ points: Point[] } | { table: LatexPlotTable }) & {
+  marker: 'circle' | 'triangle' | 'none';
+  legend?: string;
+};
 type Drawing =
   | { kind: 'picture'; width: number; height: number; objects: PictureObject[]; end: number }
-  | { kind: 'axis'; width: string; height: number; xLabel: string; yLabel: string; scaleOnlyAxis: boolean; padding: Point; legendPosition?: string; xTicks: number[]; yTicks: number[]; plots: { points: Point[]; marker: 'circle' | 'triangle' | 'none'; legend?: string }[]; end: number };
+  | { kind: 'axis'; width: string; height: number; xLabel: string; yLabel: string; scaleOnlyAxis: boolean; padding: Point; legendPosition?: string; xTicks: number[]; yTicks: number[]; limits: { xmin?: number; xmax?: number; ymin?: number; ymax?: number }; plots: Plot[]; end: number };
 
 const pair = /\(\s*([+-]?\d*\.?\d+)\s*,\s*([+-]?\d*\.?\d+)\s*\)/g;
 const text = (source: string) => source.replace(/\\([%&#_$])/g, '$1');
@@ -57,12 +62,17 @@ function picture(source: string, environment: NonNullable<ReturnType<typeof envi
   return { kind: 'picture', width: size.x * scale, height: size.y * scale, objects, end: environment.end };
 }
 
+function options(source: string) {
+  const values = new Map<string, string>();
+  for (const part of source.matchAll(/(?:^|,)\s*([A-Za-z ]+?)\s*=\s*(?:\{([^{}]*)\}|([^,]+))/g))
+    values.set(part[1]!.trim(), (part[2] ?? part[3] ?? '').trim());
+  return values;
+}
+
 function axis(source: string, environment: NonNullable<ReturnType<typeof environmentAt>>): Drawing | undefined {
   const option = groupAt(source, whitespaceEnd(source, environment.from), '[', ']');
   const settings = option ? source.slice(option.from, option.to) : '';
-  const values = new Map<string, string>();
-  for (const part of settings.matchAll(/(?:^|,)\s*([A-Za-z ]+?)\s*=\s*(?:\{([^{}]*)\}|([^,]+))/g))
-    values.set(part[1]!.trim(), (part[2] ?? part[3] ?? '').trim());
+  const values = options(settings);
   const height = latexLength(values.get('height') ?? '6cm');
   if (height === undefined || height <= 0) return;
   const ticks = (key: string) =>
@@ -89,19 +99,36 @@ function axis(source: string, environment: NonNullable<ReturnType<typeof environ
     const at = whitespaceEnd(body, command.end + Number(body[command.end] === '+'));
     const style = groupAt(body, at, '[', ']');
     const start = whitespaceEnd(body, style?.end ?? at);
-    if (!body.startsWith('coordinates', start)) return;
-    const data = groupAt(body, whitespaceEnd(body, start + 'coordinates'.length));
-    if (!data) return;
-    const coordinates = body.slice(data.from, data.to);
-    const points = [...coordinates.matchAll(pair)].map(([, x, y]) => ({ x: Number(x), y: Number(y) }));
-    if (!points.length || coordinates.replace(pair, '').trim()) return;
-    const marker = style && /(?:^|,)\s*mark\s*=\s*([^,\]]+?)(?:,|$)/.exec(body.slice(style.from, style.to))?.[1];
-    plots.push({ points, marker: marker === '*' ? 'circle' : marker === 'triangle*' ? 'triangle' : 'none' });
+    const mark = style && options(body.slice(style.from, style.to)).get('mark');
+    const marker = mark === '*' ? 'circle' : mark === 'triangle*' ? 'triangle' : 'none';
+    if (body.startsWith('coordinates', start)) {
+      const data = groupAt(body, whitespaceEnd(body, start + 'coordinates'.length));
+      if (!data) return;
+      const coordinates = body.slice(data.from, data.to);
+      const points = [...coordinates.matchAll(pair)].map(([, x, y]) => ({ x: Number(x), y: Number(y) }));
+      if (!points.length || coordinates.replace(pair, '').trim()) return;
+      plots.push({ points, marker });
+    } else if (body.startsWith('table', start)) {
+      const at = whitespaceEnd(body, start + 'table'.length);
+      const settings = groupAt(body, at, '[', ']');
+      const data = groupAt(body, whitespaceEnd(body, settings?.end ?? at));
+      if (!data) return;
+      const table = latexPlotTable(
+        body.slice(data.from, data.to),
+        options(settings ? body.slice(settings.from, settings.to) : ''),
+      );
+      plots.push({ table, marker });
+    } else return;
   }
+  const limit = (name: string) => {
+    const value = Number(values.get(name));
+    return Number.isFinite(value) ? value : undefined;
+  };
   if (plots.length) return {
     kind: 'axis', width: values.get('width') ?? '8cm', height, xTicks, yTicks, scaleOnlyAxis, plots,
     padding: { x: padding('enlarge x limits'), y: padding('enlarge y limits') },
     legendPosition: values.get('legend pos'),
+    limits: { xmin: limit('xmin'), xmax: limit('xmax'), ymin: limit('ymin'), ymax: limit('ymax') },
     xLabel: text(values.get('xlabel') ?? ''), yLabel: text(values.get('ylabel') ?? ''),
     end: environment.end,
   };
@@ -126,7 +153,12 @@ type Label = Point & { kind: 'text'; text: string; align?: 'center' | 'right'; r
 type Dot = Point & { kind: 'dot'; marker: 'circle' | 'triangle'; colour: string };
 export type LatexDrawingPrimitive = Polyline | Rectangle | Label | Dot;
 
-export function layoutLatexDrawing(drawing: Drawing, bodyWidth: number, em: number) {
+export function layoutLatexDrawing(
+  drawing: Drawing,
+  bodyWidth: number,
+  em: number,
+  tableText?: (path: string) => string | undefined,
+) {
   const primitives: LatexDrawingPrimitive[] = [];
   if (drawing.kind === 'picture') {
     for (const item of drawing.objects) {
@@ -145,14 +177,25 @@ export function layoutLatexDrawing(drawing: Drawing, bodyWidth: number, em: numb
   const axisWidth = requestedWidth - allowance;
   const axisHeight = drawing.height - allowance;
   if (axisWidth <= 0 || axisHeight <= 0) return;
-  const points = drawing.plots.flatMap(plot => plot.points);
+  const plots = drawing.plots.flatMap(plot => {
+    const points = 'table' in plot ? latexPlotPoints(plot.table, tableText) : plot.points;
+    return points ? [{ ...plot, points }] : [];
+  });
+  if (plots.length !== drawing.plots.length) return;
+  const points = plots.flatMap(plot => plot.points);
   const bounds = points.reduce((b, p) => ({
     xMin: Math.min(b.xMin, p.x), xMax: Math.max(b.xMax, p.x),
     yMin: Math.min(b.yMin, p.y), yMax: Math.max(b.yMax, p.y),
   }), { xMin: Infinity, xMax: -Infinity, yMin: Infinity, yMax: -Infinity });
+  bounds.xMin = drawing.limits.xmin ?? bounds.xMin;
+  bounds.xMax = drawing.limits.xmax ?? bounds.xMax;
+  bounds.yMin = drawing.limits.ymin ?? bounds.yMin;
+  bounds.yMax = drawing.limits.ymax ?? bounds.yMax;
+  if (bounds.xMin > bounds.xMax || bounds.yMin > bounds.yMax) return;
   const xRange = bounds.xMax - bounds.xMin || 1;
   const yRange = bounds.yMax - bounds.yMin || 1;
-  const { x: xPad, y: yPad } = drawing.padding;
+  const xPad = drawing.limits.xmin !== undefined && drawing.limits.xmax !== undefined ? 0 : drawing.padding.x;
+  const yPad = drawing.limits.ymin !== undefined && drawing.limits.ymax !== undefined ? 0 : drawing.padding.y;
   const tick = (min: number, max: number, span: number, relativePadding: number) => {
     const desired = Math.max(4, Math.floor(span / (35 * texPoint)));
     const raw = (max - min) * (1 + 2 * relativePadding) / (desired - 1) || 1;
@@ -195,7 +238,7 @@ export function layoutLatexDrawing(drawing: Drawing, bodyWidth: number, em: numb
   );
   const cycle = ['#0000ff', '#ff0000', '#000000', '#757500'];
   const labels: { text: string; colour: string; marker: 'triangle'|'circle'|'none' }[] = [];
-  drawing.plots.forEach((plot, index) => {
+  plots.forEach((plot, index) => {
     const stroke = cycle[index % cycle.length]!;
     const path = plot.points.map(point => ({ x: x(point.x), y: y(point.y) }));
     primitives.push({ kind: 'path', points: path, stroke });

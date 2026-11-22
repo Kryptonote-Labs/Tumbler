@@ -14,6 +14,10 @@ import { updateLatexBoundary, updateLatexNodeSource } from './latex-boundary-ste
 export { updateLatexBoundary, updateLatexNodeSource } from './latex-boundary-step';
 import { noteSchema as schema } from './index';
 import {
+  latexEffectivePrefix, latexProjectFile, readLatexInclude, resolveLatexProjectPrefix, type LatexProject,
+} from './latex-project';
+export { isLatexProjectPath, latexEffectivePrefix, latexProjectEntry } from './latex-project';
+import {
   argumentAt,
   commandEnd,
   documentBody,
@@ -70,6 +74,7 @@ export {
   latexFigureSource,
   readLatexCaption,
   readLatexFigure,
+  readLatexSubfigures,
   setLatexCaption,
   setLatexFigureImage,
   setLatexFigureWidth,
@@ -289,6 +294,7 @@ function blockStart(source: string, position: number, context: SourceContext) {
   const command = source.slice(position, commandEnd(source, position));
   return (
     command === '\\begin' ||
+    (!!context.include && !!readLatexInclude(source, position)) ||
     blockCommands.has(command) ||
     bibliographyCommands.has(command) ||
     headingLevel(command.slice(1)) > 0 ||
@@ -328,6 +334,7 @@ type SourceContext = {
   theorems: ReturnType<typeof readLatexTheorems>;
   proof: boolean;
   boxes: boolean;
+  include?: (name: string, depth: number) => { path: string; nodes: Node[]; tail: string } | undefined;
 };
 
 function sourceContext(prefix: string): SourceContext {
@@ -487,6 +494,19 @@ function blocks(source: string, context: SourceContext, depth = 0): { nodes: Nod
       position = start + command.length;
       continue;
     }
+    if (context.include) {
+      const call = readLatexInclude(source, start);
+      if (call) {
+        const fragment = context.include(call.name, depth);
+        nodes.push(fragment
+          ? schema.nodes.latex_include!.create({
+              before, open: source.slice(start, call.end), close: fragment.tail, path: fragment.path,
+            }, fragment.nodes)
+          : schema.nodes.latex_raw!.create({ before, source: source.slice(start, call.end) }));
+        position = call.end;
+        continue;
+      }
+    }
     const colour = command === '\\definecolor' && latexColourDefinition(source, start);
     if (colour) {
       context.colours.set(colour.name, colour.colour);
@@ -562,7 +582,12 @@ function blocks(source: string, context: SourceContext, depth = 0): { nodes: Nod
 export function parseLatex(source: string): Node {
   const body = documentBody(source);
   const prefix = body ? source.slice(0, body.from) : '';
-  const context = sourceContext(prefix);
+  return parseDocument(source, body, prefix, sourceContext(prefix));
+}
+
+function parseDocument(
+  source: string, body: ReturnType<typeof documentBody>, prefix: string, context: SourceContext,
+) {
   const { nodes, tail } = blocks(body ? source.slice(body.from, body.to) : source, context);
   const suffix = tail + (body ? source.slice(body.to) : '');
   if (!nodes.length) {
@@ -575,6 +600,36 @@ export function parseLatex(source: string): Node {
     );
   }
   return schema.topNodeType.create({ format: 'latex', prefix, suffix }, nodes);
+}
+
+/** Load literal included files as editable nodes in the same Notes document. */
+export function parseLatexProject(entry: string, files: ReadonlyMap<string, string>) {
+  const source = files.get(entry);
+  if (source === undefined) throw new RangeError('The main LaTeX file is missing.');
+  const body = documentBody(source);
+  const prefix = body ? source.slice(0, body.from) : '';
+  const used = new Set([entry]);
+  const context = sourceContext(resolveLatexProjectPrefix(prefix, entry, files));
+  let from = entry;
+  context.include = (name, depth) => {
+    const path = latexProjectFile(files, entry, from, name, '.tex');
+    if (!path || used.has(path) || depth >= 64) return;
+    const text = files.get(path)!;
+    if (documentBody(text)) return;
+    used.add(path);
+    const parent = from;
+    from = path;
+    const parsed = blocks(text, context, depth + 1);
+    from = parent;
+    if (!parsed.nodes.length) parsed.nodes.push(schema.nodes.paragraph!.create({ before: '' }));
+    return { path, ...parsed };
+  };
+  const parsed = parseDocument(source, body, prefix, context);
+  const latexProject: LatexProject = {
+    entry,
+    files: Object.fromEntries([...files].filter(([path]) => !used.has(path))),
+  };
+  return parsed.type.create({ ...parsed.attrs, latexProject }, parsed.content);
 }
 
 function inlineSource(node: Node) {
@@ -622,6 +677,9 @@ function blockSource(node: Node): string {
   const { open, close } = node.attrs;
   let result: string;
   switch (node.type.name) {
+    case 'latex_include':
+      result = open;
+      break;
     case 'latex_raw':
       result = node.attrs.source;
       break;
@@ -677,8 +735,7 @@ export function serializeLatex(document: Node) {
 /** Promote supported structures stored as opaque blocks by an older editor. */
 export function materializeLatexStructures(document: Node): Transform {
   const transform = new Transform(document);
-  const prefix = String(document.attrs.prefix ?? '');
-  const context = sourceContext(prefix);
+  const context = sourceContext(latexEffectivePrefix(document));
   document.descendants((node, position) => {
     const environment = node.type.name === 'latex_raw' ? latexEnvironmentName(node.attrs.source) : undefined;
     const raw = !!environment && (
@@ -714,12 +771,29 @@ export function materializeLatexStructures(document: Node): Transform {
   return transform;
 }
 
+/** The authored files in one Notes revision, each at its original relative path. */
+export function serializeLatexProject(document: Node) {
+  const project: LatexProject | null = document.attrs.latexProject ?? null;
+  if (!project) return;
+  const files = new Map(Object.entries(project.files));
+  files.set(project.entry, serializeLatex(document));
+  document.descendants(node => {
+    if (node.type.name === 'latex_include')
+      files.set(node.attrs.path, childrenSource(node) + (node.attrs.close ?? ''));
+  });
+  return { entry: project.entry, files };
+}
+
 /** Source mode and the hosted CLI turn source changes into normal, mappable editor steps. */
-export function replaceLatexSource(document: Node, source: string): Transform {
-  const next = parseLatex(source);
+export function replaceLatexSource(document: Node, source: string, file?: string): Transform {
+  const project = serializeLatexProject(document);
+  if (project) project.files.set(file ?? project.entry, source);
+  const next = project ? parseLatexProject(project.entry, project.files) : parseLatex(source);
   const transform = new Transform(document);
   updateLatexBoundary(transform, 'prefix', next.attrs.prefix);
   updateLatexBoundary(transform, 'suffix', next.attrs.suffix);
+  if (JSON.stringify(document.attrs.latexProject) !== JSON.stringify(next.attrs.latexProject))
+    transform.setDocAttribute('latexProject', next.attrs.latexProject);
 
   const from = document.content.findDiffStart(next.content);
   if (from === null) return transform;

@@ -338,6 +338,7 @@ export type PageBlock = PageLine & {
   flow?: LatexBlockFlow;
 };
 export type PageBreak = { position: number; height: number; fragment?: number };
+export type LatexWideFloat = { position: number; sheet: number; offset: number; height: number };
 
 function strongerBreak(left: LatexBreak | undefined, right: LatexBreak | undefined) {
   if (left === 'recto' || right === 'recto') return 'recto';
@@ -362,6 +363,10 @@ export function paginateLatex(
   const breakSlots: number[] = [];
   const footnotes: number[] = [];
   const footHeights: number[] = [0];
+  const wideFloats: LatexWideFloat[] = [];
+  const floatSpans = new Map<number, number>();
+  const deferred: PageLine[] = [];
+  const floatGap = 20 * texPoint;
   let start = 0;
   let pages = 1;
   let occupied = false;
@@ -373,8 +378,31 @@ export function paginateLatex(
     if (!extra) return notes;
     return notes + extra + (notes ? 0 : noteGap);
   };
-  const fits = (line: PageLine) =>
-    line.bottom - (line.depth ?? 0) - start + room(line) + (line.reserveAfter ?? 0) <= bodyHeight - (pages > 1 && pages <= columns ? firstSpanHeight : 0);
+  const sheetOf = (slot: number) => Math.floor(slot / columns);
+  const fits = (line: PageLine) => {
+    const span = floatSpans.get(sheetOf(pages - 1)) ?? (pages > 1 && pages <= columns ? firstSpanHeight : 0);
+    return line.bottom - (line.depth ?? 0) - start + room(line) + (line.reserveAfter ?? 0) <= bodyHeight - span;
+  };
+
+  function placeWide(sheet: number, floatPage = false) {
+    const startIndex = wideFloats.length;
+    let height = 0;
+    while (deferred.length) {
+      const figure = deferred[0]!;
+      const size = figure.bottom - figure.top;
+      const offset = height ? height + floatGap : 0;
+      if (offset && offset + size + (floatPage ? 0 : floatGap) > bodyHeight) break;
+      if (!floatPage && size + floatGap >= bodyHeight) break;
+      deferred.shift();
+      wideFloats.push({ position: figure.position, sheet, offset, height: size });
+      height = offset + size;
+    }
+    if (!height) return;
+    if (floatPage) {
+      const fill = Math.max(0, (bodyHeight - height) / 2);
+      for (const item of wideFloats.slice(startIndex)) item.offset += fill;
+    } else floatSpans.set(sheet, height + floatGap);
+  }
   function place(line: PageLine) {
     notes = room(line);
     for (const _ of line.notes ?? []) footnotes.push(pages - 1);
@@ -389,6 +417,7 @@ export function paginateLatex(
     let next = boundary === 'column' ? slot : Math.ceil(slot / columns) * columns;
     if (boundary === 'recto' && (next / columns) % 2 !== 0) next += columns;
     const advanceBy = next - (pages - 1);
+    if (sheetOf(next) > sheetOf(pages - 1)) placeWide(sheetOf(next));
     breakSlots.push(next);
     const continuation = line.continuation;
     const startHeight = continuation?.startHeight ?? 0;
@@ -405,6 +434,10 @@ export function paginateLatex(
   }
   for (const block of blocks) {
     const flow = block.flow;
+    if (columns > 1 && flow?.kind === 'content' && flow.wideFloat) {
+      deferred.push(block);
+      continue;
+    }
     if (flow?.kind === 'omit') continue;
     if (flow?.kind === 'break') {
       if (occupied) pending = strongerBreak(pending, flow.boundary);
@@ -433,5 +466,11 @@ export function paginateLatex(
       place(line);
     }
   }
-  return { breaks, breakSlots, pages, footnotes, footHeights };
+  while (deferred.length) {
+    const sheet = sheetOf(pages - 1) + 1;
+    placeWide(sheet, true);
+    pages = sheet * columns + 1;
+    while (footHeights.length < pages) footHeights.push(0);
+  }
+  return { breaks, breakSlots, pages, footnotes, footHeights, wideFloats, floatSpans };
 }

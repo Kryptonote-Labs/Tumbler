@@ -1,3 +1,5 @@
+import { latexEffectivePrefix } from './latex-project';
+import { readLatexSubfigures } from './latex-figures';
 import { readLatexCodeBlock } from './latex-code';
 import { latexBoxTitle, latexEnvironmentName, latexEnvironmentOption, readLatexTheorems } from './latex-environments';
 import { latexRomanNumber } from './latex-number-format';
@@ -57,7 +59,7 @@ export function latexEquationRows(source: string) {
  * editor does not model, so callers show no number rather than a wrong one.
  */
 export function latexNumbering(document: Node): LatexNumbering | undefined {
-  const prefix = String(document.attrs.prefix ?? '');
+  const prefix = latexEffectivePrefix(document);
   const documentClass = readLatexClass(prefix).name;
   if (documentClass && !['article', 'report', 'book'].includes(documentClass.trim())) return;
   if (opaqueCounters.test(prefix)) return;
@@ -214,7 +216,13 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
         const captions = [...body.matchAll(/\\caption\b/g)];
         for (const [index, match] of captions.entries()) {
           const number = within(++floatCount[kind]);
-          if (index === 0) result.floats.set(position, { kind, number });
+          if (index === 0) {
+            result.floats.set(position, { kind, number });
+            const panels = readLatexSubfigures(source).filter(panel => panel.caption);
+            panels.forEach((panel, index) => {
+              if (panel.label) result.labels.set(panel.label, number + alph(index + 1).toLowerCase());
+            });
+          }
           const next = captions[index + 1]?.index ?? body.length;
           labelsIn(body.slice(match.index, next), number);
         }

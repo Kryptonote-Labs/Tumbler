@@ -58,5 +58,8 @@ export function paginateLatexRegions(blocks: LatexRegionBlock[], portrait: Latex
     inserted += plan.breaks.reduce((total, item) => total + item.height, 0);
     pageTop += plan.pages * (paper.height + paper.gap);
   }
-  return { breaks, breakSlots, footnotes, footHeights, pages: papers.length, papers };
+  return {
+    breaks, breakSlots, footnotes, footHeights, pages: papers.length, papers,
+    wideFloats: [], floatSpans: new Map<number, number>(),
+  };
 }

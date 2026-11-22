@@ -1,4 +1,5 @@
 import type { Node, NodeSpec, TagParseRule } from 'prosemirror-model';
+import { validateLatexProject } from './latex-project';
 
 export const latexStructureNodes = [
   'paragraph',
@@ -9,6 +10,7 @@ export const latexStructureNodes = [
   'blockquote',
   'latex_landscape',
   'latex_container',
+  'latex_include',
 ] as const;
 
 export const latexBlockAttrs = {
@@ -26,6 +28,7 @@ export const latexDocumentAttrs = {
   },
   prefix: { default: '', validate: 'string' },
   suffix: { default: '', validate: 'string' },
+  latexProject: { default: null, validate: validateLatexProject },
 };
 
 // Store source separately from the visible label. Only the LaTeX clipboard parser
@@ -43,6 +46,14 @@ function atomDOM(node: Node, className: string) {
 }
 
 export const latexNodes = {
+  latex_include: {
+    group: 'block',
+    content: 'block+',
+    defining: true,
+    isolating: true,
+    attrs: { ...latexBlockAttrs, path: { validate: 'string' } },
+    toDOM: () => ['div', { 'data-latex-include': '' }, 0],
+  },
   latex_container: {
     group: 'block',
     content: 'block+',
