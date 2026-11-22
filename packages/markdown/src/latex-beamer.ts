@@ -76,21 +76,33 @@ export function readLatexBeamerFrame(source: string) {
     if (spec) setExtent(spec.ranges);
   }
   const titlePage = body.trim() === '\\titlepage' || body.trim() === '\\maketitle';
+  const intervals: { from: number; through: number }[] = [];
+  for (const range of (selection?.ranges ?? [{ from: 1 }]).toSorted((a, b) => a.from - b.from)) {
+    const through = range.through ?? highest;
+    const previous = intervals.at(-1);
+    if (previous && range.from - previous.through <= 1) previous.through = Math.max(previous.through, through);
+    else intervals.push({ from: range.from, through });
+  }
+  // The live editor mounts every projected sheet. Fall back to source when a frame's expansion
+  // would exhaust its render budget. Its authored overlays still compile during PDF export.
+  const sheets = intervals.reduce((count, range) => count + (range.through - range.from + 1), 0);
+  if (sheets > 256 || sheets * body.length > 4 * 1024 * 1024) return;
   const overlays = [];
-  for (let step = 1; step <= highest; step++) {
-    if (selection && !visible(selection.ranges, step)) continue;
-    let previous = 0;
-    let output = '';
-    for (const edit of edits) {
-      output += body.slice(previous, edit.from);
-      if (!edit.ranges || visible(edit.ranges, step)) output += edit.source;
-      previous = edit.to;
+  for (const { from, through } of intervals) {
+    for (let step = from; step <= through; step++) {
+      let previous = 0;
+      let output = '';
+      for (const edit of edits) {
+        output += body.slice(previous, edit.from);
+        if (!edit.ranges || visible(edit.ranges, step)) output += edit.source;
+        previous = edit.to;
+      }
+      overlays.push({
+        step,
+        body: output + body.slice(previous),
+        hiddenItems: items.flatMap((range, index) => (visible(range, step) ? [] : [index])),
+      });
     }
-    overlays.push({
-      step,
-      body: output + body.slice(previous),
-      hiddenItems: items.flatMap((range, index) => (visible(range, step) ? [] : [index])),
-    });
   }
   return {
     title: title ? source.slice(title.from, title.to) : '',

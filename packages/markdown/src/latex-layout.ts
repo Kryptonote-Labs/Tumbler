@@ -333,12 +333,16 @@ export type PageLine = {
   continuation?: { fragment: number; startHeight: number };
   /** Space needed after placing this line if another fragment follows on a new page. */
   reserveAfter?: number;
-  /** Descender depth left below TeX's page goal when this is the last line or row. */
+  /** Descender depth or trailing glue that can extend beyond TeX's page goal. */
   depth?: number;
 };
 export type PageBlock = PageLine & {
   split?: () => PageLine[];
   flow?: LatexBlockFlow;
+  /** @deprecated Use a column break in `flow`. */
+  force?: boolean;
+  /** @deprecated Use a page break in `flow`. */
+  forcePage?: boolean;
 };
 export type PageBreak = { position: number; height: number; fragment?: number };
 export type LatexWideFloat = { position: number; sheet: number; offset: number; height: number };
@@ -436,7 +440,11 @@ export function paginateLatex(
     notes = 0;
   }
   for (const block of blocks) {
-    const flow = block.flow;
+    const flow = block.flow ?? (
+      block.forcePage || block.force
+        ? { kind: 'break' as const, boundary: block.forcePage ? 'page' as const : 'column' as const }
+        : undefined
+    );
     if (columns > 1 && flow?.kind === 'content' && flow.wideFloat) {
       deferred.push(block);
       continue;

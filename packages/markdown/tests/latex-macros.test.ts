@@ -26,6 +26,13 @@ test("optional defaults, aliases, and formatting compose into printed inline con
   expect(interpretLatexText(String.raw`\unknown{5}`, macros)).toBeUndefined();
 });
 
+test("xparse command signatures keep their argument and optional default", () => {
+  const macros = readLatexTextMacros(String.raw`\NewDocumentCommand{\site}{O{Reach}m}{\textbf{#1 #2}}`);
+  expect(interpretLatexText(String.raw`\site{North}`, macros)).toEqual([
+    { style: "strong", content: ["Reach North"] },
+  ]);
+});
+
 test("the output driver can change the sheet without changing the class text block", () => {
   const source = String.raw`\documentclass[letterpaper]{article}`;
   const logical = latexPageLayout(source);

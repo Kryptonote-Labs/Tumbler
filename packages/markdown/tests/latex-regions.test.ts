@@ -89,6 +89,11 @@ test('explicit Beamer overlays reserve hidden items and project only their visib
   expect(serializeLatex(parseLatex(source))).toBe(source);
 });
 
+test('a sparse Beamer selection projects the selected steps without expanding the gap', () => {
+  const sparse = String.raw`\begin{frame}<1,1000000>{Update}Latest results\end{frame}`;
+  expect(readLatexBeamerFrame(sparse)?.overlays.map(({ step }) => step)).toEqual([1, 1000000]);
+});
+
 test('a TikZ automaton retains its named states and transition directions', () => {
   const source = String.raw`\begin{tikzpicture}[node distance=38mm,auto]
 \node[state] (locked) {locked};

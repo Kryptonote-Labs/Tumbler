@@ -63,7 +63,23 @@ export function readLatexTextMacros(prefix: string) {
     const to = commandEnd(prefix, from);
     if (to === from || (group && to !== group.to)) continue;
     const command = prefix.slice(from + 1, to);
-    const arity = groupAt(prefix, whitespaceEnd(prefix, group?.end ?? to), "[", "]");
+    const argumentStart = whitespaceEnd(prefix, group?.end ?? to);
+    if (documentCommand) {
+      const signature = groupAt(prefix, argumentStart);
+      const body = signature && groupAt(prefix, whitespaceEnd(prefix, signature.end));
+      if (!signature || !body) continue;
+      consumed = body.end;
+      const args = documentArguments(prefix.slice(signature.from, signature.to));
+      if (!args || (name === 'ProvideDocumentCommand' && (macros.has(command) || styles.has(command))))
+        continue;
+      macros.set(command, {
+        count: args.count,
+        ...(args.optional !== undefined && { optional: args.optional }),
+        replacement: prefix.slice(body.from, body.to),
+      });
+      continue;
+    }
+    const arity = groupAt(prefix, argumentStart, "[", "]");
     const count = arity ? Number(prefix.slice(arity.from, arity.to)) : 0;
     if (!Number.isInteger(count) || count < 0 || count > 9) continue;
     const fallback =
