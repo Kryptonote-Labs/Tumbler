@@ -20,8 +20,8 @@ export function readLatexTheorems(prefix: string) {
     const key = prefix.slice(environment.from, environment.to);
     definitions.set(key, {
       title: prefix.slice(title.from, title.to),
-      counter: starred ? undefined : shared ? prefix.slice(shared.from, shared.to) : key,
-      within: scope ? prefix.slice(scope.from, scope.to) : undefined,
+      ...(!starred && { counter: shared ? prefix.slice(shared.from, shared.to) : key }),
+      ...(scope && { within: prefix.slice(scope.from, scope.to) }),
     });
   }
   return definitions;

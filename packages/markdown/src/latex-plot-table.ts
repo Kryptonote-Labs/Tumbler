@@ -12,14 +12,18 @@ export type LatexPlotTable = {
 
 export function latexPlotTable(source: string, options: ReadonlyMap<string, string>): LatexPlotTable {
   const separator = options.get('col sep');
+  const x = options.get('x');
+  const y = options.get('y');
+  const xIndex = options.get('x index');
+  const yIndex = options.get('y index');
   return {
     source: /\r|\n|\\\\/.test(source) ? { inline: source } : { file: source.trim() },
     separator: separator === 'comma' || separator === 'tab' ? separator : 'space',
     rowSeparator: options.get('row sep') === '\\\\' ? 'tex' : 'line',
-    x: options.get('x'),
-    y: options.get('y'),
-    xIndex: options.has('x index') ? Number(options.get('x index')) : undefined,
-    yIndex: options.has('y index') ? Number(options.get('y index')) : undefined,
+    ...(x !== undefined && { x }),
+    ...(y !== undefined && { y }),
+    ...(xIndex !== undefined && { xIndex: Number(xIndex) }),
+    ...(yIndex !== undefined && { yIndex: Number(yIndex) }),
   };
 }
 

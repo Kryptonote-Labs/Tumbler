@@ -45,12 +45,12 @@ export function latexSheetLayout(layout: LatexPageLayout, index: number): LatexP
 
 /** pdflscape exchanges the body axes, with the portrait footer on the left of the sheet. */
 export function latexLandscapeLayout(portrait: LatexPageLayout): LatexPageLayout {
+  const { evenLeft: _bindingMargin, ...paper } = portrait;
   return {
-    ...portrait,
+    ...paper,
     width: portrait.height,
     height: portrait.width,
     left: portrait.bottom,
-    evenLeft: undefined,
     right: portrait.top,
     top: portrait.left,
     bottom: portrait.right,
@@ -309,7 +309,7 @@ export function latexPageLayout(
     gap: 24,
     fontSize: font,
     leading,
-    typography: ['article', 'report', 'book', 'letter'].includes(documentClass) ? typography : undefined,
+    ...(['article', 'report', 'book', 'letter'].includes(documentClass) && { typography }),
     firstBaseline: slide ? leading / 2 + font * 0.4 : fontSize * texPoint,
     footerBaseline: height - bottom + (latexLength(sizes.get('footskip')) ?? (letter ? 25 : 30) * texPoint),
     paragraphIndent: paragraphs.parindent,

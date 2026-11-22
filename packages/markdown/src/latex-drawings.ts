@@ -124,11 +124,17 @@ function axis(source: string, environment: NonNullable<ReturnType<typeof environ
     const value = Number(values.get(name));
     return Number.isFinite(value) ? value : undefined;
   };
+  const limits: Extract<Drawing, { kind: 'axis' }>['limits'] = {};
+  for (const name of ['xmin', 'xmax', 'ymin', 'ymax'] as const) {
+    const value = limit(name);
+    if (value !== undefined) limits[name] = value;
+  }
+  const legendPosition = values.get('legend pos');
   if (plots.length) return {
     kind: 'axis', width: values.get('width') ?? '8cm', height, xTicks, yTicks, scaleOnlyAxis, plots,
     padding: { x: padding('enlarge x limits'), y: padding('enlarge y limits') },
-    legendPosition: values.get('legend pos'),
-    limits: { xmin: limit('xmin'), xmax: limit('xmax'), ymin: limit('ymin'), ymax: limit('ymax') },
+    ...(legendPosition === undefined ? {} : { legendPosition }),
+    limits,
     xLabel: text(values.get('xlabel') ?? ''), yLabel: text(values.get('ylabel') ?? ''),
     end: environment.end,
   };

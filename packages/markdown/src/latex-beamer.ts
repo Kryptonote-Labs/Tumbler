@@ -19,7 +19,7 @@ function overlay(source: string, at: number) {
       (through !== undefined && (!Number.isSafeInteger(through) || through < from))
     )
       return;
-    ranges.push({ from, through });
+    ranges.push(through === undefined ? { from } : { from, through });
   }
   return { ranges, end: group.end };
 }

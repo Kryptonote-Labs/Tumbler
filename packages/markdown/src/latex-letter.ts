@@ -49,16 +49,22 @@ export function readLatexLetterParts(document: Node) {
         local.set(command.command, value);
         parts.set(position, { kind: 'setting' });
         break;
-      case 'opening':
+      case 'opening': {
+        const sender = local.get('address');
+        const date = local.get('date');
         if (recipient) parts.set(position, {
-          kind: 'opening', salutation: value, recipient, sender: local.get('address'), date: local.get('date'),
+          kind: 'opening', salutation: value, recipient,
+          ...(sender && { sender }),
+          ...(date && { date }),
         });
         break;
+      }
       case 'closing': {
-        const signature = local.get('signature');
+        const authored = local.get('signature');
+        const signature = authored?.source ? authored : local.get('name');
         if (recipient) parts.set(position, {
           kind: 'closing', closing: value,
-          signature: signature?.source ? signature : local.get('name'),
+          ...(signature && { signature }),
           indented: !!local.get('address')?.source,
         });
         break;

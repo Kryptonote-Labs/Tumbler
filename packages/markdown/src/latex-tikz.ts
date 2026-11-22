@@ -48,9 +48,9 @@ export function readLatexTikzStateDiagram(source: string) {
       states.push({
         name: name!,
         label: label!,
-        relative: reference
-          ? { direction: direction as NonNullable<State['relative']>['direction'], reference }
-          : undefined,
+        ...(reference && {
+          relative: { direction: direction as NonNullable<State['relative']>['direction'], reference },
+        }),
       });
       continue;
     }

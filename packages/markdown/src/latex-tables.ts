@@ -265,7 +265,10 @@ export function readLatexTabular(source: string): LatexTabular | undefined {
   return {
     start: spec.end,
     end: environment.to,
-    spec: { start: spec.from, end: spec.to, columns: columns ?? [], width: tableWidth },
+    spec: {
+      start: spec.from, end: spec.to, columns: columns ?? [],
+      ...(tableWidth !== undefined && { width: tableWidth }),
+    },
     rows,
     layout: continuing ? { kind: 'continuing', sections } : { kind: 'fixed', caption },
     rowStarts,

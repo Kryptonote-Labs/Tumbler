@@ -77,7 +77,7 @@ export function readLatexTextMacros(prefix: string) {
     if (name === "providecommand" && (macros.has(command) || styles.has(command))) continue;
     macros.set(command, {
       count,
-      optional: fallback ? prefix.slice(fallback.from, fallback.to) : undefined,
+      ...(fallback && { optional: prefix.slice(fallback.from, fallback.to) }),
       replacement: prefix.slice(body.from, body.to),
     });
   }

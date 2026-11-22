@@ -42,10 +42,11 @@ export function paginateLatexRegions(blocks: LatexRegionBlock[], portrait: Latex
       bottom: line.bottom - first.top,
     });
     const plan = paginateLatex(
-      group.map((block) => ({
-        ...move(block),
-        split: block.split ? () => block.split!().map(move) : undefined,
-      })),
+      group.map((block) => {
+        const { split } = block;
+        const shifted = move(block);
+        return split ? { ...shifted, split: () => split().map(move) } : shifted;
+      }),
       paper.height - paper.top - paper.bottom,
       paper.top + paper.bottom + paper.gap,
       paper.leading,
