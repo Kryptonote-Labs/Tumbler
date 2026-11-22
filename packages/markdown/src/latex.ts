@@ -1,4 +1,4 @@
-export { interpretLatexText, readLatexTextMacros, type LatexPrintedText } from './latex-macros';
+export { interpretLatexParagraphMacro, interpretLatexText, readLatexTextMacros, type LatexPrintedText } from './latex-macros';
 import { readLatexEnumitem } from './latex-list';
 import { readLatexBookMatter, readLatexClass } from './latex-flow';
 import { latexColourDefinition, readLatexColours } from './latex-colour';
@@ -7,7 +7,7 @@ import { latexLetterCommandAt } from './latex-letter';
 export { latexColourDefinition } from './latex-colour';
 export type { LatexLetterPart } from './latex-letter';
 import { usesLatexPackage } from './latex-preamble';
-import { latexFormattingAlias, readLatexTextMacros } from './latex-macros';
+import { latexFormattingAlias, readLatexParagraphMacro, readLatexTextMacros } from './latex-macros';
 import { Fragment, type Mark, type Node } from 'prosemirror-model';
 import { Transform } from 'prosemirror-transform';
 import { updateLatexBoundary, updateLatexNodeSource } from './latex-boundary-step';
@@ -295,6 +295,7 @@ function blockStart(source: string, position: number, context: SourceContext) {
   return (
     command === '\\begin' ||
     (!!context.include && !!readLatexInclude(source, position)) ||
+    !!readLatexParagraphMacro(source, context.macros, position) ||
     blockCommands.has(command) ||
     bibliographyCommands.has(command) ||
     headingLevel(command.slice(1)) > 0 ||
@@ -506,6 +507,12 @@ function blocks(source: string, context: SourceContext, depth = 0): { nodes: Nod
         position = call.end;
         continue;
       }
+    }
+    const macro = readLatexParagraphMacro(source, context.macros, start);
+    if (macro) {
+      nodes.push(schema.nodes.latex_raw!.create({ before, source: source.slice(start, macro.end) }));
+      position = macro.end;
+      continue;
     }
     const colour = command === '\\definecolor' && latexColourDefinition(source, start);
     if (colour) {
@@ -745,6 +752,8 @@ export function materializeLatexStructures(document: Node): Transform {
     );
     const matter = node.type.name === 'paragraph' && node.children.some(child =>
       child.type.name === 'latex_inline' && readLatexBookMatter(child.attrs.source));
+    const paragraphMacro = node.type.name === 'paragraph' && node.children.some(child =>
+      child.type.name === 'latex_inline' && readLatexParagraphMacro(child.attrs.source, context.macros));
     const letter = context.letter && node.type.name === 'paragraph' && node.children.some(child =>
       child.type.name === 'latex_inline' && latexLetterCommandAt(child.attrs.source, 0));
     if (node.type.name === 'latex_raw' && typeof node.attrs.source === 'string') {
@@ -753,7 +762,7 @@ export function materializeLatexStructures(document: Node): Transform {
     }
     const styled = node.type.name === 'paragraph' && node.children.some(child =>
       child.type.name === 'latex_inline' && /^\\(?:definecolor|textcolor)\b/.test(child.attrs.source));
-    if (!raw && !matter && !letter && !styled) return;
+    if (!raw && !matter && !letter && !styled && !paragraphMacro) return;
     const source = blockSource(node);
     const parsed = blocks(source, context);
     if (!parsed.nodes.length || (raw && parsed.nodes.every(block => block.type.name === 'latex_raw'))) return;

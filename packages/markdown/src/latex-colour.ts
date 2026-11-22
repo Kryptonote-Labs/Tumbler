@@ -39,3 +39,19 @@ export function readLatexColours(prefix: string) {
   }
   return colours;
 }
+
+/** Resolve named xcolor expressions with a single percentage blend. */
+export function resolveLatexColour(value: string, colours: ReadonlyMap<string, string>) {
+  const [name, percentage, other = 'white', ...extra] = value.trim().split('!');
+  const first = colours.get(name ?? '');
+  if (!first || extra.length) return;
+  if (percentage === undefined) return first;
+  const part = Number(percentage) / 100;
+  const second = colours.get(other);
+  if (!second || !percentage.trim() || !Number.isFinite(part) || part < 0 || part > 1) return;
+  const channels = [1, 3, 5].map(at => Math.round(
+    Number.parseInt(first.slice(at, at + 2), 16) * part +
+    Number.parseInt(second.slice(at, at + 2), 16) * (1 - part),
+  ));
+  return rgb(channels);
+}

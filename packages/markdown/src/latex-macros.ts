@@ -1,3 +1,4 @@
+import { readLatexColours, resolveLatexColour } from './latex-colour';
 import { usesLatexPackage } from './latex-preamble';
 import { commandEnd, groupAt, latexCommands, lineEnd, whitespaceEnd } from "./latex-syntax";
 
@@ -42,7 +43,7 @@ function documentArguments(signature: string) {
   if (position === signature.length && count <= 9) return { count, optional };
 }
 
-export function readLatexTextMacros(prefix: string): Macros {
+export function readLatexTextMacros(prefix: string) {
   const macros = new Map<string, Macro>();
   if (usesLatexPackage(prefix, 'siunitx')) {
     for (const name of ['qty', 'SI']) macros.set(name, { count: 2, replacement: '#1~#2' });
@@ -97,7 +98,9 @@ export function latexFormattingAlias(command: string, macros: Macros) {
   }
 }
 
-export type LatexPrintedText = string | { style: LatexTextStyle; content: LatexPrintedText[] };
+export type LatexPrintedText = string |
+  { style: LatexTextStyle; content: LatexPrintedText[] } |
+  { colour: string; content: LatexPrintedText[] };
 
 const symbols = new Map([
   ["$", "$"],
@@ -114,7 +117,11 @@ const symbols = new Map([
 ]);
 
 /** Expand a source-backed inline command into text and native formatting. */
-export function interpretLatexText(source: string, macros: Macros): LatexPrintedText[] | undefined {
+export function interpretLatexText(
+  source: string,
+  macros: Macros,
+  colours = readLatexColours(''),
+): LatexPrintedText[] | undefined {
   let remaining = 128;
   // Bound the work of expanding a single inline object. Its authored source stays intact.
   let remainingText = 65536;
@@ -155,14 +162,15 @@ export function interpretLatexText(source: string, macros: Macros): LatexPrinted
       const macro = macros.get(command);
       const style = styles.get(command);
       const symbol = symbols.get(command);
-      if (!macro && !style) {
+      const textColour = command === 'textcolor';
+      if (!macro && !style && !textColour) {
         if (symbol === undefined) return;
         result.push(symbol);
         continue;
       }
       if (active.has(command)) return;
       const args: string[] = [];
-      const count = macro?.count ?? 1;
+      const count = macro?.count ?? (textColour ? 2 : 1);
       if (macro?.optional !== undefined) {
         const option = groupAt(input, position, "[", "]");
         if (option) position = whitespaceEnd(input, option.end);
@@ -190,6 +198,11 @@ export function interpretLatexText(source: string, macros: Macros): LatexPrinted
         active.delete(command);
         if (!content) return;
         result.push(...content);
+      } else if (textColour) {
+        const colour = resolveLatexColour(args[0]!, colours);
+        const content = read(args[1]!, depth + 1);
+        if (!colour || !content) return;
+        result.push({ colour, content });
       } else if (style) {
         const content = read(args[0]!, depth + 1);
         if (!content) return;
@@ -200,6 +213,52 @@ export function interpretLatexText(source: string, macros: Macros): LatexPrinted
   }
   if (!source.startsWith("\\")) return;
   const command = source.slice(1, commandEnd(source, 0));
-  if (!macros.has(command) && !styles.has(command) && !symbols.has(command)) return;
+  if (!macros.has(command) && !styles.has(command) && !symbols.has(command) && command !== 'textcolor') return;
   return read(source, 0);
+}
+
+
+const paragraphSkips = new Map([['smallskip', 3], ['medskip', 6], ['bigskip', 12]]);
+
+/** Paragraph macros bounded by explicit TeX paragraph breaks and ordinary vertical skips. */
+export function readLatexParagraphMacro(
+  source: string,
+  macros: Macros,
+  position = 0,
+) {
+  const command = commandEnd(source, position);
+  const name = source.slice(position + 1, command);
+  const macro = macros.get(name);
+  if (!macro) return;
+  const body = /^\s*\\par\b\s*(?:\\(smallskip|medskip|bigskip)\b\s*)?(\\noindent\b\s*)?([\s\S]*?)\s*\\par\b\s*(?:\\(smallskip|medskip|bigskip)\b\s*)?$/.exec(macro.replacement);
+  if (!body) return;
+  let end = command;
+  let count = macro.count;
+  if (macro.optional !== undefined) {
+    const option = groupAt(source, whitespaceEnd(source, end), '[', ']');
+    if (option) end = option.end;
+    count--;
+  }
+  for (let index = 0; index < count; index++) {
+    const arg = groupAt(source, whitespaceEnd(source, end));
+    if (!arg) return;
+    end = arg.end;
+  }
+  return {
+    end,
+    name,
+    macro: { ...macro, replacement: body[3]! },
+    before: paragraphSkips.get(body[1] ?? '') ?? 0,
+    after: paragraphSkips.get(body[4] ?? '') ?? 0,
+    noIndent: !!body[2],
+  };
+}
+
+export function interpretLatexParagraphMacro(source: string, prefix: string) {
+  const macros = readLatexTextMacros(prefix);
+  const paragraph = readLatexParagraphMacro(source, macros);
+  if (!paragraph || paragraph.end !== source.length) return;
+  macros.set(paragraph.name, paragraph.macro);
+  const content = interpretLatexText(source, macros, readLatexColours(prefix));
+  if (content) return { ...paragraph, content };
 }
