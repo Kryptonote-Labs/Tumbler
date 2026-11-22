@@ -1,11 +1,16 @@
 import {
   DOMParser,
   DOMSerializer,
+  Fragment,
+  Slice,
   type DOMOutputSpec,
+  type Node,
   type Schema,
   type TagParseRule,
 } from 'prosemirror-model';
+import type { EditorView } from 'prosemirror-view';
 import { latexAtomPasteRules, latexStructureNodes } from './latex-spec';
+import { isLatexProjectPath, readLatexInclude, type LatexProject } from './latex-project';
 
 // HTML carries its ordinary heading/list/emphasis semantics to other editors.
 // Preserve the original TeX spelling as well when both sides understand it.
@@ -32,6 +37,50 @@ function readDelimiters(element: HTMLElement) {
   return null;
 }
 
+/** Preserve include boundaries in a project and keep copied content readable elsewhere. */
+function pasteLatexIncludes(slice: Slice, view: EditorView) {
+  let includes = false;
+  slice.content.descendants(node => {
+    if (node.type.name === 'latex_include') includes = true;
+    return !node.isTextblock && !includes;
+  });
+  if (!includes) return slice;
+  const { doc, selection } = view.state;
+  const project: LatexProject | null = doc.attrs.latexProject;
+  const used = new Set(Object.keys(project?.files ?? {}));
+  if (project) used.add(project.entry);
+  doc.descendants((node, position) => {
+    if (node.type.name === 'latex_include' && (position < selection.from || position + node.nodeSize > selection.to))
+      used.add(node.attrs.path);
+    return !node.isTextblock;
+  });
+  function copy(fragment: Fragment): Node[] {
+    const result: Node[] = [];
+    fragment.forEach(node => {
+      if (node.isTextblock || node.isLeaf) {
+        result.push(node);
+        return;
+      }
+      const path: string | undefined = node.type.name === 'latex_include' ? node.attrs.path : undefined;
+      const retain = path !== undefined && project && !used.has(path);
+      if (retain) used.add(path);
+      const children = copy(node.content);
+      if (path !== undefined && !retain) {
+        const first = children[0];
+        if (first) children[0] = first.type.create({
+          ...first.attrs,
+          before: (node.attrs.before ?? '') + (first.attrs.before ?? ''),
+        }, first.content, first.marks);
+        result.push(...children);
+      } else result.push(node.copy(Fragment.fromArray(children)));
+    });
+    return result;
+  }
+  const content = Fragment.fromArray(copy(slice.content));
+  const max = Slice.maxOpen(content);
+  return new Slice(content, Math.min(slice.openStart, max.openStart), Math.min(slice.openEnd, max.openEnd));
+}
+
 export function latexClipboard(schema: Schema) {
   const base = DOMSerializer.fromSchema(schema);
   const nodes = { ...base.nodes };
@@ -54,6 +103,18 @@ export function latexClipboard(schema: Schema) {
     },
   } satisfies DOMSerializer['marks'];
   const baseRules = DOMParser.fromSchema(schema).rules;
+  const include: TagParseRule = {
+    tag: 'div[data-latex-include][data-latex-delimiters]',
+    node: 'latex_include',
+    getAttrs(element) {
+      const path = element.getAttribute('data-latex-include');
+      const delimiters = readDelimiters(element);
+      const open = delimiters?.open;
+      if (!path || !isLatexProjectPath(path) || typeof open !== 'string') return false;
+      const reference = readLatexInclude(open, 0);
+      return reference?.end === open.length ? { ...delimiters, path } : false;
+    },
+  };
   const structureRules = baseRules.flatMap((rule): TagParseRule[] => {
     if (!rule.tag || !latexStructureNodes.some((name) => name === rule.node)) return [];
     return [
@@ -93,9 +154,11 @@ export function latexClipboard(schema: Schema) {
     },
   };
   return {
+    transformPasted: pasteLatexIncludes,
     clipboardSerializer: new DOMSerializer(nodes, marks),
     clipboardParser: new DOMParser(schema, [
       ...latexAtomPasteRules,
+      include,
       ...structureRules,
       style,
       ...baseRules,

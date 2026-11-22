@@ -30,7 +30,7 @@ import { Decoration, DecorationSet, type EditorView, type NodeViewConstructor } 
 import { environmentAt, verbatimEnd } from './latex-syntax';
 import { noteSchema as schema } from './index';
 import { latexClipboard } from './latex-clipboard';
-import { latexHeadings, parseLatex, serializeLatex } from './latex';
+import { latexHeadings, parseLatex, retainDetachedLatexFiles, serializeLatex } from './latex';
 import { latexNumberingPlugin } from './latex-numbering-view';
 import { latexObjectSelection } from './latex-selection';
 export { latexLetterPartSpec, latexNumberSpec, type LatexNumberSpec } from './latex-numbering-view';
@@ -401,6 +401,11 @@ export function latexState(
       history(),
       collab(clientID === undefined ? { version } : { version, clientID }),
       new Plugin({
+        appendTransaction(_transactions, previous, current) {
+          const transaction = current.tr;
+          retainDetachedLatexFiles(transaction, previous.doc);
+          return transaction.docChanged ? transaction : null;
+        },
         props: {
           ...(nodeViews ? { nodeViews } : {}),
           handleDOMEvents: { mousedown: continueAfterLatexBlock },

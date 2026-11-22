@@ -1,9 +1,30 @@
 import { expect, test } from 'bun:test';
+import { undo } from 'prosemirror-history';
+import { latexState } from '../src/latex-editor';
 import {
   latexEffectivePrefix, latexFlow, latexNumbering, latexPageLayout, layoutLatexDrawing,
   paginateLatex, parseLatexProject, readLatexDrawing, readLatexFigure, replaceLatexSource, serializeLatexProject,
   setLatexCaption,
 } from '../src/latex';
+
+test('unlinking a chapter in Visual retains the most recent chapter file and can be undone', () => {
+  const entry = 'main.tex';
+  const chapter = 'chapter.tex';
+  const document = parseLatexProject(entry, new Map([
+    [entry, String.raw`\begin{document}\input{chapter}\end{document}`],
+    [chapter, 'Original text.\n'],
+  ]));
+  let state = latexState(document, 0, 'writer');
+  state = state.apply(state.tr.insertText('Edited', 2, 10));
+  const revised = serializeLatexProject(state.doc)?.files.get(chapter);
+  expect(revised).toBe('Edited text.\n');
+  state = state.apply(state.tr.delete(0, state.doc.firstChild!.nodeSize));
+  const snapshot = serializeLatexProject(state.doc);
+  expect(snapshot?.files.get(entry)).not.toContain('\\input');
+  expect(snapshot?.files.get(chapter)).toBe(revised);
+  expect(undo(state, transaction => { state = state.apply(transaction); })).toBe(true);
+  expect(serializeLatexProject(state.doc)?.files.get(entry)).toContain('\\input{chapter}');
+});
 
 test('an included chapter edits its original file and keeps the local class and labels', () => {
   const files = new Map([

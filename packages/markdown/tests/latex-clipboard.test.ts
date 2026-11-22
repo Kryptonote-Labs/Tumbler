@@ -1,10 +1,11 @@
 import { expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
+import type { Node } from 'prosemirror-model';
 import { AllSelection } from 'prosemirror-state';
 import { EditorView, noteState } from '../src/editor';
-import { parseLatex, serializeLatex } from '../src/latex';
+import { parseLatex, parseLatexProject, serializeLatex, serializeLatexProject } from '../src/latex';
 
-async function withLatexEditor(source: string, run: (view: EditorView) => void | Promise<void>) {
+async function withLatexEditor(source: string | Node, run: (view: EditorView) => void | Promise<void>) {
   const browser = new Window();
   const keys = [
     'window',
@@ -24,7 +25,7 @@ async function withLatexEditor(source: string, run: (view: EditorView) => void |
       value: key === 'window' ? browser : browser[key],
     });
   const view = new EditorView(document.body, {
-    state: noteState('', 0, 'copy', parseLatex(source)),
+    state: noteState('', 0, 'copy', typeof source === 'string' ? parseLatex(source) : source),
   });
   try {
     await run(view);
@@ -58,6 +59,19 @@ raw & <value>
     expect(clipboard.text).toBe(source);
     expect(view.pasteHTML(clipboard.dom.innerHTML)).toBe(true);
     expect(serializeLatex(view.state.doc)).toBe(source);
+  });
+});
+
+test('replacing a project selection with its clipboard keeps the included file separate', async () => {
+  const source = new Map([
+    ['main.tex', '\\begin{document}\nBefore.\n\n\\input{chapter}\n\nAfter.\n\\end{document}'],
+    ['chapter.tex', 'Chapter text.\n'],
+  ]);
+  await withLatexEditor(parseLatexProject('main.tex', source), (view) => {
+    view.dispatch(view.state.tr.setSelection(new AllSelection(view.state.doc)));
+    const clipboard = view.serializeForClipboard(view.state.selection.content());
+    expect(view.pasteHTML(clipboard.dom.innerHTML)).toBe(true);
+    expect(serializeLatexProject(view.state.doc)?.files).toEqual(source);
   });
 });
 

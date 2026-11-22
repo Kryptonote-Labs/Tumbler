@@ -27,8 +27,9 @@ export function latexProjectEntry(files: ReadonlyMap<string, string>) {
     : 'This archive has no complete LaTeX document.');
 }
 
-function relativePath(directory: string, path: string) {
+export function resolveLatexProjectPath(from: string, path: string) {
   if (path.startsWith('/') || /[\\\u0000-\u001f\u007f]/.test(path)) return;
+  const directory = from.slice(0, Math.max(0, from.lastIndexOf('/')));
   const parts = directory ? directory.split('/') : [];
   for (const part of path.split('/')) {
     if (part === '..') {
@@ -48,7 +49,7 @@ export function latexProjectFile(
 ) {
   const withExtension = name.endsWith(extension) ? name : name + extension;
   for (const source of [entry, from]) {
-    const path = relativePath(source.slice(0, Math.max(0, source.lastIndexOf('/'))), withExtension);
+    const path = resolveLatexProjectPath(source, withExtension);
     if (path && files.has(path)) return path;
   }
 }

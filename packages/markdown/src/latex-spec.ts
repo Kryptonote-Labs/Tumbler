@@ -1,5 +1,5 @@
 import type { Node, NodeSpec, TagParseRule } from 'prosemirror-model';
-import { validateLatexProject } from './latex-project';
+import { isLatexProjectPath, validateLatexProject } from './latex-project';
 
 export const latexStructureNodes = [
   'paragraph',
@@ -51,8 +51,16 @@ export const latexNodes = {
     content: 'block+',
     defining: true,
     isolating: true,
-    attrs: { ...latexBlockAttrs, path: { validate: 'string' } },
-    toDOM: () => ['div', { 'data-latex-include': '' }, 0],
+    attrs: {
+      ...latexBlockAttrs,
+      path: {
+        validate(value: unknown) {
+          if (typeof value !== 'string' || !isLatexProjectPath(value))
+            throw new RangeError('Invalid LaTeX include path.');
+        },
+      },
+    },
+    toDOM: node => ['div', { 'data-latex-include': node.attrs.path }, 0],
   },
   latex_container: {
     group: 'block',
