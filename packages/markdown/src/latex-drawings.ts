@@ -204,7 +204,7 @@ export function layoutLatexDrawing(
     const step = (multiple < 1.5 ? 1 : multiple < 3.5 ? 2 : multiple < 7.5 ? 5 : 10) * base;
     const padding = (max - min) * relativePadding;
     const first = Math.ceil((min - padding) / step) * step;
-    return Array.from({ length: Math.floor((max + padding - first) / step) + 1 }, (_, i) =>
+    return Array.from({ length: Math.floor((max + padding - first) / step + 1e-9) + 1 }, (_, i) =>
       Number((first + i * step).toPrecision(10)));
   };
   const yTicks = drawing.yTicks.length ? drawing.yTicks : tick(bounds.yMin, bounds.yMax, axisHeight, yPad);
@@ -221,16 +221,18 @@ export function layoutLatexDrawing(
   const line = (a: Point, b: Point) => primitives.push({ kind: 'path', points: [a, b], stroke: '#212121', width: 0.5 });
   primitives.push({ kind: 'rect', x: left, y: top, width: axisWidth, height: axisHeight, stroke: '#000' });
   for (const value of drawing.xTicks.length ? drawing.xTicks : tick(bounds.xMin, bounds.xMax, axisWidth, xPad)) {
-    if (x(value) < left || x(value) > right) continue;
-    line({ x: x(value), y: bottom }, { x: x(value), y: bottom - 5 });
-    line({ x: x(value), y: top }, { x: x(value), y: top + 5 });
-    primitives.push({ kind: 'text', x: x(value), y: bottom + .78 * em, text: String(value), align: 'center' });
+    const at = x(value);
+    if (at < left - 1e-8 || at > right + 1e-8) continue;
+    line({ x: at, y: bottom }, { x: at, y: bottom - 5 });
+    line({ x: at, y: top }, { x: at, y: top + 5 });
+    primitives.push({ kind: 'text', x: at, y: bottom + .78 * em, text: String(value), align: 'center' });
   }
   for (const value of yTicks) {
-    if (y(value) < top || y(value) > bottom) continue;
-    line({ x: left, y: y(value) }, { x: left + 5, y: y(value) });
-    line({ x: right, y: y(value) }, { x: right - 5, y: y(value) });
-    primitives.push({ kind: 'text', x: left - tickInset, y: y(value), text: String(value), align: 'right' });
+    const at = y(value);
+    if (at < top - 1e-8 || at > bottom + 1e-8) continue;
+    line({ x: left, y: at }, { x: left + 5, y: at });
+    line({ x: right, y: at }, { x: right - 5, y: at });
+    primitives.push({ kind: 'text', x: left - tickInset, y: at, text: String(value), align: 'right' });
   }
   primitives.push(
     { kind: 'text', x: (left + right) / 2, y: bottom + 2.2 * em, text: drawing.xLabel, align: 'center' },

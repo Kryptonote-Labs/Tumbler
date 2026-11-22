@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import {
   latexEffectivePrefix, latexFlow, latexNumbering, latexPageLayout, layoutLatexDrawing,
-  parseLatexProject, readLatexDrawing, readLatexFigure, replaceLatexSource, serializeLatexProject,
+  paginateLatex, parseLatexProject, readLatexDrawing, readLatexFigure, replaceLatexSource, serializeLatexProject,
   setLatexCaption,
 } from '../src/latex';
 
@@ -41,6 +41,7 @@ test('an inline table and a project CSV produce the same plot', () => {
 \end{axis}`)!;
   const external = layoutLatexDrawing(make('data/replay.csv'), 400, 13.28, name => name === 'data/replay.csv' ? data : undefined);
   expect(external?.primitives.filter(item => item.kind === 'dot')).toHaveLength(2);
+  expect(external?.primitives.some(item => item.kind === 'text' && item.align === 'right' && item.text === '1')).toBe(true);
   expect(layoutLatexDrawing(make(data), 400, 13.28)).toEqual(external);
 });
 
@@ -61,4 +62,16 @@ test('outer captions and subfigure references follow their own source', () => {
   expect(latexNumbering(doc)?.labels.get('fig:existing')).toBe('1a');
   expect(latexNumbering(doc)?.labels.get('fig:proposed')).toBe('1b');
   expect(setLatexCaption(figure, 'Updated', false, 0)).toBe(figure.replace('Comparison', 'Updated'));
+});
+
+
+test('a wide figure moves to the next sheet while later paragraphs stay on the first', () => {
+  const result = paginateLatex([
+    { position: 0, top: 0, bottom: 20 },
+    { position: 12, top: 0, bottom: 40, flow: { kind: 'content', wideFloat: true } },
+    { position: 23, top: 20, bottom: 50 },
+  ], 100, 20, 0, 2);
+  expect(result.breaks).toEqual([]);
+  expect(result.wideFloats).toEqual([{ position: 12, sheet: 1, offset: 30, height: 40 }]);
+  expect(Math.ceil(result.pages / 2)).toBe(2);
 });
