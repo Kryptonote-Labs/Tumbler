@@ -16,6 +16,7 @@ from fontTools.pens.boundsPen import BoundsPen
 from fontTools.pens.t2CharStringPen import T2CharStringPen
 
 FACES = {
+    "cmr9": ("Tumbler TeX Roman 9", "Regular"),
     "cmr10": ("Tumbler TeX Roman", "Regular"),
     "cmbx10": ("Tumbler TeX Roman", "Bold"),
     "cmti10": ("Tumbler TeX Roman", "Italic"),

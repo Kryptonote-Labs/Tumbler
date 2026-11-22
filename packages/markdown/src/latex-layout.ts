@@ -222,11 +222,14 @@ export function latexPageLayout(
     leading,
     Math.floor((height - 3.5 * inch) / leading) * leading + fontSize * texPoint,
   );
-  const classTop = letter ? inch + 84 * texPoint : inch + (height - 2 * inch - 67 * texPoint - body) / 2 + 37 * texPoint;
+  const wholePoints = (length: number) => Math.trunc(length / texPoint) * texPoint;
+  const classTop = letter
+    ? inch + 84 * texPoint
+    : inch + wholePoints((height - 2 * inch - 67 * texPoint - body) / 2) + 37 * texPoint;
   const standardSide = Math.max(0, (width - Math.min(classWidth, width - 2 * inch)) / 2);
 
-  // The standard classes use 40% of the free width inside the binding in two-sided mode.
-  let left = twoSided ? inch + Math.trunc((0.8 * standardSide - inch) / texPoint) * texPoint : standardSide;
+  // The standard classes round their margin registers to whole TeX points after removing the origin.
+  let left = inch + wholePoints((twoSided ? 0.8 : 1) * standardSide - inch);
   let right = 2 * standardSide - left;
   let top = geometry ? height * 0.12 : classTop;
   let bottom = geometry ? height * 0.18 : height - classTop - body;
@@ -272,7 +275,7 @@ export function latexPageLayout(
     bottom = height * 0.18;
   }
   const evenLeft = twoSided
-    ? geometry ? right : inch + Math.trunc((right - inch) / texPoint) * texPoint
+    ? geometry ? right : inch + wholePoints(right - inch)
     : undefined;
   // A driver can ship a physical sheet independently of the lengths set by the class.
   // Geometry uses the paper primitives and replaces that driver default.

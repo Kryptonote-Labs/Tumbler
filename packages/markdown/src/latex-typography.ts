@@ -19,8 +19,14 @@ const classic = {
 
 export type LatexTypography = Readonly<{
   text: TextSize;
-  inTextFloat: Readonly<{ before: number; after: number; captionGap: number; captionShift: number }>;
-  subcaption: TextSize & { gap: number; shift: number };
+  inTextFloat: Readonly<{
+    before: number;
+    after: number;
+    followingLine: number;
+    captionGap: number;
+    captionShift: number;
+  }>;
+  subcaption: TextSize & { gap: number; shift: number; romanFont?: 'cmr9' | 'cmr10' };
   hiddenLinks: boolean;
   sections: readonly [SectionSize, SectionSize, SectionSize];
   table: Readonly<{
@@ -121,10 +127,17 @@ export function latexTypography(points: number, prefix: string, twoColumns = fal
     inTextFloat: {
       before: inTextSep - textDescent,
       after: inTextSep,
+      // A float's closed vertical box has zero depth, so the next paragraph gets a full baseline skip.
+      followingLine: textDescent,
       captionGap: 10 * texPoint + (caption ? 0 : textDescent),
       captionShift: caption ? captionShift(text) : 0,
     },
-    subcaption: { ...subcaption, gap: 6 * texPoint, shift: captionShift(subcaption) },
+    subcaption: {
+      ...subcaption,
+      gap: 6 * texPoint,
+      shift: captionShift(subcaption),
+      ...(usesClassicRoman ? { romanFont: points === 10 ? 'cmr9' : 'cmr10' } : {}),
+    },
     hiddenLinks: packages.some(item => item.name === 'hyperref' && item.options.includes('hidelinks')),
     sections: [
       section(points === 12 ? textSize(17.28, 22) : textSize(14.4, 18), 3.5, 2.3),

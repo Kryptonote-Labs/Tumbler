@@ -125,6 +125,14 @@ test('the column newsletter breaks the opening paragraph like pdfTeX with microt
 });
 
 
+test('the letter-paper article text block matches the standard class offsets', () => {
+  const paper = latexPageLayout(String.raw`\documentclass{article}`);
+  const point = 96 / 72.27;
+  expect(paper.left).toBeCloseTo(96 + 62 * point, 4);
+  expect(paper.top).toBeCloseTo(96 + 53 * point, 4);
+  expect(paper.width - paper.left - paper.right).toBeCloseTo(345 * point, 4);
+});
+
 test('a two-sided book keeps its text measure with alternating binding margins', () => {
   const paper = latexPageLayout(String.raw`\documentclass{book}`);
   const verso = latexSheetLayout(paper, 1);
