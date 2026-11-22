@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { latexTableGrid, readLatexTabular, setLatexTableCell, latexFlow, latexNumbering, latexPageLabel, latexPageLayout, latexPageNumbers, paginateLatex, parseLatex, serializeLatex } from '../src/latex';
+import { composeLatexParagraph, latexInterwordGlue, measureLatexRoman, hyphenateLatexEnglish, latexTableGrid, readLatexTabular, setLatexTableCell, latexFlow, latexNumbering, latexPageLabel, latexPageLayout, latexPageNumbers, paginateLatex, parseLatex, serializeLatex } from '../src/latex';
 
 test('document driver options select physical media without moving the class text block', () => {
   const base = String.raw`\documentclass[letterpaper]{article}`;
@@ -105,4 +105,21 @@ test('numbered theorem bodies and description items become native editable conte
   expect(doc.child(1).firstChild?.textContent).toContain('The sample variance');
   expect(doc.child(2).firstChild?.textContent).toBe('Mean squared deviation.');
   expect(latexNumbering(doc)?.labels.get('lem:sample')).toBe('1.1');
+});
+
+test('the column newsletter breaks the opening paragraph like pdfTeX with microtype', () => {
+  const text = 'The temporary zebra crossing at King Street will remain until the curb extension is finished. A site walk is planned for 17 June.';
+  const layout = latexPageLayout('\\documentclass[twocolumn]{article}\\usepackage{microtype}');
+  const size = layout.typography!;
+  const width = (layout.width - layout.left - layout.right - layout.columnGap) / 2;
+  const glue = { space: size.space, stretch: size.spaceStretch, shrink: size.spaceShrink, extra: size.spaceExtra };
+  expect(composeLatexParagraph(text, width, 0, {
+    ...glue, expansion: size.expansion, gapAfter: word => latexInterwordGlue(word, glue),
+    word: word => measureLatexRoman(word, size.romanFont!, size.text.size)!,
+    hyphenate: hyphenateLatexEnglish,
+  }).map(line => text.slice(line.from, line.to) + (line.hyphen ? '-' : ''))).toEqual([
+    'The temporary zebra crossing at King Street will',
+    'remain until the curb extension is finished. A site',
+    'walk is planned for 17 June.',
+  ]);
 });

@@ -34,13 +34,13 @@ function isLabelParagraph(node: Node) {
   return hasLabel;
 }
 
-function headingNumber(number: string, command: string) {
+function headingNumber(number: string, command: string, appendix?: boolean) {
   return (view: { dom: HTMLElement }) => {
     const element = view.dom.ownerDocument.createElement('span');
     element.className = 'latex-heading-number';
     element.dataset.command = command;
     element.textContent =
-      command === 'part' ? 'Part ' + number : command === 'chapter' ? 'Chapter ' + number : number;
+      command === 'part' ? 'Part ' + number : command === 'chapter' ? (appendix ? 'Appendix ' : 'Chapter ') + number : number;
     element.contentEditable = 'false';
     return element;
   };
@@ -66,11 +66,11 @@ function decorate(document: Node) {
         'data-latex-container-kind': kind,
       }));
     }
-    for (const [position, { number, command }] of numbers.headings)
+    for (const [position, { number, command, appendix }] of numbers.headings)
       if (number) decorations.push(
-        Decoration.widget(position + 1, headingNumber(number, command), {
+        Decoration.widget(position + 1, headingNumber(number, command, appendix), {
           side: -1,
-          key: command + ':' + number,
+          key: command + ':' + (appendix ? 'appendix:' : '') + number,
           ignoreSelection: true,
         }),
       );

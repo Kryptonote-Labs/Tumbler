@@ -27,7 +27,7 @@ import {
 
 export { latexEnvironmentName, latexEnvironmentOption } from './latex-environments';
 export { latexItemLabel, latexListOptions } from './latex-list';
-export { composeLatexParagraph, type LatexLine, type LatexTextMetrics } from './latex-lines';
+export { composeLatexParagraph, latexInterwordGlue, type LatexLine, type LatexTextMetrics } from './latex-lines';
 export { latexInlineFlow, latexInlineRule, latexLineBreakSkip, latexParagraphText, type LatexParagraphSegment } from './latex-paragraph';
 export { measureLatexRoman, type LatexRomanFont } from './latex-font-metrics';
 export { layoutLatexDrawing, readLatexDrawing } from './latex-drawings';
@@ -45,6 +45,7 @@ export type { LatexPageLayout, PageBlock, PageBreak, PageLine } from './latex-la
 export { latexBreakCommand, latexFlow, latexPageLabel, latexPageNumbers, readLatexBookMatter, readLatexClass } from './latex-flow';
 export type { LatexBlockFlow, LatexBreak, LatexPageNumber } from './latex-flow';
 export {
+  latexAuthorGroups,
   latexFieldSource,
   latexFieldText,
   latexPreambleCommand,

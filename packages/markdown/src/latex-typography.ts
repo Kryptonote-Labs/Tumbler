@@ -1,3 +1,4 @@
+import { readLatexPackages } from './latex-preamble';
 import { latexRomanGlue, type LatexRomanFont } from './latex-font-metrics';
 
 export const texPoint = 96 / 72.27;
@@ -38,9 +39,12 @@ export type LatexTypography = Readonly<{
   }>[];
   space: number;
   spaceStretch: number;
+  spaceExtra: number;
+  sentenceSpacing: boolean;
   spaceShrink: number;
   hyphenation?: 'english';
   romanFont?: LatexRomanFont;
+  expansion?: { stretch: number; shrink: number };
   inlineTitle: Readonly<{
     text: TextSize;
     author: TextSize;
@@ -54,7 +58,7 @@ export type LatexTypography = Readonly<{
 }>;
 
 /** Standard LaTeX size defaults and Computer Modern interword glue, in CSS pixels. */
-export function latexTypography(points: number, prefix: string): LatexTypography {
+export function latexTypography(points: number, prefix: string, twoColumns = false): LatexTypography {
   const { text, author, title } = classic[points === 12 ? 12 : points === 11 ? 11 : 10];
   const ex = text.size * (points === 12 ? 0.430554 : 0.430555);
   const section = (font: TextSize, before: number, after: number): SectionSize => ({
@@ -79,6 +83,9 @@ export function latexTypography(points: number, prefix: string): LatexTypography
     !/\\usepackage\s*(?:\[[^\]]*\]\s*)?\{[^}]*\b(?:fontenc|fontspec|lmodern|times|palatino|newtxtext|newpxtext)\b/.test(
       prefix,
     );
+  const microtype = readLatexPackages(prefix).find(item => item.name === 'microtype');
+  const expansion = microtype && usesClassicRoman && !microtype.options.some(option => /^expansion\s*=\s*false$/.test(option))
+    ? { stretch: 0.02, shrink: 0.02 } : undefined;
   const titleAscent = title.leading / 2 + 0.4 * title.size;
   const titleDescent = title.leading - titleAscent;
   const authorAscent = author.leading / 2 + 0.4 * author.size;
@@ -117,13 +124,15 @@ export function latexTypography(points: number, prefix: string): LatexTypography
       spaceBelowRule: 0.65 * ex,
     },
     ...latexRomanGlue(romanFont, text.size),
+    sentenceSpacing: !/\\frenchspacing\b/.test(prefix),
     ...(usesClassicRoman ? { romanFont } : {}),
+    ...(expansion ? { expansion } : {}),
     ...(english ? { hyphenation: 'english' } : {}),
     inlineTitle: {
       text: title,
       author,
       // The null box receives \topskip, then the title advances by its full baselineskip.
-      before: points * texPoint + 2 * text.size + title.leading - titleAscent,
+      before: (twoColumns ? 0 : points * texPoint) + 2 * text.size + title.leading - titleAscent,
       authorGap: 1.5 * text.size + author.leading - titleDescent - authorAscent,
       emptyAuthorGap: 1.5 * text.size + author.leading - titleDescent,
       dateGap: text.size,

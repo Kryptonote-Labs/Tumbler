@@ -2,20 +2,25 @@ export type LatexLine = Readonly<{
   from: number;
   to: number;
   spaceAdjustment: number;
+  letterSpacing?: number;
   hyphen?: true;
 }>;
+
+type Glue = { width: number; stretch: number; shrink: number };
 
 export type LatexTextMetrics = Readonly<{
   word(text: string, from: number, to: number): number;
   space: number;
   stretch: number;
   shrink: number;
+  expansion?: { stretch: number; shrink: number };
+  gapAfter?(word: string): Glue;
   hyphenate?(word: string): readonly number[];
 }>;
 
 type Word = { from: number; to: number; advance: number };
 type Break = { word: number; offset: number; hyphen?: true };
-type Choice = { end: number; adjustment: number; cost: number; badness: number };
+type Choice = { end: number; adjustment: number; cost: number; badness: number; letters?: number };
 
 function planLines(
   text: string,
@@ -27,6 +32,7 @@ function planLines(
 ) {
   const points: Break[] = [];
   const advances = [0];
+  const glue = [{ width: 0, stretch: 0, shrink: 0 }];
   for (const [index, word] of words.entries()) {
     const token = text.slice(word.from, word.to);
     points.push({ word: index, offset: word.from });
@@ -38,6 +44,9 @@ function planLines(
       }
     }
     advances.push(advances[index]! + word.advance);
+    const gap = metrics.gapAfter?.(token) ?? { width: metrics.space, stretch: metrics.stretch, shrink: metrics.shrink };
+    const prior = glue[index]!;
+    glue.push({ width: prior.width + gap.width, stretch: prior.stretch + gap.stretch, shrink: prior.shrink + gap.shrink });
   }
   points.push({ word: words.length, offset: text.length });
 
@@ -57,6 +66,11 @@ function planLines(
       const finalWord = last.hyphen ? last.word : last.word - 1;
       const finalOffset = last.hyphen ? last.offset : words[finalWord]!.to;
       const gaps = finalWord - first.word;
+      const beginGlue = glue[first.word]!;
+      const endGlue = glue[finalWord]!;
+      const gapWidth = endGlue.width - beginGlue.width;
+      const lineShrink = endGlue.shrink - beginGlue.shrink;
+      const lineStretch = endGlue.stretch - beginGlue.stretch;
       const advance =
         gaps === 0
           ? last.hyphen
@@ -65,7 +79,7 @@ function planLines(
           : firstWidth +
             advances[finalWord]! -
             advances[first.word + 1]! +
-            gaps * metrics.space +
+            gapWidth +
             (last.hyphen
               ? metrics.word(
                   text.slice(words[finalWord]!.from, finalOffset) + '-',
@@ -74,12 +88,14 @@ function planLines(
                 )
               : words[finalWord]!.advance);
       const remaining = available - advance;
-      if (gaps && remaining < -gaps * metrics.shrink) {
+      const glyphs = advance - gapWidth;
+      const expansion = glyphs * (remaining < 0 ? metrics.expansion?.shrink ?? 0 : metrics.expansion?.stretch ?? 0);
+      if ((gaps || expansion) && remaining < -(lineShrink + expansion)) {
         if (!last.hyphen) break;
         continue;
       }
       if (!best[end] || (last.hyphen && remaining < 0 && !gaps)) continue;
-      const capacity = gaps * (remaining < 0 ? metrics.shrink : metrics.stretch);
+      const capacity = (remaining < 0 ? lineShrink : lineStretch) + expansion;
       const ratio =
         remaining === 0
           ? 0
@@ -93,8 +109,11 @@ function planLines(
         (last.hyphen ? 50 ** 2 : 0) +
         (first.hyphen && last.hyphen ? 10_000 : 0);
       if (!choice || cost < choice.cost) {
-        const adjustment = gaps && (end !== terminal || remaining < 0) ? remaining / gaps : 0;
-        choice = { end, cost, adjustment, badness };
+        const justify = end !== terminal || remaining < 0;
+        const scaled = justify ? Math.sign(remaining) * Math.min(1, ratio) * expansion : 0;
+        const characters = scaled ? text.slice(first.offset, finalOffset).replace(/[ \t\r\n\f]+/g, ' ').length + Number(!!last.hyphen) : 0;
+        const adjustment = gaps ? (gapWidth - gaps * metrics.space + (justify ? remaining - scaled : 0)) / gaps : 0;
+        choice = { end, cost, adjustment, badness, ...(scaled && characters ? { letters: scaled / characters } : {}) };
       }
     }
     if (choice) best[start] = choice;
@@ -111,6 +130,7 @@ function planLines(
       from: points[start]!.offset,
       to: end.hyphen ? end.offset : words[end.word - 1]!.to,
       spaceAdjustment: choice.adjustment,
+      ...(choice.letters ? { letterSpacing: choice.letters } : {}),
       ...(end.hyphen ? { hyphen: true } : {}),
     });
     start = choice.end;
@@ -142,4 +162,17 @@ export function composeLatexParagraph(
     if (hyphenated && (!plain || hyphenated.cost < plain.cost)) return hyphenated.lines;
   }
   return plain?.lines ?? [];
+}
+
+/** Standard TeX space factors for plain Roman prose at a word boundary. */
+export function latexInterwordGlue(word: string, metrics: Pick<LatexTextMetrics, 'space' | 'stretch' | 'shrink'> & { extra: number }) {
+  const tail = word.replace(/[)\]'"’”]+$/, '');
+  const factor = /[A-Z][.?!:;,]$/.test(tail) ? 1
+    : /[.?!]$/.test(tail) ? 3
+      : tail.endsWith(':') ? 2 : tail.endsWith(';') ? 1.5 : tail.endsWith(',') ? 1.25 : 1;
+  return {
+    width: metrics.space + (factor === 3 ? metrics.extra : 0),
+    stretch: metrics.stretch * factor,
+    shrink: metrics.shrink / factor,
+  };
 }

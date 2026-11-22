@@ -5,10 +5,11 @@ export type LatexRomanFont = keyof typeof classicRoman;
 const fraction = 2 ** 20;
 
 export function latexRomanGlue(font: LatexRomanFont, size: number) {
-  const [space, stretch, shrink] = classicRoman[font].glue;
+  const [space, stretch, shrink, extra] = classicRoman[font].glue;
   return {
     space: (space! / fraction) * size,
     spaceStretch: (stretch! / fraction) * size,
+    spaceExtra: (extra! / fraction) * size,
     spaceShrink: (shrink! / fraction) * size,
   };
 }

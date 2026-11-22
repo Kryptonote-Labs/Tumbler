@@ -41,7 +41,7 @@ async function font(name: string) {
   return {
     widths: width,
     pairs,
-    glue: [fixed(parameters + 1), fixed(parameters + 2), fixed(parameters + 3)],
+    glue: [fixed(parameters + 1), fixed(parameters + 2), fixed(parameters + 3), fixed(parameters + 6)],
   };
 }
 

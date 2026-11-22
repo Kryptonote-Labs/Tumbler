@@ -1,3 +1,5 @@
+import { latexColourDefinition } from './latex-colour';
+import { latexLetterCommandAt } from './latex-letter';
 import { latexRomanNumber } from './latex-number-format';
 import type { Node } from 'prosemirror-model';
 import { commandEnd, groupAt, latexCommands, whitespaceEnd } from './latex-syntax';
@@ -8,6 +10,7 @@ type FolioStyle = 'roman' | 'arabic';
 /** A source command can occupy no space, or constrain where visible content flows. */
 export type LatexBlockFlow =
   | { kind: 'break'; boundary: LatexBreak }
+  | { kind: 'omit' }
   | {
       kind: 'content';
       before?: LatexBreak;
@@ -86,6 +89,11 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
 
   document.descendants((node, position) => {
     const source = node.type.name === 'latex_raw' ? String(node.attrs.source).trim() : '';
+    const letterCommand = name === 'letter' && latexLetterCommandAt(source, 0);
+    if ((standard && source === '\\appendix') || latexColourDefinition(source) || (letterCommand && ['address', 'signature', 'name', 'date'].includes(letterCommand.command))) {
+      flow.set(position, { kind: 'omit' });
+      return false;
+    }
     const matter = name === 'book' && readLatexBookMatter(source);
     if (matter) {
       flow.set(position, { kind: 'break', boundary: matter === 'back' ? chapterBoundary : recto ? 'recto' : 'page' });

@@ -7,7 +7,7 @@ import { commandEnd, environmentAt, groupAt } from './latex-syntax';
 
 export type LatexNumbering = {
   /** Heading positions and the number LaTeX prints, such as `2.1`, `A` or `I` for a part. */
-  headings: Map<number, { number: string; command: string }>;
+  headings: Map<number, { number: string; command: string; appendix?: true }>;
   /** Display equation positions, with one entry per row and null for an unnumbered row. */
   equations: Map<number, (string | null)[]>;
   /** Captioned figure and table positions. */
@@ -153,7 +153,7 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
         floatCount.figure = floatCount.table = 0;
       }
       current = value(name);
-      result.headings.set(position, { number: current, command: name });
+      result.headings.set(position, { number: current, command: name, ...(appendix && name === 'chapter' ? { appendix: true } : {}) });
       return true;
     }
     if (type === 'latex_display_math') {

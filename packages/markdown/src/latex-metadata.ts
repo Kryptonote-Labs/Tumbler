@@ -1,4 +1,4 @@
-import { argumentAt, commandEnd, groupAt, lineEnd, verbatimEnd } from './latex-syntax';
+import { argumentAt, commandEnd, groupAt, latexCommands, lineEnd, verbatimEnd } from './latex-syntax';
 
 /** The argument of a preamble command, with offsets into the preamble source. */
 export type LatexCommandArgument = {
@@ -98,4 +98,20 @@ function balanced(source: string) {
     else if (source[position] === '}' && --depth < 0) return false;
   }
   return depth === 0;
+}
+
+/** Keep the actual author text and its separators while displaying the authors side by side. */
+export function latexAuthorGroups(source: string) {
+  const parts: { text: string; separator: boolean }[] = [];
+  let position = 0;
+  for (const command of latexCommands(source)) {
+    if (command.name !== 'and') continue;
+    parts.push({ text: source.slice(position, command.start), separator: false });
+    parts.push({ text: source.slice(command.start, command.end), separator: true });
+    position = command.end;
+  }
+  if (position) {
+    parts.push({ text: source.slice(position), separator: false });
+    return parts;
+  }
 }

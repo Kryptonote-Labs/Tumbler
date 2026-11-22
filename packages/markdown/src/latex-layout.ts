@@ -182,12 +182,12 @@ export function latexPageLayout(
     width = size[0] * millimeter;
     height = size[1] * millimeter;
   }
-  const typography = latexTypography(slide && !classOptions.includes('10pt') && !classOptions.includes('12pt') ? 11 : fontSize, source);
+  const twoColumns = classOptions.includes('twocolumn');
+  const typography = latexTypography(slide && !classOptions.includes('10pt') && !classOptions.includes('12pt') ? 11 : fontSize, source, twoColumns);
   const { size: font, leading } = typography.text;
   // Standard Computer Modern classes set lengths using the font's quad.
   const quad = (fontSize === 12 ? 11.74988 : fontSize === 11 ? 10.95003 : 10) * texPoint;
   const letter = documentClass === 'letter';
-  const twoColumns = classOptions.includes('twocolumn');
   const defaultIndent = twoColumns
     ? quad
     : fontSize === 12
@@ -387,6 +387,7 @@ export function paginateLatex(
   }
   for (const block of blocks) {
     const flow = block.flow;
+    if (flow?.kind === 'omit') continue;
     if (flow?.kind === 'break') {
       if (occupied) pending = strongerBreak(pending, flow.boundary);
       continue;
