@@ -36,8 +36,8 @@ a protected document; password-required and invalid-password errors are distinct
 
 `PdfInterpreter.page(index)` compiles positioned glyphs, paths, images, Form XObjects and
 annotation appearances into a source-aware scene. Glyphs retain character codes, CIDs, Unicode,
-source ranges, font metrics and explicit transforms. Embedded TrueType/OpenType/CFF outlines are
-painted directly. Standard unembedded fonts use individual host glyphs with PDF advances.
+source ranges, font metrics and explicit transforms. Embedded TrueType, OpenType, CFF and Type 1
+outlines are painted directly. Standard unembedded fonts use individual host glyphs with PDF advances.
 `paintPdfPage` accepts a canvas and replaceable image/path host; it never asks the browser to
 lay out PDF text. Its optional `region: {x, y, width, height}` paints an integer device-pixel
 rectangle at the supplied scale, including translated clips, images and shadings. This allows
@@ -50,7 +50,7 @@ to that worker; it contains credentials and must not be logged, persisted or sen
 `PdfInterpreter.executionLimits` returns the budget to use in an isolated interpreter.
 
 This is an initial ISO 32000-1 implementation, not complete PDF conformance. Unsupported content
-raises `PdfError` instead of silently omitting marks. Current gaps include Type 1 font programs,
+raises `PdfError` instead of silently omitting marks. Current gaps include specialized Type 1 multiple-master procedures,
 predefined CJK CMaps, tiling patterns, transparency groups/soft masks, text clipping, mesh
 shadings, PostScript calculator functions, filtered inline images and JPX/JBIG2/CCITT codecs.
 ICCBased spaces currently use their standard alternate space, not a colour-managed ICC engine.

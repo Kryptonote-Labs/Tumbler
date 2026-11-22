@@ -1,8 +1,23 @@
+export { interpretLatexParagraphMacro, interpretLatexText, readLatexTextMacros, type LatexPrintedText } from './latex-macros';
+import { readLatexEnumitem } from './latex-list';
+import { readLatexBookMatter, readLatexClass } from './latex-flow';
+import { latexColourDefinition, readLatexColours } from './latex-colour';
+import { readLatexTheorems, latexBoxTitle, latexEnvironmentName } from './latex-environments';
+import { latexLetterCommandAt } from './latex-letter';
+export { latexColourDefinition } from './latex-colour';
+export type { LatexLetterPart } from './latex-letter';
+import { usesLatexPackage } from './latex-preamble';
+import { latexFormattingAlias, readLatexParagraphMacro, readLatexTextMacros } from './latex-macros';
 import { Fragment, type Mark, type Node } from 'prosemirror-model';
 import { Transform } from 'prosemirror-transform';
 import { updateLatexBoundary, updateLatexNodeSource } from './latex-boundary-step';
+import { LatexProjectFileStep, updateLatexProjectFile } from './latex-project-step';
 export { updateLatexBoundary, updateLatexNodeSource } from './latex-boundary-step';
 import { noteSchema as schema } from './index';
+import {
+  latexEffectivePrefix, latexProjectFile, readLatexInclude, resolveLatexProjectPrefix, type LatexProject,
+} from './latex-project';
+export { isLatexProjectPath, latexEffectivePrefix, latexProjectEntry, resolveLatexProjectPath } from './latex-project';
 import {
   argumentAt,
   commandEnd,
@@ -15,9 +30,27 @@ import {
   whitespaceEnd,
 } from './latex-syntax';
 
-export { latexPageLayout, latexPaperSettings, paginateLatex } from './latex-layout';
+export { latexEnvironmentName, latexEnvironmentOption } from './latex-environments';
+export { latexItemLabel, latexListOptions } from './latex-list';
+export { composeLatexParagraph, latexInterwordGlue, type LatexLine, type LatexTextMetrics } from './latex-lines';
+export { latexInlineFlow, latexInlineRule, latexLineBreakSkip, latexParagraphText, type LatexParagraphSegment } from './latex-paragraph';
+export { measureLatexRoman, type LatexRomanFont } from './latex-font-metrics';
+export { layoutLatexDrawing, readLatexDrawing } from './latex-drawings';
+export { readLatexCodeBlock } from './latex-code';
+export { latexLength } from './latex-lengths';
+export { latexTableGrid } from './latex-table-grid';
+export { latexHorizontalRule, latexNaturalColumns, latexNaturalTableWidths } from './latex-tables';
+export { hyphenateLatexEnglish } from './latex-hyphenation';
+export { latexBeamerLayout, readLatexBeamerFrame } from './latex-beamer';
+export { layoutLatexTikzStateDiagram, readLatexTikzStateDiagram } from './latex-tikz';
+export type { LatexTypography } from './latex-typography';
+export { latexLandscapeLayout, latexPageLayout, latexPaperSettings, latexSheetLayout, paginateLatex } from './latex-layout';
+export { paginateLatexRegions, type LatexRegionBlock } from './latex-page-regions';
 export type { LatexPageLayout, PageBlock, PageBreak, PageLine } from './latex-layout';
+export { latexBreakCommand, latexFlow, latexPageLabel, latexPageNumbers, readLatexBookMatter, readLatexClass } from './latex-flow';
+export type { LatexBlockFlow, LatexBreak, LatexPageNumber } from './latex-flow';
 export {
+  latexAuthorGroups,
   latexFieldSource,
   latexFieldText,
   latexPreambleCommand,
@@ -42,6 +75,7 @@ export {
   latexFigureSource,
   readLatexCaption,
   readLatexFigure,
+  readLatexSubfigures,
   setLatexCaption,
   setLatexFigureImage,
   setLatexFigureWidth,
@@ -53,6 +87,8 @@ export {
   insertLatexTableRow,
   latexTableCellText,
   latexTableSource,
+  readLatexMulticolumn,
+  readLatexTableBlock,
   readLatexTabular,
   setLatexTableCell,
   writeLatexTabular,
@@ -76,7 +112,7 @@ const displayEnvironments = new Set([
   'gather',
   'gather*',
 ]);
-const textEnvironments = new Set(['quote', 'quotation', 'abstract']);
+const textEnvironments = new Set(['quote', 'quotation', 'abstract', 'landscape']);
 const escaped = new Map([
   ['\\%', '%'],
   ['\\$', '$'],
@@ -90,6 +126,17 @@ const escaped = new Map([
   ['\\textasciitilde{}', '~'],
   ['~', '\u00a0'],
 ]);
+const textLiterals = [
+  // The browser's DOM parser normalizes carriage returns even when it preserves newlines.
+  ['\r\n', ' '],
+  ['\r', ' '],
+  // Computer Modern interprets these spellings as single glyphs.
+  ['---', '—'],
+  ['--', '–'],
+  ['``', '“'],
+  ["''", '”'],
+] as const;
+
 const escapeText = new Map([...escaped].map(([source, value]) => [value, source]));
 
 export function isLatex(document: Node) {
@@ -98,6 +145,7 @@ export function isLatex(document: Node) {
 
 function inline(
   source: string,
+  context: SourceContext,
   depth = 0,
   marks: readonly Mark[] = [],
   order = { next: 0 },
@@ -111,6 +159,17 @@ function inline(
   };
   for (let position = 0; position < source.length; position++) {
     const character = source[position]!;
+    const literal =
+      character === '\r' || character === '-' || character === '`' || character === "'"
+        ? textLiterals.find(([input]) => source.startsWith(input, position))
+        : undefined;
+    if (literal) {
+      flush(position);
+      nodes.push(schema.nodes.latex_inline!.create({ source: literal[0], label: literal[1] }, null, marks));
+      plain = position + literal[0].length;
+      position = plain - 1;
+      continue;
+    }
     if (!'\\%${}#&_^~'.includes(character)) continue;
     flush(position);
     const commandLength = commandEnd(source, position);
@@ -133,22 +192,21 @@ function inline(
       );
       end = formulaEnd + close.length;
     } else {
-      const style =
-        command === '\\textbf'
-          ? 'strong'
-          : ['\\emph', '\\textit'].includes(command)
-            ? 'em'
-            : undefined;
-      const argument = style && argumentAt(source, end);
+      const colourName = command === '\\textcolor' && groupAt(source, whitespaceEnd(source, end));
+      const colour = colourName && context.colours.get(source.slice(colourName.from, colourName.to).trim());
+      const style = colour ? 'colour' : latexFormattingAlias(command.slice(1), context.macros);
+      const argument = style && groupAt(source, whitespaceEnd(source, colourName ? colourName.end : end));
       if (argument && argument.from < argument.to) {
         const formatting = schema.marks.latex_style!.create({
           style,
+          ...(colour ? { colour } : {}),
           order: order.next++,
           open: source.slice(position, argument.from),
           close: '}',
         });
         inline(
           source.slice(argument.from, argument.to),
+          context,
           depth + 1,
           [...marks, formatting],
           order,
@@ -195,6 +253,10 @@ const blockCommands = new Set([
   '\\appendix',
   '\\newpage',
   '\\clearpage',
+  '\\cleardoublepage',
+  '\\frontmatter',
+  '\\mainmatter',
+  '\\backmatter',
 ]);
 
 // Bibliography commands set the reference list where they stand, so they are blocks. A style
@@ -227,25 +289,29 @@ function headingAt(source: string, position: number) {
   if (group) return { ...group, level };
 }
 
-function blockStart(source: string, position: number) {
+function blockStart(source: string, position: number, context: SourceContext) {
   if (source.startsWith('$$', position) || source.startsWith('\\[', position)) return true;
   if (source[position] !== '\\') return false;
   const command = source.slice(position, commandEnd(source, position));
   return (
     command === '\\begin' ||
+    (!!context.include && !!readLatexInclude(source, position)) ||
+    !!readLatexParagraphMacro(source, context.macros, position) ||
     blockCommands.has(command) ||
     bibliographyCommands.has(command) ||
-    headingLevel(command.slice(1)) > 0
+    headingLevel(command.slice(1)) > 0 ||
+    (context.letter && !!latexLetterCommandAt(source, position)) ||
+    (command === '\\definecolor' && !!latexColourDefinition(source, position))
   );
 }
 
-function paragraphEnd(source: string, position: number) {
+function paragraphEnd(source: string, position: number, context: SourceContext) {
   const blank = /\r?\n[^\S\r\n]*\r?\n/y;
   const unmatched = new Set<string>();
   for (let next = position; next < source.length; next++) {
     blank.lastIndex = next;
     if (blank.test(source)) return next;
-    if (next > position && blockStart(source, next)) return next;
+    if (next > position && blockStart(source, next, context)) return next;
     const character = source[next];
     if (character === '%') next = lineEnd(source, next);
     else if (character === '$' || source.startsWith('\\(', next)) {
@@ -262,7 +328,23 @@ function paragraphEnd(source: string, position: number) {
   return source.length;
 }
 
-function listItems(source: string, depth: number): { items: Node[]; tail: string } | undefined {
+type SourceContext = {
+  macros: ReturnType<typeof readLatexTextMacros>;
+  enumitem: boolean;
+  letter: boolean;
+  colours: ReturnType<typeof readLatexColours>;
+  theorems: ReturnType<typeof readLatexTheorems>;
+  proof: boolean;
+  boxes: boolean;
+  include?: (name: string, depth: number) => { path: string; nodes: Node[]; tail: string } | undefined;
+};
+
+function sourceContext(prefix: string): SourceContext {
+  return { macros: readLatexTextMacros(prefix), enumitem: usesLatexPackage(prefix, 'enumitem'), letter: readLatexClass(prefix).name === 'letter', colours: readLatexColours(prefix), theorems: readLatexTheorems(prefix),
+    proof: usesLatexPackage(prefix, 'amsthm'), boxes: usesLatexPackage(prefix, 'tcolorbox') };
+}
+
+function listItems(source: string, context: SourceContext, depth: number, description = false): { items: Node[]; tail: string } | undefined {
   let position = whitespaceEnd(source, 0);
   let before = source.slice(0, position);
   const items: Node[] = [];
@@ -272,8 +354,8 @@ function listItems(source: string, depth: number): { items: Node[]; tail: string
     if (source.slice(position, command) !== '\\item') return;
     const optionStart = whitespaceEnd(source, command);
     const option = groupAt(source, optionStart, '[', ']');
-    if (option) return; // Custom item labels need the original list layout.
-    const start = whitespaceEnd(source, command);
+    if (option && !description) return;
+    const start = whitespaceEnd(source, option?.end ?? command);
     let next = start;
     while (next < source.length) {
       if (source[next] === '%') next = lineEnd(source, next);
@@ -291,7 +373,7 @@ function listItems(source: string, depth: number): { items: Node[]; tail: string
       } else if (source[next] === '{') next = groupAt(source, next)?.end ?? next + 1;
       else next++;
     }
-    const content = blocks(source.slice(start, next), depth + 1);
+    const content = blocks(source.slice(start, next), context, depth + 1);
     if (!content.nodes.length) content.nodes.push(schema.nodes.paragraph!.create({ before: '' }));
     if (content.nodes[0]!.type !== schema.nodes.paragraph)
       content.nodes.unshift(schema.nodes.paragraph!.create({ before: '' }));
@@ -311,7 +393,7 @@ function listItems(source: string, depth: number): { items: Node[]; tail: string
   if (items.length) return { items, tail };
 }
 
-function environmentBlock(source: string, position: number, before: string, depth: number) {
+function environmentBlock(source: string, position: number, before: string, context: SourceContext, depth: number) {
   if (source.slice(position, commandEnd(source, position)) !== '\\begin') return;
   const environment = environmentAt(source, position);
   if (!environment)
@@ -331,24 +413,60 @@ function environmentBlock(source: string, position: number, before: string, dept
       node: schema.nodes.latex_display_math!.create({ before, open, close, source: content }),
       end,
     };
-  if ((name === 'itemize' || name === 'enumerate') && depth < 64) {
-    const list = listItems(content, depth);
-    if (list)
+  const description = name === 'description';
+  if ((name === 'itemize' || name === 'enumerate' || description) && depth < 64) {
+    const option = context.enumitem && groupAt(source, whitespaceEnd(source, from), '[', ']');
+    const settings = option ? source.slice(option.from, option.to) : '';
+    const spec = option && !description && readLatexEnumitem(settings);
+    const valid = !option || (option.end <= to && (
+      description ? /^style\s*=\s*nextline$/.test(settings.trim()) :
+        spec && (name === 'enumerate' || (!spec.label && spec.start === undefined))
+    ));
+    const bodyStart = option ? option.end : from;
+    const list = valid && listItems(source.slice(bodyStart, to), { ...context, colours: new Map(context.colours) }, depth, description);
+    if (list) return {
+      node: schema.nodes[name === 'enumerate' ? 'ordered_list' : 'bullet_list']!.create(
+        { before, open: source.slice(position, bodyStart), close: list.tail + close, ...(spec && spec.start !== undefined ? {order: spec.start} : {}) },
+        list.items,
+      ),
+      end,
+    };
+  }
+  if (context.letter && name === 'letter' && depth < 64) {
+    const recipient = groupAt(source, whitespaceEnd(source, from));
+    if (recipient && recipient.end <= to) {
+      const body = blocks(source.slice(recipient.end, to), { ...context, colours: new Map(context.colours) }, depth + 1);
+      if (!body.nodes.length) body.nodes.push(schema.nodes.paragraph!.create({ before: '' }));
       return {
-        node: schema.nodes[name === 'itemize' ? 'bullet_list' : 'ordered_list']!.create(
-          { before, open, close: list.tail + close },
-          list.items,
-        ),
+        node: schema.nodes.latex_container!.create({
+          before, open: source.slice(position, recipient.end), close: body.tail + close,
+        }, body.nodes),
         end,
       };
+    }
+  }
+  const theorem = context.theorems.has(name) || (context.proof && name === 'proof');
+  const box = context.boxes && name === 'tcolorbox';
+  if ((theorem || box) && depth < 64) {
+    const option = groupAt(source, whitespaceEnd(source, from), '[', ']');
+    const bodyStart = option?.end ?? from;
+    const opener = source.slice(position, bodyStart);
+    if (bodyStart <= to && (!box || !option || latexBoxTitle(opener) !== undefined)) {
+      const body = blocks(source.slice(bodyStart, to), { ...context, colours: new Map(context.colours) }, depth + 1);
+      if (!body.nodes.length) body.nodes.push(schema.nodes.paragraph!.create({ before: '' }));
+      return {
+        node: schema.nodes.latex_container!.create({ before, open: opener, close: body.tail + close }, body.nodes),
+        end,
+      };
+    }
   }
   // Text environments edit as native blocks. The open and close source keep the environment, and
   // an empty one, such as a new abstract, gets an empty paragraph to type into.
   if (textEnvironments.has(name) && depth < 64) {
-    const quote = blocks(content, depth + 1);
+    const quote = blocks(content, { ...context, colours: new Map(context.colours) }, depth + 1);
     if (!quote.nodes.length) quote.nodes.push(schema.nodes.paragraph!.create({ before: '' }));
     return {
-      node: schema.nodes.blockquote!.create(
+      node: schema.nodes[name === 'landscape' ? 'latex_landscape' : 'blockquote']!.create(
         {
           before,
           open,
@@ -365,7 +483,7 @@ function environmentBlock(source: string, position: number, before: string, dept
   };
 }
 
-function blocks(source: string, depth = 0): { nodes: Node[]; tail: string } {
+function blocks(source: string, context: SourceContext, depth = 0): { nodes: Node[]; tail: string } {
   const nodes: Node[] = [];
   let position = 0;
   while (position < source.length) {
@@ -376,6 +494,38 @@ function blocks(source: string, depth = 0): { nodes: Node[]; tail: string } {
     if (blockCommands.has(command)) {
       nodes.push(schema.nodes.latex_raw!.create({ before, source: command }));
       position = start + command.length;
+      continue;
+    }
+    if (context.include) {
+      const call = readLatexInclude(source, start);
+      if (call) {
+        const fragment = context.include(call.name, depth);
+        nodes.push(fragment
+          ? schema.nodes.latex_include!.create({
+              before, open: source.slice(start, call.end), close: fragment.tail, path: fragment.path,
+            }, fragment.nodes)
+          : schema.nodes.latex_raw!.create({ before, source: source.slice(start, call.end) }));
+        position = call.end;
+        continue;
+      }
+    }
+    const macro = readLatexParagraphMacro(source, context.macros, start);
+    if (macro) {
+      nodes.push(schema.nodes.latex_raw!.create({ before, source: source.slice(start, macro.end) }));
+      position = macro.end;
+      continue;
+    }
+    const colour = command === '\\definecolor' && latexColourDefinition(source, start);
+    if (colour) {
+      context.colours.set(colour.name, colour.colour);
+      nodes.push(schema.nodes.latex_raw!.create({ before, source: source.slice(start, colour.end) }));
+      position = colour.end;
+      continue;
+    }
+    const letterCommand = context.letter && latexLetterCommandAt(source, start);
+    if (letterCommand) {
+      nodes.push(schema.nodes.latex_raw!.create({ before, source: source.slice(start, letterCommand.end) }));
+      position = letterCommand.end;
       continue;
     }
     const bibliography = bibliographyCommands.has(command) ? bibliographyAt(source, start) : undefined;
@@ -394,7 +544,7 @@ function blocks(source: string, depth = 0): { nodes: Node[]; tail: string } {
             open: source.slice(start, heading.from),
             close: '}',
           },
-          inline(source.slice(heading.from, heading.to)),
+          inline(source.slice(heading.from, heading.to), context),
         ),
       );
       position = heading.end;
@@ -422,15 +572,15 @@ function blocks(source: string, depth = 0): { nodes: Node[]; tail: string } {
       }
     }
     const environment =
-      source[start] === '\\' ? environmentBlock(source, start, before, depth) : undefined;
+      source[start] === '\\' ? environmentBlock(source, start, before, context, depth) : undefined;
     if (environment) {
       nodes.push(environment.node);
       position = environment.end;
       continue;
     }
-    const end = paragraphEnd(source, start);
+    const end = paragraphEnd(source, start, context);
     const content = source.slice(start, end).trimEnd();
-    nodes.push(schema.nodes.paragraph!.create({ before }, inline(content)));
+    nodes.push(schema.nodes.paragraph!.create({ before }, inline(content, context)));
     position = start + content.length;
   }
   return { nodes, tail: '' };
@@ -439,8 +589,14 @@ function blocks(source: string, depth = 0): { nodes: Node[]; tail: string } {
 /** Parse common constructs structurally and retain unsupported TeX as inert, verbatim nodes. */
 export function parseLatex(source: string): Node {
   const body = documentBody(source);
-  const { nodes, tail } = blocks(body ? source.slice(body.from, body.to) : source);
   const prefix = body ? source.slice(0, body.from) : '';
+  return parseDocument(source, body, prefix, sourceContext(prefix));
+}
+
+function parseDocument(
+  source: string, body: ReturnType<typeof documentBody>, prefix: string, context: SourceContext,
+) {
+  const { nodes, tail } = blocks(body ? source.slice(body.from, body.to) : source, context);
   const suffix = tail + (body ? source.slice(body.to) : '');
   if (!nodes.length) {
     // In a blank document, typing starts after the whitespace already following the opener.
@@ -452,6 +608,36 @@ export function parseLatex(source: string): Node {
     );
   }
   return schema.topNodeType.create({ format: 'latex', prefix, suffix }, nodes);
+}
+
+/** Load literal included files as editable nodes in the same Notes document. */
+export function parseLatexProject(entry: string, files: ReadonlyMap<string, string>) {
+  const source = files.get(entry);
+  if (source === undefined) throw new RangeError('The main LaTeX file is missing.');
+  const body = documentBody(source);
+  const prefix = body ? source.slice(0, body.from) : '';
+  const used = new Set([entry]);
+  const context = sourceContext(resolveLatexProjectPrefix(prefix, entry, files));
+  let from = entry;
+  context.include = (name, depth) => {
+    const path = latexProjectFile(files, entry, from, name, '.tex');
+    if (!path || used.has(path) || depth >= 64) return;
+    const text = files.get(path)!;
+    if (documentBody(text)) return;
+    used.add(path);
+    const parent = from;
+    from = path;
+    const parsed = blocks(text, context, depth + 1);
+    from = parent;
+    if (!parsed.nodes.length) parsed.nodes.push(schema.nodes.paragraph!.create({ before: '' }));
+    return { path, ...parsed };
+  };
+  const parsed = parseDocument(source, body, prefix, context);
+  const latexProject: LatexProject = {
+    entry,
+    files: Object.fromEntries([...files].filter(([path]) => !used.has(path))),
+  };
+  return parsed.type.create({ ...parsed.attrs, latexProject }, parsed.content);
 }
 
 function inlineSource(node: Node) {
@@ -499,6 +685,9 @@ function blockSource(node: Node): string {
   const { open, close } = node.attrs;
   let result: string;
   switch (node.type.name) {
+    case 'latex_include':
+      result = open;
+      break;
     case 'latex_raw':
       result = node.attrs.source;
       break;
@@ -512,13 +701,15 @@ function blockSource(node: Node): string {
     }
     case 'bullet_list':
     case 'ordered_list':
+    case 'latex_landscape':
+    case 'latex_container':
     case 'blockquote': {
       const environment =
         node.type.name === 'bullet_list'
           ? 'itemize'
           : node.type.name === 'ordered_list'
             ? 'enumerate'
-            : 'quote';
+            : node.type.name === 'latex_landscape' ? 'landscape' : 'quote';
       result =
         (open ?? '\\begin{' + environment + '}\n') +
         childrenSource(node) +
@@ -549,12 +740,135 @@ export function serializeLatex(document: Node) {
   return document.attrs.prefix + childrenSource(document) + document.attrs.suffix;
 }
 
+/** Promote supported structures stored as opaque blocks by an older editor. */
+export function materializeLatexStructures(document: Node): Transform {
+  const transform = new Transform(document);
+  const context = sourceContext(latexEffectivePrefix(document));
+  document.descendants((node, position) => {
+    const environment = node.type.name === 'latex_raw' ? latexEnvironmentName(node.attrs.source) : undefined;
+    const raw = !!environment && (
+      ['landscape', 'itemize', 'enumerate', 'description'].includes(environment) ||
+      (context.letter && environment === 'letter') || (context.boxes && environment === 'tcolorbox') ||
+      (context.proof && environment === 'proof') || context.theorems.has(environment)
+    );
+    const matter = node.type.name === 'paragraph' && node.children.some(child =>
+      child.type.name === 'latex_inline' && readLatexBookMatter(child.attrs.source));
+    const paragraphMacro = node.type.name === 'paragraph' && node.children.some(child =>
+      child.type.name === 'latex_inline' && readLatexParagraphMacro(child.attrs.source, context.macros));
+    const letter = context.letter && node.type.name === 'paragraph' && node.children.some(child =>
+      child.type.name === 'latex_inline' && latexLetterCommandAt(child.attrs.source, 0));
+    if (node.type.name === 'latex_raw' && typeof node.attrs.source === 'string') {
+      const colour = latexColourDefinition(node.attrs.source);
+      if (colour) context.colours.set(colour.name, colour.colour);
+    }
+    const styled = node.type.name === 'paragraph' && node.children.some(child =>
+      child.type.name === 'latex_inline' && /^\\(?:definecolor|textcolor)\b/.test(child.attrs.source));
+    if (!raw && !matter && !letter && !styled && !paragraphMacro) return;
+    const source = blockSource(node);
+    const parsed = blocks(source, context);
+    if (!parsed.nodes.length || (raw && parsed.nodes.every(block => block.type.name === 'latex_raw'))) return;
+    const reparsed = parsed.nodes.map(block => (block.attrs.before ?? '') + blockSource(block)).join('') + parsed.tail;
+    if (reparsed !== source || parsed.tail) return;
+    const first = parsed.nodes[0]!;
+    if (parsed.nodes.length === 1 && first.type === node.type && first.content.eq(node.content)) return;
+    parsed.nodes[0] = first.type.create({
+      ...first.attrs,
+      before: (node.attrs.before ?? '') + (first.attrs.before ?? ''),
+    }, first.content);
+    const start = transform.mapping.map(position);
+    transform.replaceWith(start, start + node.nodeSize, parsed.nodes);
+  });
+  return transform;
+}
+
+/** The authored files in one Notes revision, each at its original relative path. */
+export function serializeLatexProject(document: Node) {
+  const project: LatexProject | null = document.attrs.latexProject ?? null;
+  if (!project) return;
+  const files = new Map(Object.entries(project.files));
+  files.set(project.entry, serializeLatex(document));
+  document.descendants(node => {
+    if (node.type.name === 'latex_include')
+      files.set(node.attrs.path, childrenSource(node) + (node.attrs.close ?? ''));
+  });
+  return { entry: project.entry, files };
+}
+
+function removedLatexIncludes(before: Node, after: Node) {
+  const from = before.content.findDiffStart(after.content);
+  const to = before.content.findDiffEnd(after.content)?.a;
+  if (from === null || to === undefined || from >= to) return [];
+  const candidates: Node[] = [];
+  before.nodesBetween(from, to, (node, position) => {
+    if (node.type.name === 'latex_include' && position >= from && position + node.nodeSize <= to)
+      candidates.push(node);
+    return !node.isTextblock;
+  });
+  if (!candidates.length) return candidates;
+  const active = new Set<string>();
+  after.descendants(node => {
+    if (node.type.name === 'latex_include') active.add(node.attrs.path);
+    return !node.isTextblock;
+  });
+  return candidates.filter(node => !active.has(node.attrs.path));
+}
+
+/** Removing an include reference detaches its source file from the document body. */
+export function retainDetachedLatexFiles(transform: Transform, before: Node) {
+  const original: LatexProject | null = before.attrs.latexProject;
+  const project: LatexProject | null = transform.doc.attrs.latexProject;
+  if (!original || project?.entry !== original.entry) return;
+  for (const node of removedLatexIncludes(before, transform.doc)) {
+    const path: string = node.attrs.path;
+    if (path !== project.entry && project.files[path] === original.files[path]) {
+      const source = childrenSource(node) + (node.attrs.close ?? '');
+      updateLatexProjectFile(transform, path, source, true);
+    }
+  }
+}
+
+/** A replayed unlink must save the chapter as it was after receiving other editors' changes. */
+export function refreshRebasedLatexFiles(transform: Transform, rebased: Transform) {
+  const snapshots = new Map<string, LatexProjectFileStep>();
+  for (const step of rebased.steps) {
+    if (!(step instanceof LatexProjectFileStep)) continue;
+    if (step.retaining) snapshots.set(step.path, step);
+    else snapshots.delete(step.path);
+  }
+  if (!snapshots.size) return;
+  const recovered = new Map<string, Node>();
+  for (let index = 0; index < rebased.steps.length; index++) {
+    const before = rebased.docs[index]!;
+    const after = rebased.docs[index + 1] ?? rebased.doc;
+    for (const node of removedLatexIncludes(before, after)) {
+      const path: string = node.attrs.path;
+      if (snapshots.has(path)) recovered.set(path, node);
+    }
+  }
+  const project: LatexProject | null = transform.doc.attrs.latexProject;
+  for (const [path, node] of recovered) {
+    if (project?.files[path] === snapshots.get(path)?.after)
+      updateLatexProjectFile(transform, path, childrenSource(node) + (node.attrs.close ?? ''), true);
+  }
+}
+
 /** Source mode and the hosted CLI turn source changes into normal, mappable editor steps. */
-export function replaceLatexSource(document: Node, source: string): Transform {
-  const next = parseLatex(source);
+export function replaceLatexSource(document: Node, source: string, file?: string): Transform {
+  const project = serializeLatexProject(document);
+  if (project) project.files.set(file ?? project.entry, source);
+  const next = project ? parseLatexProject(project.entry, project.files) : parseLatex(source);
   const transform = new Transform(document);
   updateLatexBoundary(transform, 'prefix', next.attrs.prefix);
   updateLatexBoundary(transform, 'suffix', next.attrs.suffix);
+  const previousProject: LatexProject | null = document.attrs.latexProject;
+  const nextProject: LatexProject | null = next.attrs.latexProject;
+  if (previousProject && nextProject) {
+    for (const path of new Set([...Object.keys(previousProject.files), ...Object.keys(nextProject.files)])) {
+      const value = Object.hasOwn(nextProject.files, path) ? nextProject.files[path]! : null;
+      const detaching = value !== null && !Object.hasOwn(previousProject.files, path) && path !== file;
+      updateLatexProjectFile(transform, path, value, detaching);
+    }
+  }
 
   const from = document.content.findDiffStart(next.content);
   if (from === null) return transform;
@@ -609,6 +923,7 @@ const containerDefaults: Record<string, string> = {
   bullet_list: '\\begin{itemize}\n',
   ordered_list: '\\begin{enumerate}\n',
   blockquote: '\\begin{quote}\n',
+  latex_landscape: '\\begin{landscape}\n',
   list_item: '\\item ',
 };
 

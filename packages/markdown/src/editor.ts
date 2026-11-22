@@ -3,6 +3,7 @@ import { latexState } from './latex-editor';
 export {
   insertLatexMath,
   latexHeading,
+  latexLetterPartSpec,
   latexNumberSpec,
   latexStyleActive,
   toggleLatexStyle,

@@ -1,7 +1,10 @@
+import { readLatexClass, type LatexBlockFlow, type LatexBreak } from './latex-flow';
+import { latexTypography, texPoint, type LatexTypography } from './latex-typography';
+import { latexLength } from './latex-lengths';
+import { latexDriverUsesClassPaper } from './latex-preamble';
 import { commandEnd, groupAt } from './latex-syntax';
 
 const inch = 96;
-const texPoint = inch / 72.27;
 const millimeter = inch / 25.4;
 const paperSizes = new Map([
   ['letterpaper', [8.5 * inch, 11 * inch]],
@@ -16,12 +19,14 @@ export type LatexPageLayout = {
   width: number;
   height: number;
   left: number;
+  evenLeft?: number;
   right: number;
   top: number;
   bottom: number;
   gap: number;
   fontSize: number;
   leading: number;
+  typography?: LatexTypography;
   firstBaseline: number;
   footerBaseline: number;
   paragraphIndent: number;
@@ -29,32 +34,34 @@ export type LatexPageLayout = {
   numbered: boolean;
   columns: 1 | 2;
   columnGap: number;
+  rotated?: true;
 };
 
-function dimension(value: string | undefined, quad?: number) {
-  const match = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*(in|cm|mm|pt|bp|pc|sp|dd|cc|em)$/.exec(
-    value ?? '',
-  );
-  if (!match) return;
-  const units: Record<string, number> = {
-    in: inch,
-    cm: 10 * millimeter,
-    mm: millimeter,
-    pt: texPoint,
-    bp: inch / 72,
-    pc: texPoint * 12,
-    sp: texPoint / 65536,
-    dd: (texPoint * 1238) / 1157,
-    cc: (texPoint * 12 * 1238) / 1157,
-    em: quad ?? NaN,
+/** Resolve the binding margin for a physical sheet, preserving its text width. */
+export function latexSheetLayout(layout: LatexPageLayout, index: number): LatexPageLayout {
+  if (index % 2 === 0 || layout.evenLeft === undefined) return layout;
+  return { ...layout, left: layout.evenLeft, right: layout.left + layout.right - layout.evenLeft };
+}
+
+/** pdflscape exchanges the body axes, with the portrait footer on the left of the sheet. */
+export function latexLandscapeLayout(portrait: LatexPageLayout): LatexPageLayout {
+  const { evenLeft: _bindingMargin, ...paper } = portrait;
+  return {
+    ...paper,
+    width: portrait.height,
+    height: portrait.width,
+    left: portrait.bottom,
+    right: portrait.top,
+    top: portrait.left,
+    bottom: portrait.right,
+    footerBaseline: portrait.height - portrait.footerBaseline,
+    rotated: true,
   };
-  const length = Number(match[1]) * (units[match[2]!] ?? 0);
-  if (Number.isFinite(length)) return length;
 }
 
 function readOptions(prefix: string) {
   const source = prefix.replace(/(?<!\\)%[^\n]*/g, '');
-  const classOptions = /\\documentclass\s*(?:\[([^\]]*)\])?/.exec(source)?.[1] ?? '';
+  const { name: documentClass, options: classOptions } = readLatexClass(prefix);
   const geometryOptions: string[] = [];
   let geometry = false;
   for (const match of source.matchAll(
@@ -71,7 +78,7 @@ function readOptions(prefix: string) {
   let paperSize: string | undefined;
   let orientation: 'landscape' | 'portrait' | undefined;
   let fontSize = 10;
-  for (const value of [...classOptions.split(',').map((item) => item.trim()), ...geometryOptions]) {
+  for (const value of [...classOptions, ...geometryOptions]) {
     const named = value.replace(/^paper\s*=\s*/, '');
     if (paperSizes.has(named)) paperSize = named;
     if (value === 'landscape' || value === 'portrait') orientation = value;
@@ -85,6 +92,7 @@ function readOptions(prefix: string) {
     orientation,
     fontSize,
     classOptions,
+    documentClass,
   };
 }
 
@@ -106,7 +114,7 @@ function length(value: string | undefined, quad: number, leading: number) {
     ?.trim();
   const skip = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+)?)\s*\\baselineskip$/.exec(measure ?? '');
   if (skip) return (skip[1] === '' || skip[1] === undefined ? 1 : Number(skip[1])) * leading;
-  return dimension(measure, quad);
+  return latexLength(measure, quad);
 }
 
 function packageOptions(source: string, position: number, name: string) {
@@ -117,8 +125,8 @@ function packageOptions(source: string, position: number, name: string) {
   return { options: found[1] ?? '', end: match.lastIndex };
 }
 
-function paragraphLengths(source: string, quad: number, defaultIndent: number, leading: number) {
-  const lengths = { parindent: defaultIndent, parskip: 0 };
+function paragraphLengths(source: string, quad: number, defaultIndent: number, leading: number, defaultSkip = 0) {
+  const lengths = { parindent: defaultIndent, parskip: defaultSkip };
   // Apply literal TeX registers, LaTeX length commands and the parskip package in source order.
   const assignments =
     /\\(?:(setlength|addtolength)\s*(?:\{\s*\\(parindent|parskip)\s*\}|\\(parindent|parskip)\b)\s*\{([^{}]*)\}|(parindent|parskip)\s*(?:=\s*)?([+-]?(?:\d+(?:\.\d*)?|\.\d+)\s*(?:in|cm|mm|pt|bp|pc|sp|dd|cc|em))\b)/y;
@@ -162,26 +170,41 @@ function paragraphLengths(source: string, quad: number, defaultIndent: number, l
 }
 
 /** Read the standard class and geometry options that determine the editable page. */
-export function latexPageLayout(prefix: string): LatexPageLayout {
-  const { source, geometry, geometryOptions, paperSize, orientation, fontSize, classOptions } =
+export function latexPageLayout(
+  prefix: string,
+  output: { defaultPaper?: 'a4paper' | 'letterpaper' } = {},
+): LatexPageLayout {
+  const { source, geometry, geometryOptions, paperSize, orientation, fontSize, classOptions, documentClass } =
     readOptions(prefix);
   const landscape = orientation === 'landscape';
   const paper = paperSizes.get(paperSize ?? 'letterpaper')!;
   let [width, height] = landscape ? [paper[1]!, paper[0]!] : [paper[0]!, paper[1]!];
-  const leading = (fontSize === 12 ? 14.5 : fontSize === 11 ? 13.6 : 12) * texPoint;
-  const font = (fontSize === 11 ? 10.95 : fontSize) * texPoint;
+  const slide = documentClass === 'beamer';
+  if (slide) {
+    const sizes = {
+      '141': [140, 91], '1610': [160, 100], '169': [160, 90], '149': [140, 90],
+      '54': [125, 100], '43': [128, 96], '32': [135, 90], '2013': [148.5, 105],
+    } as const;
+    const aspect = classOptions.findLast((option) => option.startsWith('aspectratio='))?.slice(12);
+    const size = aspect && Object.hasOwn(sizes, aspect) ? sizes[aspect as keyof typeof sizes] : sizes['43'];
+    width = size[0] * millimeter;
+    height = size[1] * millimeter;
+  }
+  const twoColumns = classOptions.includes('twocolumn');
+  const sides = (geometry ? [...classOptions, ...geometryOptions] : classOptions)
+    .findLast((option) => option === 'twoside' || option === 'oneside');
+  const twoSided = !slide && (sides ? sides === 'twoside' : documentClass === 'book');
+  const typography = latexTypography(slide && !classOptions.includes('10pt') && !classOptions.includes('12pt') ? 11 : fontSize, source, twoColumns);
+  const { size: font, leading } = typography.text;
   // Standard Computer Modern classes set lengths using the font's quad.
   const quad = (fontSize === 12 ? 11.74988 : fontSize === 11 ? 10.95003 : 10) * texPoint;
-  const twoColumns = classOptions
-    .split(',')
-    .map((part) => part.trim())
-    .includes('twocolumn');
+  const letter = documentClass === 'letter';
   const defaultIndent = twoColumns
     ? quad
     : fontSize === 12
       ? 1.5 * quad
       : (fontSize === 11 ? 17 : 15) * texPoint;
-  const paragraphs = paragraphLengths(source, quad, defaultIndent, leading);
+  const paragraphs = paragraphLengths(source, quad, letter ? 0 : defaultIndent, leading, letter ? 0.7 * quad : 0);
 
   const sizes = new Map(
     geometryOptions.map((option) => {
@@ -189,8 +212,8 @@ export function latexPageLayout(prefix: string): LatexPageLayout {
       return [name?.trim(), value?.trim()] as const;
     }),
   );
-  const paperWidth = dimension(sizes.get('paperwidth'));
-  const paperHeight = dimension(sizes.get('paperheight'));
+  const paperWidth = latexLength(sizes.get('paperwidth'));
+  const paperHeight = latexLength(sizes.get('paperheight'));
   if (paperWidth && paperWidth > 0) width = paperWidth;
   if (paperHeight && paperHeight > 0) height = paperHeight;
 
@@ -199,11 +222,15 @@ export function latexPageLayout(prefix: string): LatexPageLayout {
     leading,
     Math.floor((height - 3.5 * inch) / leading) * leading + fontSize * texPoint,
   );
-  const classTop = inch + (height - 2 * inch - 67 * texPoint - body) / 2 + 37 * texPoint;
+  const wholePoints = (length: number) => Math.trunc(length / texPoint) * texPoint;
+  const classTop = letter
+    ? inch + 84 * texPoint
+    : inch + wholePoints((height - 2 * inch - 67 * texPoint - body) / 2) + 37 * texPoint;
   const standardSide = Math.max(0, (width - Math.min(classWidth, width - 2 * inch)) / 2);
 
-  let left = geometry ? width * 0.15 : standardSide;
-  let right = left;
+  // The standard classes round their margin registers to whole TeX points after removing the origin.
+  let left = inch + wholePoints((twoSided ? 0.8 : 1) * standardSide - inch);
+  let right = 2 * standardSide - left;
   let top = geometry ? height * 0.12 : classTop;
   let bottom = geometry ? height * 0.18 : height - classTop - body;
   // Geometry options are ordered. In particular, margin applies to all four sides.
@@ -211,7 +238,7 @@ export function latexPageLayout(prefix: string): LatexPageLayout {
   for (const option of geometryOptions) {
     const [raw, value] = option.split('=');
     const name = raw?.trim();
-    const length = dimension(value?.trim());
+    const length = latexLength(value?.trim());
     if (length === undefined || length < 0) continue;
     if (name === 'margin' || name === 'left' || name === 'inner') explicit.set('left', length);
     if (name === 'margin' || name === 'right' || name === 'outer') explicit.set('right', length);
@@ -219,11 +246,13 @@ export function latexPageLayout(prefix: string): LatexPageLayout {
     if (name === 'margin' || name === 'bottom') explicit.set('bottom', length);
   }
   const horizontal =
-    dimension(sizes.get('textwidth')) ?? dimension(sizes.get('width')) ?? width * 0.7;
+    latexLength(sizes.get('textwidth')) ?? latexLength(sizes.get('width')) ?? width * 0.7;
   const vertical =
-    dimension(sizes.get('textheight')) ?? dimension(sizes.get('height')) ?? height * 0.7;
+    latexLength(sizes.get('textheight')) ?? latexLength(sizes.get('height')) ?? height * 0.7;
   if (geometry) {
-    left = right = Math.max(0, (width - horizontal) / 2);
+    const remainder = Math.max(0, width - horizontal);
+    left = remainder * (twoSided ? 0.4 : 0.5);
+    right = remainder - left;
     top = Math.max(0, (height - vertical) * 0.4);
     bottom = Math.max(0, (height - vertical) * 0.6);
   }
@@ -245,23 +274,49 @@ export function latexPageLayout(prefix: string): LatexPageLayout {
     top = height * 0.12;
     bottom = height * 0.18;
   }
+  const evenLeft = twoSided
+    ? geometry ? right : inch + wholePoints(right - inch)
+    : undefined;
+  // A driver can ship a physical sheet independently of the lengths set by the class.
+  // Geometry uses the paper primitives and replaces that driver default.
+  if (!slide && !geometry && output.defaultPaper && !latexDriverUsesClassPaper(prefix, classOptions)) {
+    const [sheetWidth, sheetHeight] = paperSizes.get(output.defaultPaper)!;
+    right += sheetWidth! - width;
+    bottom += sheetHeight! - height;
+    width = sheetWidth!;
+    height = sheetHeight!;
+  }
+  const outputDimensions = {
+    width: latexLength(/\\pdfpagewidth\s*=?\s*([\d.]+\s*[a-z]+)/.exec(source)?.[1]),
+    height: latexLength(/\\pdfpageheight\s*=?\s*([\d.]+\s*[a-z]+)/.exec(source)?.[1]),
+  };
+  if (outputDimensions.width && outputDimensions.width > 0) {
+    right += outputDimensions.width - width;
+    width = outputDimensions.width;
+  }
+  if (outputDimensions.height && outputDimensions.height > 0) {
+    bottom += outputDimensions.height - height;
+    height = outputDimensions.height;
+  }
   return {
     width,
     height,
-    left,
-    right,
-    top,
-    bottom,
+    left: slide ? 10 * millimeter : left,
+    ...(evenLeft !== undefined && evenLeft !== left ? { evenLeft } : {}),
+    right: slide ? 10 * millimeter : right,
+    top: slide ? 0 : top,
+    bottom: slide ? 0 : bottom,
     gap: 24,
     fontSize: font,
     leading,
-    firstBaseline: fontSize * texPoint,
-    footerBaseline: height - bottom + (dimension(sizes.get('footskip')) ?? 30 * texPoint),
+    ...(['article', 'report', 'book', 'letter'].includes(documentClass) && { typography }),
+    firstBaseline: slide ? leading / 2 + font * 0.4 : fontSize * texPoint,
+    footerBaseline: height - bottom + (latexLength(sizes.get('footskip')) ?? (letter ? 25 : 30) * texPoint),
     paragraphIndent: paragraphs.parindent,
     paragraphSpacing: paragraphs.parskip,
     columns: twoColumns ? 2 : 1,
     columnGap: length(/\\setlength\s*\{\\columnsep\}\s*\{([^{}]*)\}/.exec(source)?.[1], quad, leading) ?? 10 * texPoint,
-    numbered: !/\\(?:pagestyle\s*\{empty\}|pagenumbering\s*\{gobble\})/.test(source),
+    numbered: !slide && !/\\(?:pagestyle\s*\{empty\}|pagenumbering\s*\{gobble\})/.test(source),
   };
 }
 
@@ -269,13 +324,34 @@ export function latexPageLayout(prefix: string): LatexPageLayout {
  * A line or unbreakable block in the continuous editor. `notes` are the heights of footnotes
  * whose marks it holds; they print at the foot of the same page and take room from its body.
  */
-export type PageLine = { position: number; top: number; bottom: number; notes?: number[] };
+export type PageLine = {
+  position: number;
+  top: number;
+  bottom: number;
+  notes?: number[];
+  /** Content repeated at the start of a continuation, and at its preceding boundary. */
+  continuation?: { fragment: number; startHeight: number };
+  /** Space needed after placing this line if another fragment follows on a new page. */
+  reserveAfter?: number;
+  /** Descender depth or trailing glue that can extend beyond TeX's page goal. */
+  depth?: number;
+};
 export type PageBlock = PageLine & {
   split?: () => PageLine[];
+  flow?: LatexBlockFlow;
+  /** @deprecated Use a column break in `flow`. */
   force?: boolean;
+  /** @deprecated Use a page break in `flow`. */
   forcePage?: boolean;
 };
-export type PageBreak = { position: number; height: number };
+export type PageBreak = { position: number; height: number; fragment?: number };
+export type LatexWideFloat = { position: number; sheet: number; offset: number; height: number };
+
+function strongerBreak(left: LatexBreak | undefined, right: LatexBreak | undefined) {
+  if (left === 'recto' || right === 'recto') return 'recto';
+  if (left === 'page' || right === 'page') return 'page';
+  return left ?? right;
+}
 
 /**
  * Place spacers into the continuous editor while keeping page breaks out of document history.
@@ -294,10 +370,14 @@ export function paginateLatex(
   const breakSlots: number[] = [];
   const footnotes: number[] = [];
   const footHeights: number[] = [0];
+  const wideFloats: LatexWideFloat[] = [];
+  const floatSpans = new Map<number, number>();
+  const deferred: PageLine[] = [];
+  const floatGap = 20 * texPoint;
   let start = 0;
   let pages = 1;
   let occupied = false;
-  let forced: boolean | 'page' = false;
+  let pending: LatexBreak | undefined;
   // Spacers carry the page's unused body, including the room its footnotes take.
   let notes = 0;
   const room = (line: PageLine) => {
@@ -305,41 +385,78 @@ export function paginateLatex(
     if (!extra) return notes;
     return notes + extra + (notes ? 0 : noteGap);
   };
-  const fits = (line: PageLine) =>
-    line.bottom - start + room(line) <= bodyHeight - (pages > 1 && pages <= columns ? firstSpanHeight : 0);
+  const sheetOf = (slot: number) => Math.floor(slot / columns);
+  const fits = (line: PageLine) => {
+    const span = floatSpans.get(sheetOf(pages - 1)) ?? (pages > 1 && pages <= columns ? firstSpanHeight : 0);
+    return line.bottom - (line.depth ?? 0) - start + room(line) + (line.reserveAfter ?? 0) <= bodyHeight - span;
+  };
+
+  function placeWide(sheet: number, floatPage = false) {
+    const startIndex = wideFloats.length;
+    let height = 0;
+    while (deferred.length) {
+      const figure = deferred[0]!;
+      const size = figure.bottom - figure.top;
+      const offset = height ? height + floatGap : 0;
+      if (offset && offset + size + (floatPage ? 0 : floatGap) > bodyHeight) break;
+      if (!floatPage && size + floatGap >= bodyHeight) break;
+      deferred.shift();
+      wideFloats.push({ position: figure.position, sheet, offset, height: size });
+      height = offset + size;
+    }
+    if (!height) return;
+    if (floatPage) {
+      const fill = Math.max(0, (bodyHeight - height) / 2);
+      for (const item of wideFloats.slice(startIndex)) item.offset += fill;
+    } else floatSpans.set(sheet, height + floatGap);
+  }
   function place(line: PageLine) {
     notes = room(line);
     for (const _ of line.notes ?? []) footnotes.push(pages - 1);
     footHeights[pages - 1] = notes;
   }
-  function advance(line: PageLine, wholePage = false) {
+  function advance(line: PageLine, boundary: LatexBreak = 'column') {
     // The next page has the same body capacity, even after a short previous page.
     const stride = bodyHeight + spacing;
     const distance = line.top - start;
     const needed = Math.max(1, Math.floor((distance + notes) / stride) + 1);
     const slot = pages - 1 + needed;
-    const next = wholePage ? Math.ceil(slot / columns) * columns : slot;
+    let next = boundary === 'column' ? slot : Math.ceil(slot / columns) * columns;
+    if (boundary === 'recto' && (next / columns) % 2 !== 0) next += columns;
     const advanceBy = next - (pages - 1);
+    if (sheetOf(next) > sheetOf(pages - 1)) placeWide(sheetOf(next));
     breakSlots.push(next);
+    const continuation = line.continuation;
+    const startHeight = continuation?.startHeight ?? 0;
     breaks.push({
       position: line.position,
-      height: advanceBy * stride - distance,
+      height: advanceBy * stride - distance + startHeight,
+      ...(continuation ? { fragment: continuation.fragment } : {}),
     });
     pages += advanceBy;
     for (let page = footHeights.length; page < pages; page++) footHeights.push(0);
-    start = line.top;
+    start = line.top - startHeight;
     occupied = false;
     notes = 0;
   }
   for (const block of blocks) {
-    if (block.force || block.forcePage) {
-      if (occupied) forced = block.forcePage ? 'page' : forced || true;
+    const flow = block.flow ?? (
+      block.forcePage || block.force
+        ? { kind: 'break' as const, boundary: block.forcePage ? 'page' as const : 'column' as const }
+        : undefined
+    );
+    if (columns > 1 && flow?.kind === 'content' && flow.wideFloat) {
+      deferred.push(block);
       continue;
     }
-    if (forced) {
-      advance(block, forced === 'page');
-      forced = false;
+    if (flow?.kind === 'omit') continue;
+    if (flow?.kind === 'break') {
+      if (occupied) pending = strongerBreak(pending, flow.boundary);
+      continue;
     }
+    const before = strongerBreak(pending, flow?.before);
+    if (occupied && before) advance(block, before);
+    pending = flow?.after;
     if (fits(block) || (!occupied && !block.split)) {
       occupied = true;
       place(block);
@@ -360,5 +477,11 @@ export function paginateLatex(
       place(line);
     }
   }
-  return { breaks, breakSlots, pages, footnotes, footHeights };
+  while (deferred.length) {
+    const sheet = sheetOf(pages - 1) + 1;
+    placeWide(sheet, true);
+    pages = sheet * columns + 1;
+    while (footHeights.length < pages) footHeights.push(0);
+  }
+  return { breaks, breakSlots, pages, footnotes, footHeights, wideFloats, floatSpans };
 }

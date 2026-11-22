@@ -9,7 +9,14 @@ import { collab } from 'prosemirror-collab';
 import { history, redo, undo } from 'prosemirror-history';
 import { InputRule, inputRules, undoInputRule, wrappingInputRule } from 'prosemirror-inputrules';
 import { keymap } from 'prosemirror-keymap';
-import { Fragment, Slice, type Mark, type Node } from 'prosemirror-model';
+import {
+  DOMParser,
+  Fragment,
+  Slice,
+  type Mark,
+  type Node,
+  type ParseOptions,
+} from 'prosemirror-model';
 import { liftListItem, sinkListItem, splitListItem } from 'prosemirror-schema-list';
 import {
   EditorState,
@@ -23,15 +30,24 @@ import { Decoration, DecorationSet, type EditorView, type NodeViewConstructor } 
 import { environmentAt, verbatimEnd } from './latex-syntax';
 import { noteSchema as schema } from './index';
 import { latexClipboard } from './latex-clipboard';
-import { latexHeadings, parseLatex, serializeLatex } from './latex';
+import { latexHeadings, parseLatex, refreshRebasedLatexFiles, retainDetachedLatexFiles, serializeLatex } from './latex';
 import { latexNumberingPlugin } from './latex-numbering-view';
 import { latexObjectSelection } from './latex-selection';
-export { latexNumberSpec, type LatexNumberSpec } from './latex-numbering-view';
+export { latexLetterPartSpec, latexNumberSpec, type LatexNumberSpec } from './latex-numbering-view';
 import { notePresencePlugin } from './presence';
 import { noteProofreadingPlugin } from './proofreading';
 
 export type LatexNodeViews = Record<string, NodeViewConstructor>;
 type Style = 'strong' | 'em';
+
+class LatexEditorDOMParser extends DOMParser {
+  override parse(dom: Parameters<DOMParser['parse']>[0], options?: ParseOptions) {
+    // Source line breaks collapse on the page but stay intact when the browser reports an edit.
+    return super.parse(dom, { ...options, preserveWhitespace: 'full' });
+  }
+}
+
+const latexEditorDOMParser = new LatexEditorDOMParser(schema, DOMParser.fromSchema(schema).rules);
 
 function hasStyle(mark: Mark, style: Style) {
   return (
@@ -385,9 +401,17 @@ export function latexState(
       history(),
       collab(clientID === undefined ? { version } : { version, clientID }),
       new Plugin({
+        appendTransaction(transactions, previous, current) {
+          const transaction = current.tr;
+          retainDetachedLatexFiles(transaction, previous.doc);
+          for (const received of transactions)
+            if (received.getMeta('rebased')) refreshRebasedLatexFiles(transaction, received);
+          return transaction.docChanged ? transaction : null;
+        },
         props: {
           ...(nodeViews ? { nodeViews } : {}),
           handleDOMEvents: { mousedown: continueAfterLatexBlock },
+          domParser: latexEditorDOMParser,
           ...latexClipboard(schema),
           clipboardTextSerializer: ({ content }) =>
             serializeLatex(

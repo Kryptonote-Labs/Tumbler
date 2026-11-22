@@ -6,6 +6,7 @@
     "./latex": "./src/latex.ts",
     "./editor": "./src/editor.ts",
     "./preview": "./src/preview.ts",
+    "./latex-fonts.css": "./src/latex-fonts.css",
     "./style.css": "./src/style.css"
   },
   "dependencies": {

@@ -76,7 +76,7 @@ function environmentTag(source: string, position: number) {
   };
 }
 
-const verbatimEnvironments = new Set(['verbatim', 'verbatim*', 'lstlisting', 'minted', 'Verbatim']);
+const verbatimEnvironments = new Set(['verbatim', 'verbatim*', 'lstlisting', 'minted', 'Verbatim', 'filecontents', 'filecontents*']);
 
 export function environmentAt(source: string, position: number) {
   const first = environmentTag(source, position);
@@ -121,5 +121,32 @@ export function documentBody(source: string) {
       const end = commandEnd(source, next);
       next = source.slice(next, end) === '\\verb' ? verbatimEnd(source, end) - 1 : end - 1;
     } else if (source[next] === '{') next = (groupAt(source, next)?.end ?? source.length) - 1;
+  }
+}
+
+
+/** Visit commands in a source region without interpreting groups, comments, or verbatim. */
+export function* latexCommands(source: string) {
+  for (let start = 0; start < source.length;) {
+    const character = source[start];
+    if (character === '%') {
+      start = lineEnd(source, start) + 1;
+    } else if (character === '{') {
+      start = groupAt(source, start)?.end ?? source.length;
+    } else if (character === '\\') {
+      const end = commandEnd(source, start);
+      const name = source.slice(start + 1, end);
+      if (name === 'verb') {
+        start = verbatimEnd(source, end);
+        continue;
+      }
+      yield { name, start, end };
+      const tag = name === 'begin' ? environmentTag(source, start) : undefined;
+      start = tag && verbatimEnvironments.has(tag.name)
+        ? (environmentAt(source, start)?.end ?? source.length)
+        : end;
+    } else {
+      start++;
+    }
   }
 }

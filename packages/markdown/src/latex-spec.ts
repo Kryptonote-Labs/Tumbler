@@ -1,4 +1,5 @@
 import type { Node, NodeSpec, TagParseRule } from 'prosemirror-model';
+import { isLatexProjectPath, validateLatexProject } from './latex-project';
 
 export const latexStructureNodes = [
   'paragraph',
@@ -7,6 +8,9 @@ export const latexStructureNodes = [
   'ordered_list',
   'list_item',
   'blockquote',
+  'latex_landscape',
+  'latex_container',
+  'latex_include',
 ] as const;
 
 export const latexBlockAttrs = {
@@ -24,6 +28,7 @@ export const latexDocumentAttrs = {
   },
   prefix: { default: '', validate: 'string' },
   suffix: { default: '', validate: 'string' },
+  latexProject: { default: null, validate: validateLatexProject },
 };
 
 // Store source separately from the visible label. Only the LaTeX clipboard parser
@@ -41,6 +46,41 @@ function atomDOM(node: Node, className: string) {
 }
 
 export const latexNodes = {
+  latex_include: {
+    group: 'block',
+    content: 'block+',
+    defining: true,
+    isolating: true,
+    attrs: {
+      ...latexBlockAttrs,
+      path: {
+        validate(value: unknown) {
+          if (typeof value !== 'string' || !isLatexProjectPath(value))
+            throw new RangeError('Invalid LaTeX include path.');
+        },
+      },
+    },
+    toDOM: node => ['div', { 'data-latex-include': node.attrs.path }, 0],
+  },
+  latex_container: {
+    group: 'block',
+    content: 'block+',
+    defining: true,
+    attrs: latexBlockAttrs,
+    toDOM: (node) => ['div', {
+      class: 'latex-container',
+      'data-latex-container': /^\\begin\s*\{([^}]+)\}/.exec(node.attrs.open ?? '')?.[1] ?? '',
+    }, 0],
+    parseDOM: [{ tag: 'div[data-latex-container]' }],
+  },
+  latex_landscape: {
+    group: 'block',
+    content: 'block+',
+    defining: true,
+    attrs: latexBlockAttrs,
+    toDOM: () => ['div', { class: 'latex-landscape', 'data-latex-landscape': '' }, 0],
+    parseDOM: [{ tag: 'div[data-latex-landscape]' }],
+  },
   latex_inline: {
     inline: true,
     group: 'inline',
@@ -74,7 +114,7 @@ function mathNode(display: boolean): NodeSpec {
   };
 }
 
-export const latexAtomPasteRules: TagParseRule[] = Object.keys(latexNodes).map((node) => ({
+export const latexAtomPasteRules: TagParseRule[] = ['latex_inline', 'latex_raw', 'latex_math', 'latex_display_math'].map((node) => ({
   node,
   tag: `[data-latex-node="${node}"][data-latex-source]`,
   getAttrs: (dom) => ({

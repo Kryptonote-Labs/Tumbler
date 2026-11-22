@@ -1,6 +1,9 @@
+import { latexEffectivePrefix } from './latex-project';
 import type { Node } from 'prosemirror-model';
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
+import { readLatexClass } from './latex-flow';
+import { readLatexLetterParts, type LatexLetterPart } from './latex-letter';
 import { latexNumbering } from './latex-numbering';
 
 /**
@@ -12,7 +15,8 @@ export type LatexNumberSpec =
   | { latexEquation: (string | null)[] }
   | { latexFloat: string }
   | { latexReference: string | undefined }
-  | { latexFootnote: string };
+  | { latexFootnote: string }
+  | { latexListing: string };
 
 const key = new PluginKey<DecorationSet>('latex-numbering');
 const reference = /^\\(eq)?ref\s*\{([^{}]+)\}$/;
@@ -31,13 +35,13 @@ function isLabelParagraph(node: Node) {
   return hasLabel;
 }
 
-function headingNumber(number: string, command: string) {
+function headingNumber(number: string, command: string, appendix?: boolean) {
   return (view: { dom: HTMLElement }) => {
     const element = view.dom.ownerDocument.createElement('span');
     element.className = 'latex-heading-number';
     element.dataset.command = command;
     element.textContent =
-      command === 'part' ? 'Part ' + number : command === 'chapter' ? 'Chapter ' + number : number;
+      command === 'part' ? 'Part ' + number : command === 'chapter' ? (appendix ? 'Appendix ' : 'Chapter ') + number : number;
     element.contentEditable = 'false';
     return element;
   };
@@ -50,18 +54,31 @@ function decorate(document: Node) {
     decorations.push(
       Decoration.node(position, position + document.nodeAt(position)!.nodeSize, {}, spec),
     );
+  if (readLatexClass(latexEffectivePrefix(document)).name === 'letter')
+    for (const [position, part] of readLatexLetterParts(document)) {
+      const node = document.nodeAt(position);
+      if (node) decorations.push(Decoration.node(position, position + node.nodeSize, {}, { latexLetterPart: part }));
+    }
   if (numbers) {
-    for (const [position, { number, command }] of numbers.headings)
-      decorations.push(
-        Decoration.widget(position + 1, headingNumber(number, command), {
+    for (const [position, { title, kind }] of numbers.containers) {
+      const node = document.nodeAt(position);
+      if (node) decorations.push(Decoration.node(position, position + node.nodeSize, {
+        'data-latex-container-title': title,
+        'data-latex-container-kind': kind,
+      }));
+    }
+    for (const [position, { number, command, appendix }] of numbers.headings)
+      if (number) decorations.push(
+        Decoration.widget(position + 1, headingNumber(number, command, appendix), {
           side: -1,
-          key: command + ':' + number,
+          key: command + ':' + (appendix ? 'appendix:' : '') + number,
           ignoreSelection: true,
         }),
       );
     for (const [position, rows] of numbers.equations) around(position, { latexEquation: rows });
     for (const [position, { kind, number }] of numbers.floats)
       around(position, { latexFloat: (kind === 'figure' ? 'Figure ' : 'Table ') + number });
+    for (const [position, number] of numbers.listings) around(position, { latexListing: number });
     for (const [position, number] of numbers.footnotes) around(position, { latexFootnote: number });
   }
   document.descendants((node, position) => {
@@ -100,8 +117,16 @@ export function latexNumberSpec(decorations: readonly Decoration[]) {
       'latexEquation' in spec ||
       'latexFloat' in spec ||
       'latexReference' in spec ||
-      'latexFootnote' in spec
+      'latexFootnote' in spec || 'latexListing' in spec
     )
       return spec as LatexNumberSpec;
+  }
+}
+
+export function latexLetterPartSpec(decorations: readonly Decoration[]): LatexLetterPart | undefined {
+  for (const decoration of decorations) {
+    const part: unknown = decoration.spec.latexLetterPart;
+    if (part && typeof part === 'object' && 'kind' in part)
+      return decoration.spec.latexLetterPart;
   }
 }

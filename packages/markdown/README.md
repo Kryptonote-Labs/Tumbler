@@ -36,3 +36,37 @@ structured. Original command spellings, separators, the preamble, comments and o
 part of the document tree. `replaceLatexSource(document, source)` produces ProseMirror steps for
 source editing, undo and collaboration. The browser host can supply equation and raw source views
 through `NoteEditorOptions.latexNodeViews`. Parsing never executes TeX.
+
+`latexFlow(document)` resolves standard class and command behavior into
+layout constraints at editor positions. `readLatexTableBlock(source)` exposes
+the first, repeated, body, and final row groups and retains their source offsets.
+Use `setLatexTableCell` to change a cell in the original source.
+
+The browser supplies measured blocks and internal fragment anchors to
+`paginateLatex`. A continuation can reserve room for a footer on one sheet
+and repeat a header on the next. The paginator returns placements without
+adding page breaks or repeated rows to the document. This keeps layout and
+source edits on the same model for both native objects and source-backed
+environments. The same constraints can accept measurements from a different
+layout host.
+
+`latexPageLayout(prefix)` resolves standard type sizes, leading, interword glue, and title
+spacing. `latexParagraphText(node)` projects supported text and inline formulas with editor
+offsets. Pass font and inline box measurements to `composeLatexParagraph` to get justified line
+breaks and discretionary hyphens at those offsets. The host can use `measureLatexRoman` for
+standard Computer Modern Roman text and `hyphenateLatexEnglish` for US English. The browser
+can paint the returned breaks without changing the editable document or running TeX.
+
+`paginateLatexRegions` applies the regular page planner to sections with different physical
+sheet dimensions. Landscape environments keep their source delimiters and contain normal
+editable blocks. `readLatexBeamerFrame` projects numeric overlays from one authored frame, and
+`readLatexTikzStateDiagram` exposes the states and edges of a supported TikZ automaton.
+
+Formatting aliases declared with `\newcommand` can keep their argument as editable text.
+`readLatexTextMacros` and `interpretLatexText` also project common inline expansions into text
+and formatting for hosts that display source-backed commands. Import `@tumblerjs/markdown/latex-fonts.css`
+for the editable Computer Modern webfonts. Their outlines come from AMS Fonts under the
+included SIL Open Font License.
+
+`latexListOptions` reads local `enumitem` counter labels, starting values, and compact spacing
+for supported lists. The list items remain normal editable document nodes.
