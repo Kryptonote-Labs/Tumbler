@@ -1,4 +1,6 @@
 import { latexFieldSource, latexFieldText } from './latex-metadata';
+import { measureLatexRoman } from './latex-font-metrics';
+import type { LatexTypography } from './latex-typography';
 import { argumentAt, commandEnd, environmentAt, groupAt, latexCommands, lineEnd, verbatimEnd, whitespaceEnd } from './latex-syntax';
 import { groupEnd, splice } from './latex-scan';
 
@@ -27,7 +29,7 @@ export type LatexTabular = {
   /** Where the body between `\begin{tabular}{…}` and `\end{tabular}` is in the source. */
   start: number;
   end: number;
-  spec: { start: number; end: number; columns: string[] };
+  spec: { start: number; end: number; columns: string[]; width?: string };
   rows: Row[];
   layout: TableLayout;
   rowStarts: number[];
@@ -36,6 +38,61 @@ export type LatexTabular = {
   /** Rows and columns can be added and removed only when every row is a plain grid. */
   grid: boolean;
 };
+
+type NaturalColumn = { align: 'left' | 'center' | 'right'; padBefore: boolean; padAfter: boolean };
+
+/** Empty intercolumn material suppresses the adjacent `\tabcolsep` on both sides. */
+export function latexNaturalColumns(table: LatexTabular): NaturalColumn[] | undefined {
+  const columns: NaturalColumn[] = [];
+  for (const spec of table.spec.columns) {
+    const match = /^(@\{\s*\})?([lcr])(@\{\s*\})?$/.exec(spec.trim());
+    if (!match) return;
+    const previous = columns.at(-1);
+    columns.push({
+      align: match[2] === 'c' ? 'center' : match[2] === 'r' ? 'right' : 'left',
+      padBefore: !match[1] && (previous?.padAfter ?? true),
+      padAfter: !match[3],
+    });
+  }
+  if (columns.length) return columns;
+}
+
+export function latexHorizontalRule(source: string) {
+  switch (source.trim()) {
+    case '\\toprule': return 'top';
+    case '\\midrule': return 'middle';
+    case '\\bottomrule': return 'bottom';
+  }
+}
+
+/** Size each natural column to its widest cell plus intercolumn glue. */
+export function latexNaturalTableWidths(table: LatexTabular, typography: LatexTypography) {
+  const columns = latexNaturalColumns(table);
+  const font = typography.romanFont;
+  if (!columns || !font) return;
+  const widths = columns.map(() => 0);
+  for (const row of table.rows) {
+    if (row.cells.length === 1 && columns.length > 1 && readLatexMulticolumn(row.cells[0]!.body)?.columns === columns.length)
+      continue;
+    if (row.cells.length !== columns.length) return;
+    for (const [index, cell] of row.cells.entries()) {
+      const text = latexTableCellText(cell);
+      if (text === undefined) return;
+      const words = text.trim().split(/[ \t\r\n]+/).filter(Boolean);
+      let width = Math.max(0, words.length - 1) * typography.space;
+      for (const word of words) {
+        const advance = measureLatexRoman(word, font, typography.text.size);
+        if (advance === undefined) return;
+        width += advance;
+      }
+      widths[index] = Math.max(widths[index]!, width);
+    }
+  }
+  return widths.map((width, index) => {
+    const { padBefore, padAfter } = columns[index]!;
+    return width + (Number(padBefore) + Number(padAfter)) * typography.table.separation;
+  });
+}
 
 const rule =
   /^(?:\s*(?:\\(?:hline|toprule|midrule|bottomrule)\b|\\c(?:mid)?rule\s*(?:\([^)]*\))?\s*(?:\[[^\]]*\])?\s*\{[^}]*\}))+\s*/;
@@ -139,7 +196,7 @@ export function readLatexTabular(source: string): LatexTabular | undefined {
   for (const { name, start, end } of latexCommands(source)) {
     if (name !== 'begin') continue;
     const group = groupAt(source, whitespaceEnd(source, end));
-    if (!group || !['tabular', 'tabular*', 'longtable'].includes(source.slice(group.from, group.to)))
+    if (!group || !['tabular', 'tabular*', 'tabularx', 'longtable'].includes(source.slice(group.from, group.to)))
       continue;
     environment = environmentAt(source, start);
     break;
@@ -147,9 +204,11 @@ export function readLatexTabular(source: string): LatexTabular | undefined {
   if (!environment) return;
   const continuing = environment.name === 'longtable';
   let open = whitespaceEnd(source, environment.from);
-  if (environment.name === 'tabular*') {
+  let tableWidth: string | undefined;
+  if (environment.name === 'tabular*' || environment.name === 'tabularx') {
     const width = groupAt(source, open);
     if (!width) return;
+    if (environment.name === 'tabularx') tableWidth = source.slice(width.from, width.to);
     open = whitespaceEnd(source, width.end);
   }
   const optional = groupAt(source, open, '[', ']');
@@ -205,7 +264,7 @@ export function readLatexTabular(source: string): LatexTabular | undefined {
   return {
     start: spec.end,
     end: environment.to,
-    spec: { start: spec.from, end: spec.to, columns: columns ?? [] },
+    spec: { start: spec.from, end: spec.to, columns: columns ?? [], width: tableWidth },
     rows,
     layout: continuing ? { kind: 'continuing', sections } : { kind: 'fixed', caption },
     rowStarts,
@@ -222,13 +281,14 @@ export function readLatexTableBlock(source: string) {
   switch (outer.name) {
     case 'tabular':
     case 'tabular*':
+    case 'tabularx':
     case 'longtable':
     case 'table':
     case 'table*':
       return readLatexTabular(source);
     case 'center': {
       const inner = environmentAt(source, whitespaceEnd(source, outer.from));
-      if (inner && (inner.name === 'tabular' || inner.name === 'tabular*') &&
+      if (inner && ['tabular', 'tabular*', 'tabularx'].includes(inner.name) &&
           !source.slice(inner.end, outer.to).trim()) return readLatexTabular(source);
     }
   }

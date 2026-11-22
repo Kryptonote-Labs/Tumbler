@@ -110,6 +110,7 @@ nodes = nodes
   .update('doc', { ...nodes.get('doc'), attrs: latexDocumentAttrs })
   .append(latexNodes);
 for (const name of latexStructureNodes) {
+  if (name in latexNodes) continue;
   const node = nodes.get(name)!;
   nodes = nodes.update(name, { ...node, attrs: { ...node.attrs, ...latexBlockAttrs } });
 }

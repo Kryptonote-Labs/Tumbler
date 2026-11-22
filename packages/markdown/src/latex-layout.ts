@@ -31,7 +31,23 @@ export type LatexPageLayout = {
   numbered: boolean;
   columns: 1 | 2;
   columnGap: number;
+  rotated?: true;
 };
+
+/** pdflscape exchanges the body axes, with the portrait footer on the left of the sheet. */
+export function latexLandscapeLayout(portrait: LatexPageLayout): LatexPageLayout {
+  return {
+    ...portrait,
+    width: portrait.height,
+    height: portrait.width,
+    left: portrait.bottom,
+    right: portrait.top,
+    top: portrait.left,
+    bottom: portrait.right,
+    footerBaseline: portrait.height - portrait.footerBaseline,
+    rotated: true,
+  };
+}
 
 function dimension(value: string | undefined, quad?: number) {
   const match = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+))\s*(in|cm|mm|pt|bp|pc|sp|dd|cc|em)$/.exec(
@@ -171,7 +187,18 @@ export function latexPageLayout(prefix: string): LatexPageLayout {
   const landscape = orientation === 'landscape';
   const paper = paperSizes.get(paperSize ?? 'letterpaper')!;
   let [width, height] = landscape ? [paper[1]!, paper[0]!] : [paper[0]!, paper[1]!];
-  const typography = latexTypography(fontSize, source);
+  const slide = documentClass === 'beamer';
+  if (slide) {
+    const sizes = {
+      '141': [140, 91], '1610': [160, 100], '169': [160, 90], '149': [140, 90],
+      '54': [125, 100], '43': [128, 96], '32': [135, 90], '2013': [148.5, 105],
+    } as const;
+    const aspect = classOptions.findLast((option) => option.startsWith('aspectratio='))?.slice(12);
+    const size = aspect && Object.hasOwn(sizes, aspect) ? sizes[aspect as keyof typeof sizes] : sizes['43'];
+    width = size[0] * millimeter;
+    height = size[1] * millimeter;
+  }
+  const typography = latexTypography(slide && !classOptions.includes('10pt') && !classOptions.includes('12pt') ? 11 : fontSize, source);
   const { size: font, leading } = typography.text;
   // Standard Computer Modern classes set lengths using the font's quad.
   const quad = (fontSize === 12 ? 11.74988 : fontSize === 11 ? 10.95003 : 10) * texPoint;
@@ -248,21 +275,21 @@ export function latexPageLayout(prefix: string): LatexPageLayout {
   return {
     width,
     height,
-    left,
-    right,
-    top,
-    bottom,
+    left: slide ? 10 * millimeter : left,
+    right: slide ? 10 * millimeter : right,
+    top: slide ? 0 : top,
+    bottom: slide ? 0 : bottom,
     gap: 24,
     fontSize: font,
     leading,
     typography: ['article', 'report', 'book'].includes(documentClass) ? typography : undefined,
-    firstBaseline: fontSize * texPoint,
+    firstBaseline: slide ? leading / 2 + font * 0.4 : fontSize * texPoint,
     footerBaseline: height - bottom + (dimension(sizes.get('footskip')) ?? 30 * texPoint),
     paragraphIndent: paragraphs.parindent,
     paragraphSpacing: paragraphs.parskip,
     columns: twoColumns ? 2 : 1,
     columnGap: length(/\\setlength\s*\{\\columnsep\}\s*\{([^{}]*)\}/.exec(source)?.[1], quad, leading) ?? 10 * texPoint,
-    numbered: !/\\(?:pagestyle\s*\{empty\}|pagenumbering\s*\{gobble\})/.test(source),
+    numbered: !slide && !/\\(?:pagestyle\s*\{empty\}|pagenumbering\s*\{gobble\})/.test(source),
   };
 }
 
@@ -279,6 +306,8 @@ export type PageLine = {
   continuation?: { fragment: number; startHeight: number };
   /** Space needed after placing this line if another fragment follows on a new page. */
   reserveAfter?: number;
+  /** Descender depth left below TeX's page goal when this is the last line or row. */
+  depth?: number;
 };
 export type PageBlock = PageLine & {
   split?: () => PageLine[];
@@ -321,7 +350,7 @@ export function paginateLatex(
     return notes + extra + (notes ? 0 : noteGap);
   };
   const fits = (line: PageLine) =>
-    line.bottom - start + room(line) + (line.reserveAfter ?? 0) <= bodyHeight - (pages > 1 && pages <= columns ? firstSpanHeight : 0);
+    line.bottom - (line.depth ?? 0) - start + room(line) + (line.reserveAfter ?? 0) <= bodyHeight - (pages > 1 && pages <= columns ? firstSpanHeight : 0);
   function place(line: PageLine) {
     notes = room(line);
     for (const _ of line.notes ?? []) footnotes.push(pages - 1);

@@ -56,3 +56,8 @@ offsets. Pass font and inline box measurements to `composeLatexParagraph` to get
 breaks and discretionary hyphens at those offsets. The host can use `measureLatexRoman` for
 standard Computer Modern Roman text and `hyphenateLatexEnglish` for US English. The browser
 can paint the returned breaks without changing the editable document or running TeX.
+
+`paginateLatexRegions` applies the regular page planner to sections with different physical
+sheet dimensions. Landscape environments keep their source delimiters and contain normal
+editable blocks. `readLatexBeamerFrame` projects numeric overlays from one authored frame, and
+`readLatexTikzStateDiagram` exposes the states and edges of a supported TikZ automaton.

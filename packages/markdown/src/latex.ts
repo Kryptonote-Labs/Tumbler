@@ -18,9 +18,13 @@ import {
 export { composeLatexParagraph, type LatexLine, type LatexTextMetrics } from './latex-lines';
 export { latexInlineFlow, latexParagraphText, type LatexParagraphSegment } from './latex-paragraph';
 export { measureLatexRoman, type LatexRomanFont } from './latex-font-metrics';
+export { latexHorizontalRule, latexNaturalColumns, latexNaturalTableWidths } from './latex-tables';
 export { hyphenateLatexEnglish } from './latex-hyphenation';
+export { readLatexBeamerFrame } from './latex-beamer';
+export { readLatexTikzStateDiagram } from './latex-tikz';
 export type { LatexTypography } from './latex-typography';
-export { latexPageLayout, latexPaperSettings, paginateLatex } from './latex-layout';
+export { latexLandscapeLayout, latexPageLayout, latexPaperSettings, paginateLatex } from './latex-layout';
+export { paginateLatexRegions, type LatexRegionBlock } from './latex-page-regions';
 export type { LatexPageLayout, PageBlock, PageBreak, PageLine } from './latex-layout';
 export { latexBreakCommand, latexFlow, latexPageNumbers, readLatexClass } from './latex-flow';
 export type { LatexBlockFlow, LatexBreak, LatexPageNumber } from './latex-flow';
@@ -85,7 +89,7 @@ const displayEnvironments = new Set([
   'gather',
   'gather*',
 ]);
-const textEnvironments = new Set(['quote', 'quotation', 'abstract']);
+const textEnvironments = new Set(['quote', 'quotation', 'abstract', 'landscape']);
 const escaped = new Map([
   ['\\%', '%'],
   ['\\$', '$'],
@@ -380,7 +384,7 @@ function environmentBlock(source: string, position: number, before: string, dept
     const quote = blocks(content, depth + 1);
     if (!quote.nodes.length) quote.nodes.push(schema.nodes.paragraph!.create({ before: '' }));
     return {
-      node: schema.nodes.blockquote!.create(
+      node: schema.nodes[name === 'landscape' ? 'latex_landscape' : 'blockquote']!.create(
         {
           before,
           open,
@@ -544,13 +548,14 @@ function blockSource(node: Node): string {
     }
     case 'bullet_list':
     case 'ordered_list':
+    case 'latex_landscape':
     case 'blockquote': {
       const environment =
         node.type.name === 'bullet_list'
           ? 'itemize'
           : node.type.name === 'ordered_list'
             ? 'enumerate'
-            : 'quote';
+            : node.type.name === 'latex_landscape' ? 'landscape' : 'quote';
       result =
         (open ?? '\\begin{' + environment + '}\n') +
         childrenSource(node) +
@@ -579,6 +584,24 @@ function childrenSource(parent: Node) {
 
 export function serializeLatex(document: Node) {
   return document.attrs.prefix + childrenSource(document) + document.attrs.suffix;
+}
+
+/** Older documents stored landscape environments as opaque blocks. Promote them without rewriting source. */
+export function materializeLatexRegions(document: Node): Transform {
+  const transform = new Transform(document);
+  document.forEach((node, position) => {
+    if (node.type.name !== 'latex_raw' || !/^\\begin\s*\{landscape\}/.test(node.attrs.source)) return;
+    const parsed = parseLatex(node.attrs.source);
+    if (parsed.childCount !== 1 || parsed.firstChild?.type.name !== 'latex_landscape' ||
+        serializeLatex(parsed) !== node.attrs.source) return;
+    const block = parsed.firstChild;
+    const start = transform.mapping.map(position);
+    transform.replaceWith(start, start + node.nodeSize, block.type.create({
+      ...block.attrs,
+      before: node.attrs.before,
+    }, block.content));
+  });
+  return transform;
 }
 
 /** Source mode and the hosted CLI turn source changes into normal, mappable editor steps. */
@@ -641,6 +664,7 @@ const containerDefaults: Record<string, string> = {
   bullet_list: '\\begin{itemize}\n',
   ordered_list: '\\begin{enumerate}\n',
   blockquote: '\\begin{quote}\n',
+  latex_landscape: '\\begin{landscape}\n',
   list_item: '\\item ',
 };
 

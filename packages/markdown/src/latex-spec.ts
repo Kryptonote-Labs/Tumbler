@@ -7,6 +7,7 @@ export const latexStructureNodes = [
   'ordered_list',
   'list_item',
   'blockquote',
+  'latex_landscape',
 ] as const;
 
 export const latexBlockAttrs = {
@@ -41,6 +42,14 @@ function atomDOM(node: Node, className: string) {
 }
 
 export const latexNodes = {
+  latex_landscape: {
+    group: 'block',
+    content: 'block+',
+    defining: true,
+    attrs: latexBlockAttrs,
+    toDOM: () => ['div', { class: 'latex-landscape', 'data-latex-landscape': '' }, 0],
+    parseDOM: [{ tag: 'div[data-latex-landscape]' }],
+  },
   latex_inline: {
     inline: true,
     group: 'inline',
@@ -74,7 +83,7 @@ function mathNode(display: boolean): NodeSpec {
   };
 }
 
-export const latexAtomPasteRules: TagParseRule[] = Object.keys(latexNodes).map((node) => ({
+export const latexAtomPasteRules: TagParseRule[] = ['latex_inline', 'latex_raw', 'latex_math', 'latex_display_math'].map((node) => ({
   node,
   tag: `[data-latex-node="${node}"][data-latex-source]`,
   getAttrs: (dom) => ({

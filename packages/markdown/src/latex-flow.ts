@@ -82,6 +82,10 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
       }
     } else if (node.type.name === 'latex_raw') {
       const source = String(node.attrs.source).trim();
+      if (name === 'beamer' && /^\\begin\s*\{frame\}/.test(source)) {
+        flow.set(position, { kind: 'content', before: 'page', after: 'page' });
+        return;
+      }
       const command = source.slice(1, commandEnd(source, 0));
       if (source !== '\\' + command) return;
       const boundary = latexBreakCommand(source);
