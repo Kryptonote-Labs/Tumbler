@@ -19,6 +19,7 @@ const classic = {
 
 export type LatexTypography = Readonly<{
   text: TextSize;
+  inTextFloat: Readonly<{ before: number; after: number; captionGap: number }>;
   sections: readonly [SectionSize, SectionSize, SectionSize];
   table: Readonly<{
     separation: number;
@@ -89,6 +90,8 @@ export function latexTypography(points: number, prefix: string, twoColumns = fal
   const titleAscent = title.leading / 2 + 0.4 * title.size;
   const titleDescent = title.leading - titleAscent;
   const authorAscent = author.leading / 2 + 0.4 * author.size;
+  const textDescent = text.leading / 2 - 0.4 * text.size;
+  const inTextSep = (points === 12 ? 14 : 12) * texPoint;
   // Standard classes initialize \@listi through \@listvi with these glue values.
   const list = [
     [25, points === 12 ? 10 : points === 11 ? 9 : 8, points === 12 ? 5 : points === 11 ? 4.5 : 4, points === 12 ? 5 : points === 11 ? 4.5 : 4],
@@ -108,6 +111,11 @@ export function latexTypography(points: number, prefix: string, twoColumns = fal
   return {
     text,
     list,
+    inTextFloat: {
+      before: inTextSep - textDescent,
+      after: inTextSep,
+      captionGap: 10 * texPoint + textDescent,
+    },
     sections: [
       section(points === 12 ? textSize(17.28, 22) : textSize(14.4, 18), 3.5, 2.3),
       section(author, 3.25, 1.5),
@@ -138,7 +146,7 @@ export function latexTypography(points: number, prefix: string, twoColumns = fal
       dateGap: text.size,
       after: topsep + 1.5 * text.size,
       // The following line still receives its full baseline skip when the date box is absent.
-      emptyDateAfter: 2.5 * text.size + text.leading / 2 - 0.4 * text.size,
+      emptyDateAfter: 2.5 * text.size + (twoColumns ? 0 : textDescent),
     },
   };
 }

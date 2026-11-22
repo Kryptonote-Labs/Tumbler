@@ -158,7 +158,7 @@ export function layoutLatexDrawing(drawing: Drawing, bodyWidth: number, em: numb
   const top = 0.5 * texPoint;
   const bottom = top + axisHeight;
   const width = right + top;
-  const height = bottom + (drawing.xLabel ? 2.4 : 1.2) * em;
+  const height = bottom + (drawing.xLabel ? 2.7 : 1.2) * em;
   const x = (value: number) => left + ((value - bounds.xMin) / xRange + 0.05) / 1.1 * axisWidth;
   const y = (value: number) => bottom - ((value - bounds.yMin) / yRange + 0.05) / 1.1 * axisHeight;
   const line = (a: Point, b: Point) => primitives.push({ kind: 'path', points: [a, b], stroke: '#212121', width: 0.5 });
