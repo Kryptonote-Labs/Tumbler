@@ -22,6 +22,7 @@ export { latexHorizontalRule, latexNaturalColumns, latexNaturalTableWidths } fro
 export { hyphenateLatexEnglish } from './latex-hyphenation';
 export { readLatexBeamerFrame } from './latex-beamer';
 export { readLatexTikzStateDiagram } from './latex-tikz';
+export { readLatexSyncTex } from './latex-synctex';
 export type { LatexTypography } from './latex-typography';
 export { latexLandscapeLayout, latexPageLayout, latexPaperSettings, paginateLatex } from './latex-layout';
 export { paginateLatexRegions, type LatexRegionBlock } from './latex-page-regions';

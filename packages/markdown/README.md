@@ -61,3 +61,6 @@ can paint the returned breaks without changing the editable document or running 
 sheet dimensions. Landscape environments keep their source delimiters and contain normal
 editable blocks. `readLatexBeamerFrame` projects numeric overlays from one authored frame, and
 `readLatexTikzStateDiagram` exposes the states and edges of a supported TikZ automaton.
+
+`readLatexSyncTex` reads source line anchors from pdfTeX output so a host can map a point on a
+typeset sheet to its editable document.

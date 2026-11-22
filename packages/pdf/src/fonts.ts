@@ -21,6 +21,8 @@ import {
 import type { PdfSource } from './source.ts';
 import { matrix, type PdfMatrix } from './matrix.ts';
 import { cffOpenType } from './cff-container.ts';
+import { readType1Program } from './type1-program.ts';
+import { type1Outline } from './type1-outline.ts';
 
 export interface PdfGlyph {
   readonly code: number;
@@ -51,6 +53,7 @@ export class PdfFont {
   private readonly mapping: PdfCMap;
   private readonly unicode: PdfCMap;
   private readonly outline: OutlineFont | undefined;
+  private readonly type1: ReturnType<typeof readType1Program> | undefined;
   private readonly standard: Font | undefined;
   private readonly simple = new Map<number, { unicode: string; glyph: string }>();
   private readonly widths = new Map<number, number>();
@@ -101,7 +104,14 @@ export class PdfFont {
       .map((key) => source.resolve(descriptor.get(key)))
       .find((value) => value instanceof PdfStream);
     let outline: OutlineFont | undefined;
-    if (embedded instanceof PdfStream) {
+    if (embedded instanceof PdfStream && this.kind === 'Type1' && embedded.dictionary.has('Length1') && embedded.dictionary.has('Length2')) {
+      this.type1 = readType1Program(
+        source.stream(embedded),
+        integer(source.resolve(embedded.dictionary.get('Length1'))),
+        integer(source.resolve(embedded.dictionary.get('Length2'))),
+      );
+      this.outlineNames = new Map(Array.from(this.type1.glyphs.keys(), (glyph, index) => [glyph, index + 1]));
+    } else if (embedded instanceof PdfStream) {
       try {
         const program = source.stream(embedded);
         this.rawCff = program[0] === 1 && program[2]! >= 4;
@@ -291,6 +301,11 @@ export class PdfFont {
             this.simple.set(Number(code), { glyph, unicode: glyphText(glyph) });
         }
       }
+      if (this.type1?.encoding.size && (!encoding || encoding instanceof Map && !encoding.has('BaseEncoding'))) {
+        this.simple.clear();
+        for (const [code, glyph] of this.type1.encoding)
+          this.simple.set(code, { glyph, unicode: glyphText(glyph) });
+      }
       if (encoding instanceof Map && encoding.has('Differences')) {
         let code = 0;
         for (const value of array(source.resolve(encoding.get('Differences')))) {
@@ -306,7 +321,7 @@ export class PdfFont {
           this.widths.set(integer(dictionary.get('FirstChar')) + i, number(width)),
         );
     }
-    if (!outline && !this.standard && this.kind !== 'Type3')
+    if (!outline && !this.type1 && !this.standard && this.kind !== 'Type3')
       unsupported(`Unembedded font ${this.baseName} needs an explicit host fallback font.`);
   }
   private sourceDictionary(value: PdfValue | undefined) {
@@ -327,6 +342,7 @@ export class PdfFont {
     const simple = this.simple.get(value.code);
     const unicode = this.unicode.unicode.get(key) ?? simple?.unicode ?? '\ufffd';
     let namedGlyph: number | undefined;
+    if (this.type1) namedGlyph = this.outlineNames?.get(simple?.glyph ?? '.notdef') ?? 0;
     if (this.rawCff && this.outline && this.kind !== 'Type0') {
       if (!this.outlineNames) {
         this.outlineNames = new Map();
@@ -357,6 +373,13 @@ export class PdfFont {
         const box = this.outline.getGlyph(glyphId).bbox;
         if ([box.minX,box.minY,box.maxX,box.maxY].every(Number.isFinite))
           this.bounds.set(glyphId,[box.minX,box.minY,box.maxX,box.maxY]);
+      }
+    } else if (this.type1) {
+      path = this.paths.get(glyphId);
+      if (path === undefined) {
+        const name = simple?.glyph ?? '.notdef';
+        path = type1Outline(this.type1, this.type1.glyphs.has(name) ? name : '.notdef');
+        this.paths.set(glyphId, path);
       }
     }
     const width =
