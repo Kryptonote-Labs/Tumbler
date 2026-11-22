@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { composeLatexParagraph, latexInterwordGlue, measureLatexRoman, hyphenateLatexEnglish, latexTableGrid, readLatexTabular, setLatexTableCell, latexFlow, latexNumbering, latexPageLabel, latexPageLayout, latexPageNumbers, paginateLatex, parseLatex, serializeLatex } from '../src/latex';
+import { composeLatexParagraph, latexInterwordGlue, measureLatexRoman, hyphenateLatexEnglish, latexTableGrid, readLatexTabular, setLatexTableCell, latexFlow, latexNumbering, latexPageLabel, latexPageLayout, latexSheetLayout, latexPageNumbers, paginateLatex, parseLatex, serializeLatex, layoutLatexDrawing, readLatexDrawing } from '../src/latex';
 
 test('document driver options select physical media without moving the class text block', () => {
   const base = String.raw`\documentclass[letterpaper]{article}`;
@@ -122,4 +122,33 @@ test('the column newsletter breaks the opening paragraph like pdfTeX with microt
     'remain until the curb extension is finished. A site',
     'walk is planned for 17 June.',
   ]);
+});
+
+
+test('a two-sided book keeps its text measure with alternating binding margins', () => {
+  const paper = latexPageLayout(String.raw`\documentclass{book}`);
+  const verso = latexSheetLayout(paper, 1);
+  // The 10pt class places its margins 35pt and 89pt from the one-inch origin.
+  expect(paper.left).toBeCloseTo(96 + 35 * 96 / 72.27, 4);
+  expect(verso.left).toBeCloseTo(96 + 89 * 96 / 72.27, 4);
+  expect(verso.left + verso.right).toBeCloseTo(paper.left + paper.right);
+  const oneSided = latexPageLayout(String.raw`\documentclass[oneside]{book}`);
+  expect(latexSheetLayout(oneSided, 1).left).toBe(oneSided.left);
+});
+
+test('PGFPlots reserves room for labels before sizing the axis', () => {
+  for (const axisOnly of [false, true]) {
+    const drawing = readLatexDrawing(
+      String.raw`\begin{axis}[width=200pt,height=150pt${axisOnly ? ',scale only axis' : ''}]
+      \addplot coordinates {(1,24) (4,30)};
+      \end{axis}`,
+    );
+    expect(drawing?.kind).toBe('axis');
+    const frame = layoutLatexDrawing(drawing!, 500, 96 / 7.227)?.primitives[0];
+    expect(frame?.kind).toBe('rect');
+    if (frame?.kind !== 'rect') throw new Error('Expected a rectangular plot frame');
+    const allowance = axisOnly ? 0 : 45;
+    expect(frame.width).toBeCloseTo((200 - allowance) * 96 / 72.27, 5);
+    expect(frame.height).toBeCloseTo((150 - allowance) * 96 / 72.27, 5);
+  }
 });

@@ -39,7 +39,7 @@ export { hyphenateLatexEnglish } from './latex-hyphenation';
 export { latexBeamerLayout, readLatexBeamerFrame } from './latex-beamer';
 export { layoutLatexTikzStateDiagram, readLatexTikzStateDiagram } from './latex-tikz';
 export type { LatexTypography } from './latex-typography';
-export { latexLandscapeLayout, latexPageLayout, latexPaperSettings, paginateLatex } from './latex-layout';
+export { latexLandscapeLayout, latexPageLayout, latexPaperSettings, latexSheetLayout, paginateLatex } from './latex-layout';
 export { paginateLatexRegions, type LatexRegionBlock } from './latex-page-regions';
 export type { LatexPageLayout, PageBlock, PageBreak, PageLine } from './latex-layout';
 export { latexBreakCommand, latexFlow, latexPageLabel, latexPageNumbers, readLatexBookMatter, readLatexClass } from './latex-flow';

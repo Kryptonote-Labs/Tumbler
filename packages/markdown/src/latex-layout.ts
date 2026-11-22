@@ -19,6 +19,7 @@ export type LatexPageLayout = {
   width: number;
   height: number;
   left: number;
+  evenLeft?: number;
   right: number;
   top: number;
   bottom: number;
@@ -36,6 +37,12 @@ export type LatexPageLayout = {
   rotated?: true;
 };
 
+/** Resolve the binding margin for a physical sheet, preserving its text width. */
+export function latexSheetLayout(layout: LatexPageLayout, index: number): LatexPageLayout {
+  if (index % 2 === 0 || layout.evenLeft === undefined) return layout;
+  return { ...layout, left: layout.evenLeft, right: layout.left + layout.right - layout.evenLeft };
+}
+
 /** pdflscape exchanges the body axes, with the portrait footer on the left of the sheet. */
 export function latexLandscapeLayout(portrait: LatexPageLayout): LatexPageLayout {
   return {
@@ -43,6 +50,7 @@ export function latexLandscapeLayout(portrait: LatexPageLayout): LatexPageLayout
     width: portrait.height,
     height: portrait.width,
     left: portrait.bottom,
+    evenLeft: undefined,
     right: portrait.top,
     top: portrait.left,
     bottom: portrait.right,
@@ -183,6 +191,9 @@ export function latexPageLayout(
     height = size[1] * millimeter;
   }
   const twoColumns = classOptions.includes('twocolumn');
+  const sides = (geometry ? [...classOptions, ...geometryOptions] : classOptions)
+    .findLast((option) => option === 'twoside' || option === 'oneside');
+  const twoSided = !slide && (sides ? sides === 'twoside' : documentClass === 'book');
   const typography = latexTypography(slide && !classOptions.includes('10pt') && !classOptions.includes('12pt') ? 11 : fontSize, source, twoColumns);
   const { size: font, leading } = typography.text;
   // Standard Computer Modern classes set lengths using the font's quad.
@@ -214,8 +225,9 @@ export function latexPageLayout(
   const classTop = letter ? inch + 84 * texPoint : inch + (height - 2 * inch - 67 * texPoint - body) / 2 + 37 * texPoint;
   const standardSide = Math.max(0, (width - Math.min(classWidth, width - 2 * inch)) / 2);
 
-  let left = geometry ? width * 0.15 : standardSide;
-  let right = left;
+  // The standard classes use 40% of the free width inside the binding in two-sided mode.
+  let left = twoSided ? inch + Math.trunc((0.8 * standardSide - inch) / texPoint) * texPoint : standardSide;
+  let right = 2 * standardSide - left;
   let top = geometry ? height * 0.12 : classTop;
   let bottom = geometry ? height * 0.18 : height - classTop - body;
   // Geometry options are ordered. In particular, margin applies to all four sides.
@@ -235,7 +247,9 @@ export function latexPageLayout(
   const vertical =
     latexLength(sizes.get('textheight')) ?? latexLength(sizes.get('height')) ?? height * 0.7;
   if (geometry) {
-    left = right = Math.max(0, (width - horizontal) / 2);
+    const remainder = Math.max(0, width - horizontal);
+    left = remainder * (twoSided ? 0.4 : 0.5);
+    right = remainder - left;
     top = Math.max(0, (height - vertical) * 0.4);
     bottom = Math.max(0, (height - vertical) * 0.6);
   }
@@ -257,6 +271,9 @@ export function latexPageLayout(
     top = height * 0.12;
     bottom = height * 0.18;
   }
+  const evenLeft = twoSided
+    ? geometry ? right : inch + Math.trunc((right - inch) / texPoint) * texPoint
+    : undefined;
   // A driver can ship a physical sheet independently of the lengths set by the class.
   // Geometry uses the paper primitives and replaces that driver default.
   if (!slide && !geometry && output.defaultPaper && !latexDriverUsesClassPaper(prefix, classOptions)) {
@@ -282,6 +299,7 @@ export function latexPageLayout(
     width,
     height,
     left: slide ? 10 * millimeter : left,
+    ...(evenLeft !== undefined && evenLeft !== left ? { evenLeft } : {}),
     right: slide ? 10 * millimeter : right,
     top: slide ? 0 : top,
     bottom: slide ? 0 : bottom,
