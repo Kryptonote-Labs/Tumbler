@@ -1,3 +1,4 @@
+import { texPoint } from './latex-typography';
 import { environmentAt, groupAt, latexCommands, whitespaceEnd } from './latex-syntax';
 
 type OverlayRange = { from: number; through?: number };
@@ -35,7 +36,9 @@ export function readLatexBeamerFrame(source: string) {
   if (source[start] === '<' && !selection) return;
   if (selection) start = whitespaceEnd(source, selection.end);
   const options = groupAt(source, start, '[', ']');
-  const aligned = options && /(?:^|,)\s*t\s*(?:,|$)/.test(source.slice(options.from, options.to));
+  const settings = options ? source.slice(options.from, options.to).split(',').map(s => s.trim()) : [];
+  const alignment = settings.findLast(s => s === 't' || s === 'c' || s === 'b');
+  const plain = settings.includes('plain');
   if (options) start = whitespaceEnd(source, options.end);
   const title = groupAt(source, start);
   if (title) start = whitespaceEnd(source, title.end);
@@ -93,7 +96,32 @@ export function readLatexBeamerFrame(source: string) {
     title: title ? source.slice(title.from, title.to) : '',
     subtitle: subtitle ? source.slice(subtitle.from, subtitle.to) : '',
     titlePage,
-    topAligned: !!aligned,
+    titleRange: title && { from: title.from, to: title.to },
+    subtitleRange: subtitle && { from: subtitle.from, to: subtitle.to },
+    plain,
+    alignment,
+    topAligned: alignment === 't',
     overlays,
+  };
+}
+
+/** Dimensions and stretch weights used by Beamer's default outer theme. */
+export function latexBeamerLayout(classOptions: readonly string[], alignment?: string, plain = false) {
+  const fontPoints = classOptions.includes('12pt') ? 17.28 : 14.4;
+  const leadingPoints = fontPoints === 17.28 ? 22 : 18;
+  const frameAlign = alignment ?? classOptions.findLast(option => option === 't' || option === 'c' || option === 'b') ?? 'c';
+  const millimeter = 96 / 25.4;
+  const inset = 3 * millimeter;
+  const titleSize = fontPoints * texPoint;
+  return {
+    titleSize,
+    titleLeading: leadingPoints * texPoint,
+    titleInset: inset,
+    titlePadding: inset - 0.444 * titleSize,
+    titleAfter: 0.25 * (classOptions.includes('12pt') ? 12 : classOptions.includes('10pt') ? 10 : 10.95) * texPoint,
+    footer: plain ? 0 : 4 * texPoint,
+    top: frameAlign === 't' ? 2 * millimeter : 0,
+    topStretch: frameAlign === 't' ? 0 : frameAlign === 'b' ? 1 : 2,
+    bottomStretch: frameAlign === 'b' ? 0 : 3,
   };
 }

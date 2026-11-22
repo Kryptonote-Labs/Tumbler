@@ -22,8 +22,8 @@ export { latexInlineFlow, latexParagraphText, type LatexParagraphSegment } from 
 export { measureLatexRoman, type LatexRomanFont } from './latex-font-metrics';
 export { latexHorizontalRule, latexNaturalColumns, latexNaturalTableWidths } from './latex-tables';
 export { hyphenateLatexEnglish } from './latex-hyphenation';
-export { readLatexBeamerFrame } from './latex-beamer';
-export { readLatexTikzStateDiagram } from './latex-tikz';
+export { latexBeamerLayout, readLatexBeamerFrame } from './latex-beamer';
+export { layoutLatexTikzStateDiagram, readLatexTikzStateDiagram } from './latex-tikz';
 export type { LatexTypography } from './latex-typography';
 export { latexLandscapeLayout, latexPageLayout, latexPaperSettings, paginateLatex } from './latex-layout';
 export { paginateLatexRegions, type LatexRegionBlock } from './latex-page-regions';

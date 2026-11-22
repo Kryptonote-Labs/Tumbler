@@ -24,6 +24,7 @@ FACES = {
     "cmbx12": ("Tumbler TeX Roman 12", "Bold"),
     "cmr17": ("Tumbler TeX Roman 17", "Regular"),
     "cmss10": ("Tumbler TeX Sans", "Regular"),
+    "cmss12": ("Tumbler TeX Sans 12", "Regular"),
     "cmssbx10": ("Tumbler TeX Sans", "Bold"),
     "cmtt10": ("Tumbler TeX Mono", "Regular"),
 }
@@ -47,6 +48,12 @@ def features(metrics, glyphs):
         for name, rules in (("kern", kern), ("liga", ligatures))
         if rules
     )
+
+
+def glyph_bounds(glyphs, name):
+    pen = BoundsPen(glyphs)
+    glyphs[name].draw(pen)
+    return pen.bounds
 
 
 def convert(tree, source, family, style, destination, copyright):
@@ -88,6 +95,8 @@ def convert(tree, source, family, style, destination, copyright):
     })
     builder.setupOS2(
         sTypoAscender=900, sTypoDescender=-100, usWinAscent=900, usWinDescent=250,
+        sCapHeight=round(glyph_bounds(glyphs, "H")[3]),
+        sxHeight=round(glyph_bounds(glyphs, "x")[3]),
         fsSelection=(0x01 if italic else 0) | (0x20 if bold else 0) or 0x40,
         usWeightClass=700 if bold else 400,
     )
@@ -111,7 +120,7 @@ def main():
         gzip.decompress(args.license.read_bytes()) if args.license.suffix == ".gz"
         else args.license.read_bytes()
     )
-    (destination / "OFL.txt").write_bytes(license_text)
+    (destination / "OFL.txt").write_bytes(b"\n".join(line.rstrip() for line in license_text.splitlines()) + b"\n")
     for source, (family, style) in FACES.items():
         convert(args.texmf, source, family, style, destination, license_text.decode().splitlines()[0])
 
