@@ -1,3 +1,4 @@
+import { isLatexHeading } from './latex-spec';
 import { latexEffectivePrefix } from './latex-project';
 import { readLatexSubfigures } from './latex-figures';
 import { readLatexCodeBlock } from './latex-code';
@@ -134,7 +135,7 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
       }
       return true;
     }
-    if (type === 'heading') {
+    if (isLatexHeading(node)) {
       const open = String(node.attrs.open ?? '');
       const [, name = latexHeadings[node.attrs.level - 1] ?? 'section', star] =
         /^\\([a-z]+)(\*)?/.exec(open) ?? [];

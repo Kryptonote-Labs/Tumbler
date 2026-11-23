@@ -92,11 +92,11 @@ export function latexParagraphText(node: Node, resolvedInline?: (source: string)
     }
     const from = segment.text.length;
     segment.text += content;
-    const bold = child.marks.some(
-      (mark) => mark.type.name === 'strong' || mark.attrs.style === 'strong',
-    );
-    const italic = child.marks.some((mark) => mark.type.name === 'em' || mark.attrs.style === 'em');
-    const family = child.marks.findLast((mark) => mark.attrs.style === 'sans' || mark.attrs.style === 'mono')?.attrs.style;
+    const normal = child.marks.findLastIndex((mark) => mark.attrs.style === 'normal');
+    const marks = normal < 0 ? child.marks : child.marks.slice(normal + 1);
+    const bold = marks.some((mark) => mark.type.name === 'strong' || mark.attrs.style === 'strong');
+    const italic = marks.some((mark) => mark.type.name === 'em' || mark.attrs.style === 'em');
+    const family = marks.findLast((mark) => mark.attrs.style === 'sans' || mark.attrs.style === 'mono')?.attrs.style;
     segment.runs.push({ kind: 'text', from, to: segment.text.length, position, bold, italic, family });
   });
   if (supported) return { segments, noIndent };

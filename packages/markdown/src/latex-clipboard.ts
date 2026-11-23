@@ -121,7 +121,10 @@ export function latexClipboard(schema: Schema) {
       return rendered;
     },
   } satisfies DOMSerializer['marks'];
-  const baseRules = DOMParser.fromSchema(schema).rules;
+  // Clipboard headings from Markdown and other editors become LaTeX headings.
+  const baseRules = DOMParser.fromSchema(schema).rules.map((rule) =>
+    'node' in rule && rule.node === 'heading' ? { ...rule, node: 'latex_heading' } : rule,
+  );
   const include: TagParseRule = {
     tag: 'div[data-latex-include][data-latex-delimiters]',
     node: 'latex_include',
@@ -162,7 +165,11 @@ export function latexClipboard(schema: Schema) {
         return false;
       const font = element.getAttribute('data-latex-font');
       const colour = element.getAttribute('data-latex-colour');
-      const style = colour && /^#[a-f0-9]{6}$/.test(colour) ? 'colour' : font === 'sans' || font === 'mono' ? font : element.tagName === 'STRONG' ? 'strong' : 'em';
+      const style = colour && /^#[a-f0-9]{6}$/.test(colour)
+        ? 'colour'
+        : font === 'sans' || font === 'mono' || font === 'normal'
+          ? font
+          : element.tagName === 'STRONG' ? 'strong' : 'em';
       return {
         open: delimiters.open,
         close: delimiters.close,

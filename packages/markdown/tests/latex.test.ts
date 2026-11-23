@@ -1,10 +1,12 @@
 import { expect, test } from 'bun:test';
 import { TextSelection } from 'prosemirror-state';
 import { Step } from 'prosemirror-transform';
+import { noteSchema } from '../src';
 import { noteState, receiveTransaction, sendableSteps, toggleLatexStyle, undo } from '../src/editor';
 import {
   latexBlockAtOffset,
   latexNumbering,
+  latexRunningFields,
   paginateLatex,
   parseLatex,
   replaceLatexSource,
@@ -45,7 +47,7 @@ An equation $v^2$ and an escaped \% with \R.
 test('LaTeX keeps original bytes around visual text, ribbon formatting and equation edits', () => {
   const document = parseLatex(article);
   expect(serializeLatex(document)).toBe(article);
-  expect(document.firstChild?.type.name).toBe('heading');
+  expect(document.firstChild?.textContent).toBe('Energy');
   expect(document.textContent).toContain('Ordinary prose.');
   let state = noteState('', 0, 'test', document);
   const dispatch = (tr: Parameters<typeof state.apply>[0]) => {
@@ -84,6 +86,34 @@ test('source edits use the same undo history and leave the rest of the article i
     state = state.apply(transaction);
   });
   expect(serializeLatex(state.doc)).toBe(article);
+});
+
+test('source edits retain the positions of headings saved by earlier editors', () => {
+  const source = String.raw`\section{Before}
+
+Body.
+
+\section{After}`;
+  const parsed = parseLatex(source);
+  const legacy = noteSchema.nodeFromJSON({
+    ...parsed.toJSON(),
+    content: [
+      { ...parsed.child(0).toJSON(), type: 'heading' },
+      parsed.child(1).toJSON(),
+      { ...parsed.child(2).toJSON(), type: 'heading' },
+    ],
+  });
+  legacy.check();
+  expect(serializeLatex(legacy)).toBe(source);
+  expect(latexNumbering(legacy)?.headings.size).toBe(2);
+  expect(replaceLatexSource(legacy, source).steps).toHaveLength(0);
+
+  const next = source.replace('Body.', 'Body edited.');
+  const edit = replaceLatexSource(legacy, next);
+  expect(edit.mapping.map(3)).toBe(3);
+  expect(edit.mapping.map(legacy.content.size - 3)).toBe(edit.doc.content.size - 3);
+  edit.doc.check();
+  expect(serializeLatex(edit.doc)).toBe(next);
 });
 
 test('reloading the LaTeX editor keeps preamble changes readable by ProseMirror', async () => {
@@ -188,4 +218,73 @@ test('a formatting alias stays editable and keeps the authored macro call', () =
   expect(document.firstChild?.firstChild?.marks[0]?.attrs.style).toBe('sans');
   const state = noteState('', 0, 'test', document);
   expect(serializeLatex(state.tr.insertText('Ready', 1, 9).doc)).toBe(source.replace('Incoming', 'Ready'));
+});
+
+test('formatting scopes expose their text and tables without rewriting their source', () => {
+  const source = String.raw`\vspace*{5mm}
+{\fontsize{34}{39}\selectfont\bfseries Heading\par}
+
+{\small
+\begin{tabularx}{\linewidth}{XX}
+One & Two\\
+\end{tabularx}
+}`;
+  const document = parseLatex(source);
+  document.check();
+  expect(document.child(1).textContent).toBe('Heading');
+  const table = document.child(2).firstChild;
+  expect(table?.attrs.source).toContain('One & Two');
+  expect(serializeLatex(document)).toBe(source);
+  const position = document.child(0).nodeSize + 2;
+  const state = noteState('', 0, 'test', document);
+  const edited = state.apply(state.tr.insertText('Title', position, position + 'Heading'.length));
+  expect(serializeLatex(edited.doc)).toBe(source.replace('Heading', 'Title'));
+});
+
+test('vertical space inside a paragraph does not split its text', () => {
+  const source = String.raw`Before\vspace{2pt} after.
+
+\vspace{3pt}
+Next paragraph.`;
+  const document = parseLatex(source);
+  expect(Array.from({ length: document.childCount }, (_, index) => document.child(index).type.name))
+    .toEqual(['paragraph', 'latex_raw', 'paragraph']);
+  expect(serializeLatex(document)).toBe(source);
+});
+
+test('a local declaration on its own source line can stay in a paragraph', () => {
+  for (const before of ['', 'Before.\n']) {
+    const source = before + String.raw`{\small Small text}` + '\nAfter.';
+    const document = parseLatex(source);
+    expect(document.childCount).toBe(1);
+    expect(document.firstChild?.type.name).toBe('paragraph');
+    expect(serializeLatex(document)).toBe(source);
+  }
+});
+
+test('an explicit center footer replaces the default folio, even when empty', () => {
+  for (const content of ['', String.raw`Report \thepage`]) {
+    const prefix = String.raw`\pagestyle{fancy}\fancyfoot[C]{${content}}`;
+    expect(latexRunningFields(prefix)?.clearDefault).toBe(true);
+  }
+  expect(latexRunningFields(String.raw`\pagestyle{fancy}\fancyfoot[R]{Report}`)?.clearDefault)
+    .toBe(false);
+});
+
+test('fancy running fields ignore comments and apply resets in source order', () => {
+  expect(latexRunningFields(String.raw`\pagestyle{fancy}
+% \fancyfoot[C]{} \fancyhf{}
+% \renewcommand{\headrulewidth}{0pt}
+\fancyfoot[R]{Right}`)).toMatchObject({
+    clearDefault: false,
+    fields: [{ area: 'foot', slot: 'R', source: 'Right' }],
+  });
+  expect(latexRunningFields(String.raw`\pagestyle{fancy}
+\fancyhead[L]{Old header}
+\fancyfoot[C]{Old footer}
+\fancyhf{}
+\fancyfoot[R]{New footer}`)).toMatchObject({
+    clearDefault: true,
+    fields: [{ area: 'foot', slot: 'R', source: 'New footer' }],
+  });
 });

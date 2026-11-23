@@ -1,4 +1,5 @@
 import { readLatexPackages } from './latex-preamble';
+import { latexLength } from './latex-lengths';
 import { latexRomanGlue, type LatexRomanFont } from './latex-font-metrics';
 
 export const texPoint = 96 / 72.27;
@@ -28,11 +29,13 @@ export type LatexTypography = Readonly<{
   }>;
   subcaption: TextSize & { gap: number; shift: number; romanFont?: 'cmr9' | 'cmr10' };
   hiddenLinks: boolean;
+  latinModern: boolean;
   sections: readonly [SectionSize, SectionSize, SectionSize];
   table: Readonly<{
     separation: number;
     longTableSkip: number;
     naturalLineHeight: number;
+    rowStretch: number;
     tallRule: number;
     thinRule: number;
     spaceAboveRule: number;
@@ -93,12 +96,19 @@ export function latexTypography(points: number, prefix: string, twoColumns = fal
       prefix,
     );
   const packages = readLatexPackages(prefix);
+  const latinModern = packages.some(({ name }) => name === 'lmodern');
+  const arrayStretch = Number([...prefix.matchAll(/\\(?:re)?newcommand\s*\{\\arraystretch\}\s*\{([0-9.]+)\}/g)].at(-1)?.[1] ?? 1);
+  const columnSeparation = [...prefix.matchAll(/\\setlength\s*\{\\tabcolsep\}\s*\{([^{}]+)\}/g)].at(-1)?.[1];
   const microtype = packages.find(item => item.name === 'microtype');
   const caption = packages.some(item => item.name === 'caption' || item.name === 'subcaption');
   const subcaption = points === 12 ? classic[11].text : points === 11 ? classic[10].text : textSize(9, 11);
   // Caption packages add a strut whose baseline is at 70% of the line height.
   const captionShift = ({ size, leading }: TextSize) => 0.2 * leading - 0.4 * size;
-  const expansion = microtype && usesClassicRoman && !microtype.options.some(option => /^expansion\s*=\s*false$/.test(option))
+  const expansionOption = microtype?.options.findLast(option => /^expansion(?:\s*=|$)/.test(option));
+  // The bundled pdfTeX runtime leaves expansion off for this family unless explicitly requested.
+  const expansion = microtype && (
+    expansionOption === undefined ? usesClassicRoman : /^expansion(?:\s*=\s*true)?$/.test(expansionOption)
+  ) && (usesClassicRoman || latinModern)
     ? { stretch: 0.02, shrink: 0.02 } : undefined;
   const titleAscent = title.leading / 2 + 0.4 * title.size;
   const titleDescent = title.leading - titleAscent;
@@ -138,6 +148,7 @@ export function latexTypography(points: number, prefix: string, twoColumns = fal
       shift: captionShift(subcaption),
       ...(usesClassicRoman ? { romanFont: points === 10 ? 'cmr9' : 'cmr10' } : {}),
     },
+    latinModern,
     hiddenLinks: packages.some(item => item.name === 'hyperref' && item.options.includes('hidelinks')),
     sections: [
       section(points === 12 ? textSize(17.28, 22) : textSize(14.4, 18), 3.5, 2.3),
@@ -145,7 +156,8 @@ export function latexTypography(points: number, prefix: string, twoColumns = fal
       section(text, 3.25, 1.5),
     ],
     table: {
-      separation: 6 * texPoint,
+      separation: latexLength(columnSeparation, text.size) ?? 6 * texPoint,
+      rowStretch: arrayStretch > 0 && Number.isFinite(arrayStretch) ? arrayStretch : 1,
       longTableSkip: 12 * texPoint,
       // TeX's array strut puts its baseline at 70% of the baseline skip.
       naturalLineHeight: 2 * (0.7 * text.leading - 0.4 * text.size),

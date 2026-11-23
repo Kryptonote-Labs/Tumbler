@@ -1,3 +1,4 @@
+import { isLatexHeading } from './latex-spec';
 import { latexEffectivePrefix } from './latex-project';
 import { latexColourDefinition } from './latex-colour';
 import { latexLetterCommandAt } from './latex-letter';
@@ -118,7 +119,7 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
     const effect = (change: Omit<Extract<LatexBlockFlow, { kind: 'content' }>, 'kind'>) => {
       flow.set(position, { ...flow.get(position), ...change, kind: 'content' });
     };
-    if (node.type.name === 'heading' && chapters) {
+    if (isLatexHeading(node) && chapters) {
       const open = String(node.attrs.open ?? '');
       const command = open.slice(1, commandEnd(open, 0));
       if (command === 'chapter' || command === 'part') {

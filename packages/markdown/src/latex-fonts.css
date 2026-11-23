@@ -65,3 +65,83 @@
   src: url('./fonts/latex/tumblertexsans12-regular.woff2') format('woff2');
   font-display: swap;
 }
+
+@font-face {
+  font-family: 'Latin Modern Roman';
+  src: url('./fonts/latex/lmroman10-regular.otf') format('opentype');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: 'Latin Modern Roman';
+  src: url('./fonts/latex/lmroman10-bold.otf') format('opentype');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 700;
+}
+
+@font-face {
+  font-family: 'Latin Modern Roman';
+  src: url('./fonts/latex/lmroman10-italic.otf') format('opentype');
+  font-display: swap;
+  font-style: italic;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: 'Latin Modern Roman';
+  src: url('./fonts/latex/lmroman10-bolditalic.otf') format('opentype');
+  font-display: swap;
+  font-style: italic;
+  font-weight: 700;
+}
+
+@font-face {
+  font-family: 'Latin Modern Roman 12';
+  src: url('./fonts/latex/lmroman12-regular.otf') format('opentype');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: 'Latin Modern Roman 12';
+  src: url('./fonts/latex/lmroman12-bold.otf') format('opentype');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 700;
+}
+
+@font-face {
+  font-family: 'Latin Modern Roman 17';
+  src: url('./fonts/latex/lmroman17-regular.otf') format('opentype');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: 'Latin Modern Sans';
+  src: url('./fonts/latex/lmsans10-regular.otf') format('opentype');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}
+
+@font-face {
+  font-family: 'Latin Modern Sans';
+  src: url('./fonts/latex/lmsans10-bold.otf') format('opentype');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 700;
+}
+
+@font-face {
+  font-family: 'Latin Modern Mono';
+  src: url('./fonts/latex/lmmono10-regular.otf') format('opentype');
+  font-display: swap;
+  font-style: normal;
+  font-weight: 400;
+}

@@ -29,6 +29,7 @@ import {
 import { Decoration, DecorationSet, type EditorView, type NodeViewConstructor } from 'prosemirror-view';
 import { environmentAt, verbatimEnd } from './latex-syntax';
 import { noteSchema as schema } from './index';
+import { isLatexHeading, latexHeadingDOMRules } from './latex-spec';
 import { latexClipboard } from './latex-clipboard';
 import { latexHeadings, parseLatex, refreshRebasedLatexFiles, retainDetachedLatexFiles, serializeLatex } from './latex';
 import { latexNumberingPlugin } from './latex-numbering-view';
@@ -47,7 +48,10 @@ class LatexEditorDOMParser extends DOMParser {
   }
 }
 
-const latexEditorDOMParser = new LatexEditorDOMParser(schema, DOMParser.fromSchema(schema).rules);
+const latexEditorDOMParser = new LatexEditorDOMParser(schema, [
+  ...latexHeadingDOMRules,
+  ...DOMParser.fromSchema(schema).rules,
+]);
 
 function hasStyle(mark: Mark, style: Style) {
   return (
@@ -95,7 +99,7 @@ export function latexHeading(level: number, command?: 'part' | 'chapter'): Comma
     const tr = state.tr;
     state.doc.nodesBetween(from, to, (node, position) => {
       if (!node.isTextblock) return;
-      const type = schema.nodes[level ? 'heading' : 'paragraph']!;
+      const type = schema.nodes[level ? 'latex_heading' : 'paragraph']!;
       const open = command ? '\\' + command + '{' : null;
       const currentCommand = String(node.attrs.open ?? '').match(/^\\(part|chapter)\b/)?.[1];
       if (
@@ -229,7 +233,7 @@ function latexInputRules() {
         (state, match, start, end) => {
           const block = state.doc.resolve(start);
           if (end !== block.end() || !block.parent.isTextblock) return null;
-          const node = schema.nodes.heading!.create(
+          const node = schema.nodes.latex_heading!.create(
             {
               level: Math.max(1, latexHeadings.indexOf(match[1]!) + 1),
               before: block.parent.attrs.before,
@@ -243,7 +247,7 @@ function latexInputRules() {
       new InputRule(/^(#{1,5}) $/, (state, match, start, end) =>
         state.tr
           .delete(start, end)
-          .setNodeMarkup(state.doc.resolve(start).before(), schema.nodes.heading!, {
+          .setNodeMarkup(state.doc.resolve(start).before(), schema.nodes.latex_heading!, {
             level: match[1]!.length,
             before: state.selection.$from.parent.attrs.before,
           }),
@@ -369,7 +373,7 @@ export function latexState(
   nodeViews?: LatexNodeViews,
 ) {
   const split = splitBlockAs((node, atEnd) => ({
-    type: node.type.name === 'heading' && atEnd ? schema.nodes.paragraph! : node.type,
+    type: isLatexHeading(node) && atEnd ? schema.nodes.paragraph! : node.type,
   }));
   return EditorState.create({
     schema,

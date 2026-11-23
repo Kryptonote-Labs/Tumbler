@@ -4,6 +4,7 @@ import { isLatexProjectPath, validateLatexProject } from './latex-project';
 export const latexStructureNodes = [
   'paragraph',
   'heading',
+  'latex_heading',
   'bullet_list',
   'ordered_list',
   'list_item',
@@ -31,6 +32,11 @@ export const latexDocumentAttrs = {
   latexProject: { default: null, validate: validateLatexProject },
 };
 
+// Existing LaTeX snapshots and collaboration steps may contain Markdown headings.
+export function isLatexHeading(node: Node | null | undefined) {
+  return node?.type.name === 'latex_heading' || node?.type.name === 'heading';
+}
+
 // Store source separately from the visible label. Only the LaTeX clipboard parser
 // recognizes these attributes; other applications receive ordinary text and HTML.
 function atomDOM(node: Node, className: string) {
@@ -46,6 +52,22 @@ function atomDOM(node: Node, className: string) {
 }
 
 export const latexNodes = {
+  latex_heading: {
+    group: 'block',
+    content: 'inline*',
+    defining: true,
+    attrs: {
+      ...latexBlockAttrs,
+      level: {
+        default: 1,
+        validate(value: unknown) {
+          if (typeof value !== 'number' || !Number.isInteger(value) || value < 1 || value > 6)
+            throw new RangeError('Invalid LaTeX heading level.');
+        },
+      },
+    },
+    toDOM: (node) => ['h' + node.attrs.level, { 'data-latex-heading': '' }, 0],
+  },
   latex_include: {
     group: 'block',
     content: 'block+',
@@ -113,6 +135,12 @@ function mathNode(display: boolean): NodeSpec {
     leafText: (node) => node.attrs.source,
   };
 }
+
+export const latexHeadingDOMRules: TagParseRule[] = Array.from({ length: 6 }, (_, index) => ({
+  tag: 'h' + (index + 1) + '[data-latex-heading]',
+  node: 'latex_heading',
+  attrs: { level: index + 1 },
+}));
 
 export const latexAtomPasteRules: TagParseRule[] = ['latex_inline', 'latex_raw', 'latex_math', 'latex_display_math'].map((node) => ({
   node,

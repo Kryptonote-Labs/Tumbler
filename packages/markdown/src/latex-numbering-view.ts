@@ -81,7 +81,15 @@ function decorate(document: Node) {
     for (const [position, number] of numbers.listings) around(position, { latexListing: number });
     for (const [position, number] of numbers.footnotes) around(position, { latexFootnote: number });
   }
+  const latexPreviewPrefix = latexEffectivePrefix(document);
   document.descendants((node, position) => {
+    if (
+      node.type.name === 'latex_math' ||
+      node.type.name === 'latex_display_math' ||
+      node.type.name === 'latex_raw' ||
+      node.type.name === 'latex_inline'
+    )
+      decorations.push(Decoration.node(position, position + node.nodeSize, {}, { latexPreviewPrefix }));
     if (isLabelParagraph(node))
       decorations.push(
         Decoration.node(position, position + node.nodeSize, { 'data-latex-label-only': '' }),
