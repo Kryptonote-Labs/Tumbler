@@ -1,6 +1,6 @@
 import { latexLength } from './latex-lengths';
 import { resolveLatexColour } from './latex-colour';
-import { commandEnd, environmentAt, groupAt, whitespaceEnd } from './latex-syntax';
+import { commandEnd, environmentAt, groupAt, latexCommands, whitespaceEnd } from './latex-syntax';
 
 const fontSizes = new Map([
   ['tiny', 0.5], ['scriptsize', 0.7], ['footnotesize', 0.8], ['small', 0.9],
@@ -82,7 +82,17 @@ export function latexSectionPresentation(prefix: string) {
     const style = latexDeclarations(prefix.slice(styleGroup.from, styleGroup.to));
     formats.set(match[1]!, { style, unnumbered: !prefix.slice(label.from, label.to).trim() });
   }
-  return formats;
+  const spacing = new Map<string, { before: number; after: number }>();
+  for (const match of prefix.matchAll(/\\titlespacing\*?\s*\{\\([a-z]+)\}/g)) {
+    const indent = groupAt(prefix, whitespaceEnd(prefix, match.index + match[0].length));
+    const before = indent && groupAt(prefix, whitespaceEnd(prefix, indent.end));
+    const after = before && groupAt(prefix, whitespaceEnd(prefix, before.end));
+    if (!before || !after) continue;
+    const above = latexLength(prefix.slice(before.from, before.to));
+    const below = latexLength(prefix.slice(after.from, after.to));
+    if (above !== undefined && below !== undefined) spacing.set(match[1]!, { before: above, after: below });
+  }
+  return { formats, spacing };
 }
 
 export function latexPresentationColour(name: string | undefined, colours: ReadonlyMap<string, string>) {
@@ -116,4 +126,34 @@ export function latexTikzFragment(source: string) {
   const picture = /^\\begin\s*\{center\}([\s\S]*)\\end\s*\{center\}$/.exec(trimmed)?.[1]?.trim() ?? trimmed;
   const environment = environmentAt(picture, 0);
   if (environment?.name === 'tikzpicture' && !picture.slice(environment.end).trim()) return picture;
+}
+
+/** Resolve alignment and width for simple array column aliases with zero or one argument. */
+export function latexColumnAliasWidths(prefix: string, columns: readonly string[], em: number) {
+  const aliases = new Map<string, { parameters: number; type: string; width: string | undefined }>();
+  for (const { name, end } of latexCommands(prefix)) {
+    if (name !== 'newcolumntype') continue;
+    const key = groupAt(prefix, whitespaceEnd(prefix, end));
+    if (!key || key.to - key.from !== 1) continue;
+    const option = groupAt(prefix, whitespaceEnd(prefix, key.end), '[', ']');
+    const count = option ? Number(prefix.slice(option.from, option.to)) : 0;
+    if (count !== 0 && count !== 1) continue;
+    const definition = groupAt(prefix, whitespaceEnd(prefix, option?.end ?? key.end));
+    if (!definition) continue;
+    const body = prefix.slice(definition.from, definition.to).trim();
+    const decoration = body.startsWith('>') && groupAt(body, 1);
+    const format = /^(X|[pmb]\s*\{([^{}]+)\})$/.exec(body.slice(decoration ? decoration.end : 0));
+    if (format) aliases.set(prefix.slice(key.from, key.to), {
+      parameters: count, type: format[1]!, width: format[2],
+    });
+  }
+  return columns.map((column) => {
+    const match = /^(?:@\{\s*\})?([A-Z])(?:\{([^{}]+)\})?(?:@\{\s*\})?$/.exec(column.trim());
+    if (!match) return;
+    if (match[1] === 'X') return 'flexible' as const;
+    const alias = aliases.get(match[1]!);
+    if (!alias || alias.parameters !== Number(!!match[2])) return;
+    if (alias.type === 'X') return 'flexible' as const;
+    return latexLength(alias.width?.replace('#1', match[2] ?? ''), em);
+  });
 }

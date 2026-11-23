@@ -109,7 +109,7 @@ function columnsOf(spec: string) {
       continue;
     }
     if (char === '*') return;
-    const takesGroup = /[pmbwX@!><]/.test(char);
+    const takesGroup = /[pmbwA-Z@!><]/.test(char);
     let end = index + 1;
     if (takesGroup) {
       while (spec[end] === ' ') end++;
@@ -118,7 +118,7 @@ function columnsOf(spec: string) {
       if (end < 0) return;
     }
     const token = spec.slice(index, end);
-    if (/^[lcrpmbwX]/.test(token)) {
+    if (/^[lcrpmbwA-Z]/.test(token)) {
       columns.push(decoration + token);
       decoration = '';
     } else if (columns.length) columns[columns.length - 1] += token;

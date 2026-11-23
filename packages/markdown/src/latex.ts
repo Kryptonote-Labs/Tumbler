@@ -1,6 +1,6 @@
 export { latexMathMacros, interpretLatexParagraphMacro, interpretLatexText, readLatexTextMacros, type LatexPrintedText } from './latex-macros';
 import { latexDeclarations, latexVerticalSpace } from './latex-presentation';
-export { latexDeclarations, latexVerticalSpace, latexSectionPresentation, latexPresentationColour, latexRunningFields, latexTikzFragment } from './latex-presentation';
+export { latexDeclarations, latexVerticalSpace, latexSectionPresentation, latexPresentationColour, latexRunningFields, latexTikzFragment, latexColumnAliasWidths } from './latex-presentation';
 export { readLatexColours } from './latex-colour';
 import { readLatexEnumitem } from './latex-list';
 import { readLatexBookMatter, readLatexClass } from './latex-flow';
