@@ -2,7 +2,7 @@ import { readLatexColours, resolveLatexColour } from './latex-colour';
 import { usesLatexPackage } from './latex-preamble';
 import { commandEnd, groupAt, latexCommands, lineEnd, whitespaceEnd } from "./latex-syntax";
 
-export type LatexTextStyle = "strong" | "em" | "sans" | "mono";
+export type LatexTextStyle = "strong" | "em" | "sans" | "mono" | "normal";
 type Macro = { count: number; optional?: string; replacement: string };
 type Macros = ReadonlyMap<string, Macro>;
 
@@ -12,6 +12,7 @@ const styles: ReadonlyMap<string, LatexTextStyle> = new Map([
   ["textit", "em"],
   ["textsf", "sans"],
   ["texttt", "mono"],
+  ["textnormal", "normal"],
 ]);
 const declarations = new Set([
   "newcommand",

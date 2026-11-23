@@ -104,7 +104,7 @@ Body.
   });
   legacy.check();
   expect(serializeLatex(legacy)).toBe(source);
-  expect(latexNumbering(legacy).headings.size).toBe(2);
+  expect(latexNumbering(legacy)?.headings.size).toBe(2);
   expect(replaceLatexSource(legacy, source).steps).toHaveLength(0);
 
   const next = source.replace('Body.', 'Body edited.');

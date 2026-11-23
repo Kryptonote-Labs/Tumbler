@@ -55,6 +55,7 @@ raw & <value>
 \end{verbatim}`;
   await withLatexEditor(source, (view) => {
     view.state.doc.check();
+    expect(view.dom.querySelector('[data-latex-heading] [data-latex-font="normal"]')?.textContent).toBe('title');
     view.dispatch(view.state.tr.setSelection(new AllSelection(view.state.doc)));
     const clipboard = view.serializeForClipboard(view.state.selection.content());
     expect(clipboard.text).toBe(source);
