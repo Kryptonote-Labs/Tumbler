@@ -211,7 +211,13 @@ test('custom theorem counter formats keep numbering opaque', () => {
 \begin{document}
 \begin{theorem}Statement.\end{theorem}
 \end{document}`;
-  expect(latexNumbering(parseLatex(source))).toBeUndefined();
+  for (const assignment of [
+    String.raw`\renewcommand{\thetheorem}`,
+    String.raw`\renewcommand*{\thetheorem}`,
+    String.raw`\def\thetheorem`,
+  ]) {
+    expect(latexNumbering(parseLatex(source.replace(String.raw`\renewcommand{\thetheorem}`, assignment)))).toBeUndefined();
+  }
 });
 
 test('inline page directives keep surrounding prose in one paragraph', () => {
@@ -224,4 +230,15 @@ and \null\textbf{after}.
   expect(document.childCount).toBe(1);
   expect(latexPageNumbers(latexFlow(document), [])).toEqual([{ number: 1, visible: false }]);
   expect(serializeLatex(document)).toBe(source);
+});
+
+test('section depth follows the active preamble and begin-document hook', () => {
+  const source = String.raw`\documentclass{article}
+\iffalse\setcounter{secnumdepth}{0}\fi
+\begin{document}
+\section{One}
+\end{document}`;
+  expect(latexNumbering(parseLatex(source))?.headings.size).toBe(1);
+  const hook = String.raw`\AtBeginDocument{\setcounter{secnumdepth}{0}}`;
+  expect(latexNumbering(parseLatex(hook + '\n' + source))?.headings.size).toBe(0);
 });
