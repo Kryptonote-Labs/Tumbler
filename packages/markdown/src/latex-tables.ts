@@ -30,7 +30,7 @@ export type LatexTabular = {
   /** Where the body between `\begin{tabular}{…}` and `\end{tabular}` is in the source. */
   start: number;
   end: number;
-  spec: { start: number; end: number; columns: string[]; width?: string };
+  spec: { start: number; end: number; columns: string[]; width?: string; columnSeparation?: string };
   rows: Row[];
   layout: TableLayout;
   rowStarts: number[];
@@ -121,8 +121,8 @@ function columnsOf(spec: string) {
     if (/^[lcrpmbwA-Z]/.test(token)) {
       columns.push(decoration + token);
       decoration = '';
-    } else if (columns.length) columns[columns.length - 1] += token;
-    else decoration += token;
+    } else if (char === '>' || decoration || !columns.length) decoration += token;
+    else columns[columns.length - 1] += token;
     index = end;
   }
   if (decoration && columns.length) columns[columns.length - 1] += decoration;
@@ -194,7 +194,15 @@ function captionRow(source: string) {
 /** Read a table's row source, including the separate roles that continue across pages. */
 export function readLatexTabular(source: string): LatexTabular | undefined {
   let environment: ReturnType<typeof environmentAt>;
+  let columnSeparation: string | undefined;
   for (const { name, start, end } of latexCommands(source)) {
+    if (name === 'setlength') {
+      const register = groupAt(source, whitespaceEnd(source, end));
+      if (register && source.slice(register.from, register.to).trim() === '\\tabcolsep') {
+        const length = groupAt(source, whitespaceEnd(source, register.end));
+        if (length) columnSeparation = source.slice(length.from, length.to);
+      }
+    }
     if (name !== 'begin') continue;
     const group = groupAt(source, whitespaceEnd(source, end));
     if (!group || !['tabular', 'tabular*', 'tabularx', 'longtable'].includes(source.slice(group.from, group.to)))
@@ -268,6 +276,7 @@ export function readLatexTabular(source: string): LatexTabular | undefined {
     spec: {
       start: spec.from, end: spec.to, columns: columns ?? [],
       ...(tableWidth !== undefined && { width: tableWidth }),
+      ...(columnSeparation !== undefined && { columnSeparation }),
     },
     rows,
     layout: continuing ? { kind: 'continuing', sections } : { kind: 'fixed', caption },

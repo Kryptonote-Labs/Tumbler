@@ -96,7 +96,24 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
   const changesTheoremNumber = (source: string) =>
     [...source.matchAll(/\\(?:(?:re)?newcommand\*?|(?:g|e|x)?def)\s*\{?\\the([A-Za-z@]+)(?![A-Za-z@])/g)]
       .some((match) => theoremCounters.has(match[1]));
-  if (opaqueCounters.test(prefix) || changesTheoremNumber(prefix)) return;
+  // A literal preamble declaration resets the equation counter whenever its parent advances.
+  // Leave opaque counter changes to TeX, including changes nested in a macro or condition.
+  const equationParentCommand = /\\(?:numberwithin|counterwithin)\s*\{equation\}\s*\{(chapter|section|subsection|subsubsection)\}/y;
+  let equationParent = documentClass === 'article' || !documentClass ? undefined : 'chapter';
+  let remainingPrefix = prefix;
+  if (!/\\if[A-Za-z@]*\b/.test(prefix)) {
+    let declaredParent: string | undefined;
+    for (const command of [...latexCommands(prefix)].reverse()) {
+      equationParentCommand.lastIndex = command.start;
+      const relation = equationParentCommand.exec(prefix);
+      if (!relation) continue;
+      const parent = relation[1]!;
+      if (declaredParent && declaredParent !== parent) return;
+      declaredParent = equationParent = parent;
+      remainingPrefix = remainingPrefix.slice(0, command.start) + remainingPrefix.slice(command.start + relation[0].length);
+    }
+  }
+  if (opaqueCounters.test(remainingPrefix) || changesTheoremNumber(prefix)) return;
   const chapters = documentClass === 'report' || documentClass === 'book';
   let depth = chapters ? 2 : 3;
   for (const literal of sectionDepthAssignments(prefix)) {
@@ -185,8 +202,8 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
       counters.set(name, counters.get(name)! + 1);
       // A part does not restart chapter or section numbers.
       if (name !== 'part') for (const lower of levels.slice(level + 1)) counters.set(lower, 0);
+      if (equationParent && level <= levels.indexOf(equationParent) && name !== 'part') equation = 0;
       if (name === 'chapter') {
-        equation = 0;
         listing = 0;
         footnote = 0;
         floatCount.figure = floatCount.table = 0;
@@ -204,7 +221,8 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
         const tag = /\\tag\*?\s*\{([^{}]*)\}/.exec(row)?.[1];
         if (tag !== undefined) return tag;
         if (!environment || /\\(?:nonumber|notag)\b/.test(row)) return null;
-        return within(++equation);
+        equation++;
+        return equationParent ? value(equationParent) + '.' + equation : String(equation);
       });
       if (environment || numbers.some((number) => number !== null))
         result.equations.set(position, numbers);

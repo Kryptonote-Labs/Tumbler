@@ -143,6 +143,18 @@ export function interpretLatexText(
   macros: Macros,
   colours = readLatexColours(''),
 ): LatexPrintedText[] | undefined {
+  if (!source.startsWith("\\")) return;
+  const command = source.slice(1, commandEnd(source, 0));
+  if (!macros.has(command) && !styles.has(command) && !symbols.has(command) && command !== 'textcolor') return;
+  return interpretLatexTextFragment(source, macros, colours);
+}
+
+/** Interpret a text fragment that can start with ordinary prose. */
+export function interpretLatexTextFragment(
+  source: string,
+  macros: Macros,
+  colours = readLatexColours(''),
+): LatexPrintedText[] | undefined {
   let remaining = 128;
   // Bound the work of expanding a single inline object. Its authored source stays intact.
   let remainingText = 65536;
@@ -237,9 +249,6 @@ export function interpretLatexText(
     }
     return result;
   }
-  if (!source.startsWith("\\")) return;
-  const command = source.slice(1, commandEnd(source, 0));
-  if (!macros.has(command) && !styles.has(command) && !symbols.has(command) && command !== 'textcolor') return;
   return read(source, 0);
 }
 
@@ -313,7 +322,18 @@ export function interpretLatexParagraphMacro(source: string, prefix: string) {
 
 /** KaTeX accepts parameterized replacements, with TeX execution disabled by its caller. */
 export function latexMathMacros(prefix: string) {
-  return Object.fromEntries([...readLatexTextMacros(prefix)]
+  const macros = Object.fromEntries([...readLatexTextMacros(prefix)]
     .filter(([, macro]) => macro.optional === undefined)
     .map(([name, macro]) => ['\\' + name, macro.replacement]));
+  for (const { name, end } of latexCommands(prefix)) {
+    if (name !== 'DeclareMathOperator') continue;
+    const star = prefix[end] === '*';
+    const key = groupAt(prefix, whitespaceEnd(prefix, end + Number(star)));
+    const text = key && groupAt(prefix, whitespaceEnd(prefix, key.end));
+    if (!key || !text) continue;
+    const command = prefix.slice(key.from, key.to).trim();
+    if (!/^\\[A-Za-z]+$/.test(command) || Object.hasOwn(macros, command)) continue;
+    macros[command] = '\\operatorname' + (star ? '*' : '') + '{' + prefix.slice(text.from, text.to) + '}';
+  }
+  return macros;
 }

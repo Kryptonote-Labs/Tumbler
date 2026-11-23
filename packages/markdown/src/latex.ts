@@ -1,6 +1,6 @@
 import { latexContentsRunEnd } from './latex-typeset-block';
 export { readLatexTypesetBlock } from './latex-typeset-block';
-export { latexMathMacros, interpretLatexParagraphMacro, interpretLatexText, readLatexTextMacros, type LatexPrintedText } from './latex-macros';
+export { latexMathMacros, interpretLatexParagraphMacro, interpretLatexText, interpretLatexTextFragment, readLatexTextMacros, type LatexPrintedText } from './latex-macros';
 import { latexDeclarations, latexVerticalSpace } from './latex-presentation';
 export { latexDeclarations, latexVerticalSpace, latexSectionPresentation, latexPresentationColour, latexRunningFields, latexTikzFragment, latexColumnAliasWidths } from './latex-presentation';
 export { readLatexColours } from './latex-colour';
@@ -68,6 +68,7 @@ export {
   bibEntryName,
   latexBibliographyDatabases,
   latexBibliographyFiles,
+  readLatexBibliography,
   latexCitationKeys,
   latexCitationNumbers,
   parseBibtex,
