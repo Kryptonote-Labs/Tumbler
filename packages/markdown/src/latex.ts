@@ -1,7 +1,9 @@
-import { latexContentsRunEnd } from './latex-typeset-block';
-export { readLatexTypesetBlock } from './latex-typeset-block';
+import { latexContentsLineAt } from './latex-contents-line';
+export { latexContentsLineStyle } from './latex-contents-line';
+import { latexBlockDeclaration, latexMinipageWidth, latexTextEnvironments } from './latex-text-layout';
+export { latexBlockDeclaration, latexMinipageWidth, isLatexTitlePage } from './latex-text-layout';
 export { latexMathMacros, interpretLatexParagraphMacro, interpretLatexText, interpretLatexTextFragment, readLatexTextMacros, type LatexPrintedText } from './latex-macros';
-import { latexDeclarations, latexVerticalSpace } from './latex-presentation';
+import { latexDeclarations, latexTikzFragment, latexVerticalSpace } from './latex-presentation';
 export { latexDeclarations, latexVerticalSpace, latexSectionPresentation, latexPresentationColour, latexRunningFields, latexTikzFragment, latexColumnAliasWidths } from './latex-presentation';
 export { readLatexColours } from './latex-colour';
 import { readLatexEnumitem } from './latex-list';
@@ -142,6 +144,8 @@ const textLiterals = [
   ['--', '–'],
   ['``', '“'],
   ["''", '”'],
+  ['`', '‘'],
+  ["'", '’'],
 ] as const;
 
 const escapeText = new Map([...escaped].map(([source, value]) => [value, source]));
@@ -232,6 +236,7 @@ function inline(
             end = group.end;
           }
         }
+        if (command === '\\quad' || command === '\\qquad') end = whitespaceEnd(source, end);
         const raw = source.slice(position, end);
         nodes.push(
           schema.nodes.latex_inline!.create(
@@ -318,7 +323,7 @@ function blockStart(source: string, position: number, context: SourceContext) {
     command === '\\begin' ||
     (!!context.include && !!readLatexInclude(source, position)) ||
     !!readLatexParagraphMacro(source, context.macros, position) ||
-    !!latexContentsRunEnd(source, context.macros, position) ||
+    !!latexContentsLineAt(source, context.macros, position) ||
     blockCommands.has(command) ||
     bibliographyCommands.has(command) ||
     headingLevel(command.slice(1)) > 0 ||
@@ -482,6 +487,21 @@ function environmentBlock(source: string, position: number, before: string, cont
       };
     }
   }
+  if (latexTextEnvironments.has(name) && depth < 64 &&
+      (name !== 'center' || !latexTikzFragment(source.slice(position, end)))) {
+    const width = name === 'minipage' && groupAt(source, whitespaceEnd(source, from));
+    const bodyStart = width ? width.end : from;
+    if (name !== 'minipage' || (width && bodyStart <= to && latexMinipageWidth(source.slice(position, bodyStart), 1, 1) !== undefined)) {
+      const body = blocks(source.slice(bodyStart, to), { ...context, colours: new Map(context.colours) }, depth + 1);
+      if (!body.nodes.length) body.nodes.push(schema.nodes.paragraph!.create({ before: '' }));
+      return {
+        node: schema.nodes.latex_container!.create({
+          before, open: source.slice(position, bodyStart), close: body.tail + close,
+        }, body.nodes),
+        end,
+      };
+    }
+  }
   // Text environments edit as native blocks. The open and close source keep the environment, and
   // an empty one, such as a new abstract, gets an empty paragraph to type into.
   if (textEnvironments.has(name) && depth < 64) {
@@ -512,10 +532,16 @@ function blocks(source: string, context: SourceContext, depth = 0): { nodes: Nod
     const start = whitespaceEnd(source, position);
     const before = source.slice(position, start);
     if (start === source.length) return { nodes, tail: before };
-    const contents = source[start] === '\\' && latexContentsRunEnd(source, context.macros, start);
+    const contents = source[start] === '\\' && latexContentsLineAt(source, context.macros, start);
     if (contents) {
-      nodes.push(schema.nodes.latex_raw!.create({ before, source: source.slice(start, contents) }));
-      position = contents;
+      const { title, folio } = contents;
+      nodes.push(schema.nodes.latex_contents_line!.create({
+        before, open: source.slice(start, title.from), close: source.slice(folio.to, folio.end),
+      }, [
+        schema.nodes.paragraph!.create({ before: '' }, inline(source.slice(title.from, title.to), context)),
+        schema.nodes.paragraph!.create({ before: source.slice(title.to, folio.from) }, inline(source.slice(folio.from, folio.to), context)),
+      ]));
+      position = folio.end;
       continue;
     }
     const directive = readLatexPageDirective(source, start);
@@ -526,9 +552,11 @@ function blocks(source: string, context: SourceContext, depth = 0): { nodes: Nod
       continue;
     }
     const spacing = latexVerticalSpace(source, start);
-    if (spacing) {
-      nodes.push(schema.nodes.latex_raw!.create({ before, source: source.slice(start, spacing.end) }));
-      position = spacing.end;
+    const declaration = latexBlockDeclaration(source, start);
+    if (spacing || declaration) {
+      const end = spacing?.end ?? declaration!.end;
+      nodes.push(schema.nodes.latex_raw!.create({ before, source: source.slice(start, end) }));
+      position = end;
       continue;
     }
     const group = depth < 64 && declarationScope(source, start);
@@ -757,6 +785,9 @@ function blockSource(node: Node): string {
       result = (open ?? '\\' + command + '{') + inlineSource(node) + (close ?? '}');
       break;
     }
+    case 'latex_contents_line':
+      result = (open ?? '') + childrenSource(node) + (close ?? '');
+      break;
     case 'bullet_list':
     case 'ordered_list':
     case 'latex_landscape':
@@ -804,17 +835,18 @@ export function materializeLatexStructures(document: Node): Transform {
   const context = sourceContext(latexEffectivePrefix(document));
   document.descendants((node, position) => {
     const environment = node.type.name === 'latex_raw' ? latexEnvironmentName(node.attrs.source) : undefined;
-    const raw = !!environment && (
+    const raw = node.type.name === 'latex_raw' && (
+      !!latexContentsLineAt(node.attrs.source, context.macros) || (!!environment && (
       ['landscape', 'itemize', 'enumerate', 'description'].includes(environment) ||
       (context.letter && environment === 'letter') || (context.boxes && environment === 'tcolorbox') ||
-      (context.proof && environment === 'proof') || context.theorems.has(environment)
-    );
+      (context.proof && environment === 'proof') || context.theorems.has(environment) || latexTextEnvironments.has(environment)
+    )));
     const matter = node.type.name === 'paragraph' && node.children.some(child =>
       child.type.name === 'latex_inline' && readLatexBookMatter(child.attrs.source));
     const paragraphMacro = node.type.name === 'paragraph' && node.children.some(child =>
       child.type.name === 'latex_inline' && (
         readLatexParagraphMacro(child.attrs.source, context.macros) ||
-        latexContentsRunEnd(child.attrs.source, context.macros)
+        latexContentsLineAt(child.attrs.source, context.macros)
       ));
     const letter = context.letter && node.type.name === 'paragraph' && node.children.some(child =>
       child.type.name === 'latex_inline' && latexLetterCommandAt(child.attrs.source, 0));

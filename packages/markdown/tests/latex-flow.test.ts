@@ -153,7 +153,7 @@ Summary.
   expect(serializeLatex(document)).toBe(source);
 });
 
-test('adjacent custom dotted contents entries stay together as an editable source block', () => {
+test('custom dotted contents entries are editable rows with separate folios', () => {
   const source = String.raw`\documentclass{report}
 \makeatletter
 \newcommand{\chapentry}[2]{\@dottedtocline{0}{0em}{1em}{#1}{#2}}
@@ -167,10 +167,10 @@ test('adjacent custom dotted contents entries stay together as an editable sourc
 Ordinary body.
 \end{document}`;
   const document = parseLatex(source);
-  expect(document.child(1).type.name).toBe('latex_raw');
-  expect(document.child(1).textContent).toBe(
-    '\\chapentry{Introduction}{1}\n\\secentry{A nested {title}}{2}',
-  );
+  expect(document.child(1).firstChild?.textContent).toBe('Introduction');
+  expect(document.child(1).lastChild?.textContent).toBe('1');
+  expect(document.child(2).firstChild?.firstChild?.text).toBe('A nested ');
+  expect(document.child(2).lastChild?.textContent).toBe('2');
   expect(serializeLatex(document)).toBe(source);
 });
 

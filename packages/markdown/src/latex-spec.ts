@@ -11,6 +11,7 @@ export const latexStructureNodes = [
   'blockquote',
   'latex_landscape',
   'latex_container',
+  'latex_contents_line',
   'latex_include',
 ] as const;
 
@@ -94,6 +95,15 @@ export const latexNodes = {
       'data-latex-container': /^\\begin\s*\{([^}]+)\}/.exec(node.attrs.open ?? '')?.[1] ?? '',
     }, 0],
     parseDOM: [{ tag: 'div[data-latex-container]' }],
+  },
+  latex_contents_line: {
+    group: 'block',
+    content: 'paragraph paragraph',
+    defining: true,
+    isolating: true,
+    attrs: latexBlockAttrs,
+    toDOM: () => ['div', { 'data-latex-contents-line': '' }, 0],
+    parseDOM: [{ tag: 'div[data-latex-contents-line]' }],
   },
   latex_landscape: {
     group: 'block',

@@ -1,4 +1,5 @@
 import { isLatexHeading } from './latex-spec';
+import { isLatexTitlePage } from './latex-text-layout';
 import { latexEffectivePrefix } from './latex-project';
 import { latexColourDefinition } from './latex-colour';
 import { latexLetterCommandAt } from './latex-letter';
@@ -156,14 +157,15 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
       flow.set(position, { kind: 'omit', ...change });
       return false;
     }
-    if (node.isBlock && (node.isAtom || node.isTextblock)) {
+    const explicitTitle = standard && isLatexTitlePage(node);
+    if (node.isBlock && (node.isAtom || node.isTextblock || explicitTitle)) {
       if (numbering) effect({ numbering });
       if (hideFolio) effect({ folio: { visible: false, restartAfter: false } });
       numbering = undefined;
       hideFolio = false;
       pageHasContent = true;
     }
-    if (standard && /^\\begin\s*\{titlepage\}/.test(source)) {
+    if (explicitTitle) {
       effect({ before: 'page', after: 'page', folio: { visible: false, restartAfter: !recto } });
       pageHasContent = false;
       return false;
