@@ -10,17 +10,20 @@ export type LatexBreak = 'column' | 'page' | 'recto';
 type FolioStyle = 'roman' | 'arabic';
 
 /** A source command can occupy no space, or constrain where visible content flows. */
+type FolioEffect = {
+  folio?: { visible: false; restartAfter: boolean };
+  numbering?: FolioStyle;
+};
+
 export type LatexBlockFlow =
   | { kind: 'break'; boundary: LatexBreak }
-  | { kind: 'omit' }
-  | {
+  | ({ kind: 'omit' } & FolioEffect)
+  | ({
       kind: 'content';
       before?: LatexBreak;
       wideFloat?: true;
       after?: LatexBreak;
-      folio?: { visible: false; restartAfter: boolean };
-      numbering?: FolioStyle;
-    };
+    } & FolioEffect);
 
 export type LatexPageNumber = { number: number; visible: boolean; style?: 'roman' };
 
@@ -69,6 +72,24 @@ export function latexBreakCommand(source: string): LatexBreak | undefined {
   }
 }
 
+/** Page commands that are meaningful without any printed text. */
+export function readLatexPageDirective(source: string, position = 0) {
+  const end = commandEnd(source, position);
+  const name = source.slice(position, end);
+  if (name === '\\null' && /^\s*(?:$|\\(?:newpage|clearpage|cleardoublepage)\b)/.test(source.slice(end)))
+    return { kind: 'blank' as const, end };
+  if (name !== '\\pagenumbering' && name !== '\\thispagestyle') return;
+  const argument = groupAt(source, whitespaceEnd(source, end));
+  if (!argument) return;
+  const value = source.slice(argument.from, argument.to).trim();
+  if (name === '\\pagenumbering' && (value === 'roman' || value === 'arabic')) {
+    const style: FolioStyle = value;
+    return { kind: 'numbering' as const, value: style, end: argument.end };
+  }
+  if (name === '\\thispagestyle' && value === 'empty')
+    return { kind: 'hide' as const, end: argument.end };
+}
+
 const chapterLists = new Set(['tableofcontents', 'listoffigures', 'listoftables']);
 
 /** Resolve source directives into layout effects at editor positions. Unknown classes keep
@@ -91,6 +112,8 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
   const included: { node: Node; position: number }[] = [];
   let titlePrinted = false;
   let numbering: FolioStyle | undefined;
+  let hideFolio = false;
+  let pageHasContent = false;
 
   document.descendants((node, position) => {
     if (node.type.name === 'latex_include' && /^\\include\b/.test(node.attrs.open ?? ''))
@@ -104,21 +127,47 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
     const matter = name === 'book' && readLatexBookMatter(source);
     if (matter) {
       flow.set(position, { kind: 'break', boundary: matter === 'back' ? chapterBoundary : recto ? 'recto' : 'page' });
+      pageHasContent = false;
       if (matter !== 'back') numbering = matter === 'front' ? 'roman' : 'arabic';
       return false;
     }
     const explicit = latexBreakCommand(source);
     if (explicit) {
+      pageHasContent = false;
       flow.set(position, { kind: 'break', boundary: explicit === 'recto' && !recto ? 'page' : explicit });
       return false;
-    }
-    if (numbering && node.isBlock && (node.isAtom || node.isTextblock)) {
-      flow.set(position, { kind: 'content', numbering });
-      numbering = undefined;
     }
     const effect = (change: Omit<Extract<LatexBlockFlow, { kind: 'content' }>, 'kind'>) => {
       flow.set(position, { ...flow.get(position), ...change, kind: 'content' });
     };
+    const directive = readLatexPageDirective(
+      node.type.name === 'latex_inline' ? String(node.attrs.source).trim() : source,
+    );
+    if (directive?.kind === 'numbering' || directive?.kind === 'hide' || source.startsWith('%')) {
+      const change: FolioEffect = {};
+      if (directive?.kind === 'numbering') {
+        if (pageHasContent) change.numbering = directive.value;
+        else numbering = directive.value;
+      }
+      if (directive?.kind === 'hide') {
+        if (pageHasContent) change.folio = { visible: false, restartAfter: false };
+        else hideFolio = true;
+      }
+      flow.set(position, { kind: 'omit', ...change });
+      return false;
+    }
+    if (node.isBlock && (node.isAtom || node.isTextblock)) {
+      if (numbering) effect({ numbering });
+      if (hideFolio) effect({ folio: { visible: false, restartAfter: false } });
+      numbering = undefined;
+      hideFolio = false;
+      pageHasContent = true;
+    }
+    if (standard && /^\\begin\s*\{titlepage\}/.test(source)) {
+      effect({ before: 'page', after: 'page', folio: { visible: false, restartAfter: !recto } });
+      pageHasContent = false;
+      return false;
+    }
     if (isLatexHeading(node) && chapters) {
       const open = String(node.attrs.open ?? '');
       const command = open.slice(1, commandEnd(open, 0));
@@ -126,6 +175,7 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
         effect(command === 'chapter'
           ? { before: chapterBoundary }
           : { before: chapterBoundary, after: chapterBoundary });
+        if (command === 'part') pageHasContent = false;
       }
     } else if (node.type.name === 'latex_raw') {
       if (name === 'letter' && /^\\opening\s*\{/.test(source)) {
@@ -144,6 +194,7 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
       if (source !== '\\' + command) return;
       if (command === 'maketitle' && titlePage && !titlePrinted) {
         titlePrinted = true;
+        pageHasContent = false;
         effect({
           before: name === 'book' && recto ? 'recto' : 'page',
           after: 'page',
@@ -184,7 +235,7 @@ export function latexPageNumbers(
   const overrides = new Map<number, { visible: false; restartAfter: boolean }>();
   const resets = new Map<number, FolioStyle>();
   for (const [position, effect] of flow) {
-    if (effect.kind !== 'content') continue;
+    if (effect.kind === 'break') continue;
     const page = pageStarts.findLastIndex(start => start <= position) + 1;
     if (effect.folio) overrides.set(page, effect.folio);
     if (effect.numbering) resets.set(page, effect.numbering);

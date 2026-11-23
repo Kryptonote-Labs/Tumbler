@@ -6,7 +6,7 @@ import { latexBoxTitle, latexEnvironmentName, latexEnvironmentOption, readLatexT
 import { latexRomanNumber } from './latex-number-format';
 import { readLatexBookMatter, readLatexClass } from './latex-flow';
 import type { Node } from 'prosemirror-model';
-import { commandEnd, environmentAt, groupAt } from './latex-syntax';
+import { commandEnd, environmentAt, groupAt, latexCommands, whitespaceEnd } from './latex-syntax';
 
 export type LatexNumbering = {
   /** Heading positions and the number LaTeX prints, such as `2.1`, `A` or `I` for a part. */
@@ -25,7 +25,7 @@ export type LatexNumbering = {
 
 // Commands and environments whose effect on counters the editor does not model.
 const opaqueCounters =
-  /\\(?:setcounter(?!\s*\{tocdepth\})|addtocounter|stepcounter|refstepcounter|numberwithin|counterwithin|counterwithout|(?:re)?newcommand\s*\{?\\the[a-z]+)\b|\\begin\s*\{(?:multline|flalign|alignat|eqnarray|subequations|xalignat)\*?\}/;
+  /\\(?:setcounter(?!\s*\{(?:tocdepth|secnumdepth)\})|addtocounter|stepcounter|refstepcounter|numberwithin|counterwithin|counterwithout|(?:(?:re)?newcommand\*?|(?:g|e|x)?def)\s*\{?\\the(?:part|chapter|section|subsection|subsubsection|paragraph|subparagraph|equation|figure|table|footnote|lstlisting)(?![A-Za-z@]))\b|\\begin\s*\{(?:multline|flalign|alignat|eqnarray|subequations|xalignat)\*?\}/;
 const rawCounters =
   /\\(?:part|chapter|section|subsection|subsubsection|caption|captionof)\b|\\begin\s*\{(?:equation|align|gather|figure|table)\*?\}/;
 const latexHeadings = ['section', 'subsection', 'subsubsection', 'paragraph', 'subparagraph'];
@@ -54,6 +54,34 @@ export function latexEquationRows(source: string) {
   return rows;
 }
 
+function* sectionDepthAssignments(source: string): Generator<string | undefined> {
+  const deferred: string[] = [];
+  let inactive = 0;
+  for (const command of latexCommands(source)) {
+    if (command.name === 'fi' && inactive) {
+      inactive--;
+      continue;
+    }
+    if (command.name === 'else' && inactive === 1) {
+      inactive = 0;
+      continue;
+    }
+    if (command.name === 'iffalse' || (inactive && command.name.startsWith('if'))) inactive++;
+    if (inactive) continue;
+    const argument = groupAt(source, whitespaceEnd(source, command.end));
+    if (!argument) continue;
+    const name = source.slice(argument.from, argument.to);
+    if (command.name === 'AtBeginDocument') {
+      deferred.push(name);
+      continue;
+    }
+    if (command.name !== 'setcounter' || name !== 'secnumdepth') continue;
+    const value = groupAt(source, whitespaceEnd(source, argument.end));
+    yield value && source.slice(value.from, value.to).trim();
+  }
+  for (const body of deferred) yield* sectionDepthAssignments(body);
+}
+
 /**
  * Number headings, equations, figures and tables the way the standard article, report and book
  * classes do, and resolve labels. Returns undefined when the source changes counters in ways the
@@ -63,9 +91,18 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
   const prefix = latexEffectivePrefix(document);
   const documentClass = readLatexClass(prefix).name;
   if (documentClass && !['article', 'report', 'book'].includes(documentClass.trim())) return;
-  if (opaqueCounters.test(prefix)) return;
+  const theoremDefinitions = readLatexTheorems(prefix);
+  const theoremCounters = new Set([...theoremDefinitions.values()].map(({ counter }) => counter));
+  const changesTheoremNumber = (source: string) =>
+    [...source.matchAll(/\\(?:(?:re)?newcommand\*?|(?:g|e|x)?def)\s*\{?\\the([A-Za-z@]+)(?![A-Za-z@])/g)]
+      .some((match) => theoremCounters.has(match[1]));
+  if (opaqueCounters.test(prefix) || changesTheoremNumber(prefix)) return;
   const chapters = documentClass === 'report' || documentClass === 'book';
-  const depth = chapters ? 2 : 3;
+  let depth = chapters ? 2 : 3;
+  for (const literal of sectionDepthAssignments(prefix)) {
+    if (!literal || !/^[+-]?\d+$/.test(literal)) return;
+    depth = Number(literal);
+  }
   const levels = ['part', 'chapter', ...latexHeadings];
   const counters = new Map(levels.map((name) => [name, 0]));
   let equation = 0;
@@ -74,7 +111,6 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
   let appendix = false;
   let mainMatter = true;
   let current = '';
-  const theoremDefinitions = readLatexTheorems(prefix);
   const theoremCounts = new Map<string, number>();
   const labelScopes: { end: number; previous: string }[] = [];
   let opaque = false;
@@ -145,7 +181,7 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
         return true;
       }
       const level = levels.indexOf(name);
-      if (name !== 'part' && level - 1 > depth) return true;
+      if ((name === 'part' && !chapters ? 0 : level - 1) > depth) return true;
       counters.set(name, counters.get(name)! + 1);
       // A part does not restart chapter or section numbers.
       if (name !== 'part') for (const lower of levels.slice(level + 1)) counters.set(lower, 0);
@@ -186,7 +222,7 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
         return false;
       }
       if (/\\footnote(?:mark|text)?\b/.test(source)) footnotesKnown = false;
-      if (opaqueCounters.test(source)) {
+      if (opaqueCounters.test(source) || changesTheoremNumber(source) || !sectionDepthAssignments(source).next().done) {
         opaque = true;
         return false;
       }
