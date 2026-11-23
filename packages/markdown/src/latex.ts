@@ -299,18 +299,20 @@ function declarationScope(source: string, position: number) {
   const bodyStart = latexDeclarations(source, position + 1).end;
   if (bodyStart === position + 1) return;
   const scope = groupAt(source, position);
-  if (scope && bodyStart < scope.to && /^[^\S\r\n]*(?:\r?\n|$)/.test(source.slice(scope.end)))
+  if (!scope || bodyStart >= scope.to) return;
+  const following = source.slice(scope.end);
+  if (!/^[^\S\r\n]*(?:\r?\n|$)/.test(following)) return;
+  if (/^\s*$|^[^\S\r\n]*\r?\n[^\S\r\n]*\r?\n/.test(following) ||
+      /\\par\s*$/.test(source.slice(bodyStart, scope.to)))
     return { scope, bodyStart };
 }
 
 function blockStart(source: string, position: number, context: SourceContext) {
   if (source.startsWith('$$', position) || source.startsWith('\\[', position)) return true;
-  if (source[position] === '{') return !!declarationScope(source, position);
   if (source[position] !== '\\') return false;
   const command = source.slice(position, commandEnd(source, position));
   return (
     command === '\\begin' ||
-    !!latexVerticalSpace(source, position) ||
     (!!context.include && !!readLatexInclude(source, position)) ||
     !!readLatexParagraphMacro(source, context.macros, position) ||
     blockCommands.has(command) ||

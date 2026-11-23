@@ -6,6 +6,7 @@ import { noteState, receiveTransaction, sendableSteps, toggleLatexStyle, undo } 
 import {
   latexBlockAtOffset,
   latexNumbering,
+  latexRunningFields,
   paginateLatex,
   parseLatex,
   replaceLatexSource,
@@ -238,4 +239,34 @@ One & Two\\
   const state = noteState('', 0, 'test', document);
   const edited = state.apply(state.tr.insertText('Title', position, position + 'Heading'.length));
   expect(serializeLatex(edited.doc)).toBe(source.replace('Heading', 'Title'));
+});
+
+test('vertical space inside a paragraph does not split its text', () => {
+  const source = String.raw`Before\vspace{2pt} after.
+
+\vspace{3pt}
+Next paragraph.`;
+  const document = parseLatex(source);
+  expect(Array.from({ length: document.childCount }, (_, index) => document.child(index).type.name))
+    .toEqual(['paragraph', 'latex_raw', 'paragraph']);
+  expect(serializeLatex(document)).toBe(source);
+});
+
+test('a local declaration on its own source line can stay in a paragraph', () => {
+  for (const before of ['', 'Before.\n']) {
+    const source = before + String.raw`{\small Small text}` + '\nAfter.';
+    const document = parseLatex(source);
+    expect(document.childCount).toBe(1);
+    expect(document.firstChild?.type.name).toBe('paragraph');
+    expect(serializeLatex(document)).toBe(source);
+  }
+});
+
+test('an explicit center footer replaces the default folio, even when empty', () => {
+  for (const content of ['', String.raw`Report \thepage`]) {
+    const prefix = String.raw`\pagestyle{fancy}\fancyfoot[C]{${content}}`;
+    expect(latexRunningFields(prefix)?.clearDefault).toBe(true);
+  }
+  expect(latexRunningFields(String.raw`\pagestyle{fancy}\fancyfoot[R]{Report}`)?.clearDefault)
+    .toBe(false);
 });

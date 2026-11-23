@@ -128,7 +128,8 @@ export function latexRunningFields(prefix: string) {
   return {
     fields,
     headRule: latexLength(rule?.[1] ?? '0.4pt') ?? 0,
-    clearDefault: /\\fancyhf\s*\{\s*\}/.test(prefix),
+    clearDefault: /\\fancyhf\s*\{\s*\}/.test(prefix) ||
+      fields.some(({ area, slot }) => area === 'foot' && slot === 'C'),
   };
 }
 
