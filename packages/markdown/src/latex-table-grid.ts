@@ -34,11 +34,22 @@ type CellPlacement = {
   right: boolean;
   align: 'left' | 'center' | 'right' | 'justify';
   width?: number;
+  ragged?: boolean;
   ruleBefore: boolean;
 };
 
+type TextWidths = { line: number; text: number };
+function paragraphColumnLength(value: string | undefined, quad: number, available?: TextWidths) {
+  const relative = /^\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)?)\s*\\(line|column|text)width\s*$/.exec(value ?? '');
+  if (relative && available) {
+    const factor = relative[1] ? Number(relative[1]) : 1;
+    return factor * (relative[2] === 'text' ? available.text : available.line);
+  }
+  return latexLength(value, quad);
+}
+
 /** One placement per authored cell. A null cell is an empty slot covered by a row span. */
-export function latexTableGrid(table: LatexTabular, quad: number) {
+export function latexTableGrid(table: LatexTabular, quad: number, available?: TextWidths) {
   const setup = table.spec.columns;
   if (!setup.length || table.layout.kind !== 'fixed') return;
   const occupied = setup.map(() => 0);
@@ -62,15 +73,21 @@ export function latexTableGrid(table: LatexTabular, quad: number) {
       if (column + columns > setup.length || index + spansRows > table.rows.length ||
           occupied.slice(column, column + columns).some(until => until > index)) return;
       for (let next = column; next < column + columns; next++) occupied[next] = index + spansRows;
-      const spec = span?.kind === 'column' ? span.spec : setup[column]!;
+      const authored = span?.kind === 'column' ? span.spec : setup[column]!;
+      const declaration = /^\s*>\s*\{\s*\\(raggedright|raggedleft|centering)\s*(?:\\arraybackslash\s*)?\}/.exec(authored);
+      const spec = declaration ? authored.slice(declaration[0].length) : authored;
       const format = /^\s*(\|*)\s*([lcrpmb])(?:\s*\{([^{}]*)\})?\s*(\|*)\s*$/.exec(spec);
-      const width = latexLength(format?.[3], quad);
+      const width = paragraphColumnLength(format?.[3], quad, available);
       const alignment = format?.[2];
+      const align = declaration
+        ? declaration[1] === 'raggedright' ? 'left' : declaration[1] === 'raggedleft' ? 'right' : 'center'
+        : alignment === 'r' ? 'right' : alignment === 'c' ? 'center' : alignment === 'p' && width !== undefined ? 'justify' : 'left';
       placements.push({
         column, columns, rows: spansRows,
         left: !!format?.[1],
         right: !!format?.[4],
-        align: alignment === 'r' ? 'right' : alignment === 'c' ? 'center' : alignment === 'p' && width !== undefined ? 'justify' : 'left',
+        align,
+        ...(declaration && { ragged: true }),
         ...(width !== undefined && width >= 0 ? { width } : {}),
         ruleBefore: rules.some(([from, to]) => from <= column && column + columns <= to),
       });

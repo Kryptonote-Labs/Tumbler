@@ -1,5 +1,5 @@
 import type { Node } from 'prosemirror-model';
-import { commandEnd, environmentAt, groupAt, lineEnd, whitespaceEnd } from './latex-syntax';
+import { commandEnd, environmentAt, groupAt, latexCommands, lineEnd, whitespaceEnd } from './latex-syntax';
 
 /** One BibTeX entry. Field values are kept as written, without their outer braces. */
 export type BibEntry = { type: string; key: string; fields: Record<string, string> };
@@ -196,6 +196,39 @@ export function latexBibliographyFiles(source: string) {
     }
   }
   return { files, style };
+}
+
+export type LatexBibliographyItem = { key: string; label: string; source: string };
+
+/** Read the top-level authored entries in a standard thebibliography environment. */
+export function readLatexBibliography(source: string) {
+  const start = whitespaceEnd(source, 0);
+  if (!/^\\begin\s*\{thebibliography\}/.test(source.slice(start))) return;
+  const environment = environmentAt(source, start);
+  if (!environment || source.slice(environment.end).trim()) return;
+  const widest = groupAt(source, whitespaceEnd(source, environment.from));
+  if (!widest || widest.end > environment.to) return;
+  const body = source.slice(widest.end, environment.to);
+  const entries: LatexBibliographyItem[] = [];
+  let previous: { item: LatexBibliographyItem; start: number } | undefined;
+  for (const command of latexCommands(body)) {
+    if (command.name !== 'bibitem') continue;
+    if (previous) previous.item.source = body.slice(previous.start, command.start).trim();
+    const argument = whitespaceEnd(body, command.end);
+    const label = groupAt(body, argument, '[', ']');
+    const key = groupAt(body, whitespaceEnd(body, label?.end ?? argument));
+    if (!key) return;
+    const item = {
+      key: body.slice(key.from, key.to).trim(),
+      label: label ? body.slice(label.from, label.to) : String(entries.length + 1),
+      source: '',
+    };
+    entries.push(item);
+    previous = { item, start: key.end };
+  }
+  if (!previous) return;
+  previous.item.source = body.slice(previous.start).trim();
+  return { widestLabel: source.slice(widest.from, widest.to), entries };
 }
 
 const citeCommand = /\\(?:no)?cite[a-zA-Z]*\*?\s*(?:\[[^\]]*\]\s*){0,2}\{([^{}]*)\}/g;

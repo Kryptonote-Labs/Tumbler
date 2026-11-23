@@ -335,9 +335,14 @@ export type PageLine = {
   reserveAfter?: number;
   /** Descender depth or trailing glue that can extend beyond TeX's page goal. */
   depth?: number;
+  /** Glue before the line can shrink with it. Glue after it belongs to the next line on this page. */
+  shrinkBefore?: number;
+  shrinkAfter?: number;
 };
 export type PageBlock = PageLine & {
   split?: () => PageLine[];
+  /** A display alignment can break at a row before compressing the whole display onto a page. */
+  preferFragments?: boolean;
   flow?: LatexBlockFlow;
   /** @deprecated Use a column break in `flow`. */
   force?: boolean;
@@ -373,6 +378,12 @@ export function paginateLatex(
   const wideFloats: LatexWideFloat[] = [];
   const floatSpans = new Map<number, number>();
   const deferred: PageLine[] = [];
+  type Glue = { position: number; edge: 'before' | 'after'; size: number };
+  const shrinkages = new Map<number, { before: number; after: number }>();
+  let glues: Glue[] = [];
+  let trailing: Glue | undefined;
+  let shrink = 0;
+  let lastBottom = 0;
   const floatGap = 20 * texPoint;
   let start = 0;
   let pages = 1;
@@ -386,9 +397,11 @@ export function paginateLatex(
     return notes + extra + (notes ? 0 : noteGap);
   };
   const sheetOf = (slot: number) => Math.floor(slot / columns);
-  const fits = (line: PageLine) => {
+  const before = (line: PageLine) => line.top > start ? line.shrinkBefore ?? 0 : 0;
+  const fits = (line: PageLine, elastic = true) => {
     const span = floatSpans.get(sheetOf(pages - 1)) ?? (pages > 1 && pages <= columns ? firstSpanHeight : 0);
-    return line.bottom - (line.depth ?? 0) - start + room(line) + (line.reserveAfter ?? 0) <= bodyHeight - span;
+    const availableShrink = elastic ? shrink + (trailing?.size ?? 0) + before(line) : 0;
+    return line.bottom - (line.depth ?? 0) - start - availableShrink + room(line) + (line.reserveAfter ?? 0) <= bodyHeight - span;
   };
 
   function placeWide(sheet: number, floatPage = false) {
@@ -411,9 +424,36 @@ export function paginateLatex(
     } else floatSpans.set(sheet, height + floatGap);
   }
   function place(line: PageLine) {
+    if (trailing) {
+      glues.push(trailing);
+      shrink += trailing.size;
+    }
+    const size = before(line);
+    if (size > 0) {
+      glues.push({ position: line.position, edge: 'before', size });
+      shrink += size;
+    }
+    trailing = line.shrinkAfter ? { position: line.position, edge: 'after', size: line.shrinkAfter } : undefined;
+    lastBottom = line.bottom - (line.depth ?? 0);
     notes = room(line);
     for (const _ of line.notes ?? []) footnotes.push(pages - 1);
     footHeights[pages - 1] = notes;
+  }
+  function settle() {
+    const span = floatSpans.get(sheetOf(pages - 1)) ?? 0;
+    const reduction = Math.min(shrink, Math.max(0, lastBottom - start + notes + span - bodyHeight));
+    if (reduction > 0) {
+      const ratio = reduction / shrink;
+      for (const { position, edge, size } of glues) {
+        const adjustment = shrinkages.get(position) ?? { before: 0, after: 0 };
+        adjustment[edge] += size * ratio;
+        shrinkages.set(position, adjustment);
+      }
+    }
+    glues = [];
+    trailing = undefined;
+    shrink = 0;
+    return reduction;
   }
   function advance(line: PageLine, boundary: LatexBreak = 'column') {
     // The next page has the same body capacity, even after a short previous page.
@@ -424,13 +464,16 @@ export function paginateLatex(
     let next = boundary === 'column' ? slot : Math.ceil(slot / columns) * columns;
     if (boundary === 'recto' && (next / columns) % 2 !== 0) next += columns;
     const advanceBy = next - (pages - 1);
+    const previousSpan = columns === 1 ? floatSpans.get(sheetOf(pages - 1)) ?? 0 : 0;
+    const reduction = settle();
     if (sheetOf(next) > sheetOf(pages - 1)) placeWide(sheetOf(next));
+    const span = columns === 1 ? floatSpans.get(sheetOf(next)) ?? 0 : 0;
     breakSlots.push(next);
     const continuation = line.continuation;
     const startHeight = continuation?.startHeight ?? 0;
     breaks.push({
       position: line.position,
-      height: advanceBy * stride - distance + startHeight,
+      height: advanceBy * stride - distance + startHeight + reduction + span - previousSpan,
       ...(continuation ? { fragment: continuation.fragment } : {}),
     });
     pages += advanceBy;
@@ -445,7 +488,7 @@ export function paginateLatex(
         ? { kind: 'break' as const, boundary: block.forcePage ? 'page' as const : 'column' as const }
         : undefined
     );
-    if (columns > 1 && flow?.kind === 'content' && flow.wideFloat) {
+    if (flow?.kind === 'content' && flow.wideFloat) {
       deferred.push(block);
       continue;
     }
@@ -457,7 +500,7 @@ export function paginateLatex(
     const before = strongerBreak(pending, flow?.before);
     if (occupied && before) advance(block, before);
     pending = flow?.after;
-    if (fits(block) || (!occupied && !block.split)) {
+    if (fits(block, !block.preferFragments) || (!occupied && !block.split)) {
       occupied = true;
       place(block);
       continue;
@@ -471,17 +514,18 @@ export function paginateLatex(
     }
     for (const [index, line] of lines.entries()) {
       const next = lines[index + 1];
-      const orphans = index === 0 && next && !fits({ ...next, notes: [...(line.notes ?? []), ...(next.notes ?? [])] });
-      if (occupied && (!fits(line) || orphans)) advance(line);
+      const orphans = !block.preferFragments && index === 0 && next && !fits({ ...next, notes: [...(line.notes ?? []), ...(next.notes ?? [])] });
+      if (occupied && (!fits(line, !block.preferFragments || index === 0) || orphans)) advance(line);
       occupied = true;
       place(line);
     }
   }
+  settle();
   while (deferred.length) {
     const sheet = sheetOf(pages - 1) + 1;
     placeWide(sheet, true);
     pages = sheet * columns + 1;
     while (footHeights.length < pages) footHeights.push(0);
   }
-  return { breaks, breakSlots, pages, footnotes, footHeights, wideFloats, floatSpans };
+  return { breaks, breakSlots, pages, footnotes, footHeights, wideFloats, floatSpans, shrinkages };
 }

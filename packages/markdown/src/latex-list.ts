@@ -1,13 +1,16 @@
+import { latexLength } from './latex-lengths';
 import { commandEnd, groupAt, whitespaceEnd } from "./latex-syntax";
 
 const counterNames = ["arabic", "alph", "Alph", "roman", "Roman"] as const;
 const counters = new Set<string>(counterNames);
 type Counter = (typeof counterNames)[number];
-type Label = { before: string; counter: Counter; after: string };
+type Label = { before: string; counter: Counter; after: string; bold?: true };
 
 /** An enumitem label expressible as ordinary text around the current item's counter. */
 function listLabel(value: string): Label | undefined {
-  const outer = groupAt(value, 0);
+  const bold = /^\\textbf\s*/.exec(value);
+  const outer = groupAt(value, bold?.[0].length ?? 0);
+  if (bold && outer?.end !== value.length) return;
   if (outer?.end === value.length) value = value.slice(outer.from, outer.to);
   const slash = value.indexOf("\\");
   if (slash < 0) return;
@@ -17,13 +20,15 @@ function listLabel(value: string): Label | undefined {
   const before = value.slice(0, slash);
   const after = value.slice(end + 1);
   if (/[\\{}%$#&_^~\u0000-\u001f]/.test(before + after)) return;
-  return { before, counter, after };
+  return { before, counter, after, ...(bold && { bold: true }) };
 }
 
 /** Parse the list-local enumitem options represented by an editable ordered list. */
 export function readLatexEnumitem(source: string) {
   let start: number | undefined;
   let label: Label | undefined;
+  let leftMargin: string | undefined;
+  let itemSeparation: string | undefined;
   let tight: "all" | "items" | undefined;
   for (let i = 0; i <= source.length;) {
     let end = i;
@@ -44,11 +49,19 @@ export function readLatexEnumitem(source: string) {
         if (!label) return;
       } else if (name === "start" && /^\d+$/.test(value) && Number.isSafeInteger(Number(value))) {
         start = Number(value);
+      } else if (name === 'leftmargin' && latexLength(value, 1) !== undefined) {
+        leftMargin = value;
+      } else if (name === 'itemsep' && latexLength(value, 1) !== undefined) {
+        itemSeparation = value;
       } else return;
     }
     i = end + 1;
   }
-  return { start, label, tight };
+  return {
+    start, label, tight,
+    ...(leftMargin !== undefined && { leftMargin }),
+    ...(itemSeparation !== undefined && { itemSeparation }),
+  };
 }
 
 export function latexListOptions(open: string) {
