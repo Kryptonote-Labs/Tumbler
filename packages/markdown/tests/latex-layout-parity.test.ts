@@ -113,3 +113,24 @@ test('a page shrinks only the display glue used by its content', () => {
   expect(plan.breaks).toEqual([{ position: 3, height: 15 }]);
   expect(plan.shrinkages.get(1)).toEqual({ before: 5, after: 5 });
 });
+
+test('theorem declarations retain the active standard amsthm style', () => {
+  const document = parseLatex(String.raw`\documentclass{article}
+\usepackage{amsthm}
+\newtheorem{theorem}{Theorem}
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\begin{document}
+\begin{theorem}Claim.\end{theorem}
+\begin{remark}Observation.\end{remark}
+\begin{definition}Meaning.\end{definition}
+\end{document}`);
+  const numbering = latexNumbering(document);
+  expect(numbering && [...numbering.containers.values()]).toEqual([
+    { title: 'Theorem 1.', kind: 'theorem' },
+    { title: 'Remark 2.', kind: 'theorem', style: 'remark' },
+    { title: 'Definition 3.', kind: 'theorem', style: 'definition' },
+  ]);
+});

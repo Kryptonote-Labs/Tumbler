@@ -60,11 +60,12 @@ function decorate(document: Node) {
       if (node) decorations.push(Decoration.node(position, position + node.nodeSize, {}, { latexLetterPart: part }));
     }
   if (numbers) {
-    for (const [position, { title, kind }] of numbers.containers) {
+    for (const [position, { title, kind, style }] of numbers.containers) {
       const node = document.nodeAt(position);
       if (node) decorations.push(Decoration.node(position, position + node.nodeSize, {
         'data-latex-container-title': title,
         'data-latex-container-kind': kind,
+        ...(style && { 'data-latex-theorem-style': style }),
       }));
     }
     for (const [position, { number, command, appendix }] of numbers.headings)

@@ -2,7 +2,7 @@ import { isLatexHeading } from './latex-spec';
 import { latexEffectivePrefix } from './latex-project';
 import { readLatexSubfigures } from './latex-figures';
 import { readLatexCodeBlock } from './latex-code';
-import { latexBoxTitle, latexEnvironmentName, latexEnvironmentOption, readLatexTheorems } from './latex-environments';
+import { latexBoxTitle, latexEnvironmentName, latexEnvironmentOption, readLatexTheorems, type LatexTheoremStyle } from './latex-environments';
 import { latexRomanNumber } from './latex-number-format';
 import { readLatexBookMatter, readLatexClass } from './latex-flow';
 import type { Node } from 'prosemirror-model';
@@ -18,7 +18,7 @@ export type LatexNumbering = {
   /** Label keys and the text `\ref` prints for them. */
   labels: Map<string, string>;
   listings: Map<number, string>;
-  containers: Map<number, { title: string; kind: 'theorem' | 'proof' | 'box' }>;
+  containers: Map<number, { title: string; kind: 'theorem' | 'proof' | 'box'; style?: LatexTheoremStyle }>;
   /** Inline `\footnote` positions and the mark LaTeX prints, while the count is known. */
   footnotes: Map<number, string>;
 };
@@ -184,6 +184,7 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
         result.containers.set(position, {
           title: theorem.title + (number ? ' ' + number : '') + (option ? ' (' + option + ')' : '') + '.',
           kind: 'theorem',
+          ...(theorem.style && { style: theorem.style }),
         });
       }
       return true;
