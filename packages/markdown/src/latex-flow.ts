@@ -76,7 +76,7 @@ export function latexBreakCommand(source: string): LatexBreak | undefined {
 export function readLatexPageDirective(source: string, position = 0) {
   const end = commandEnd(source, position);
   const name = source.slice(position, end);
-  if (name === '\\null' && /^(?:\s*(?:$|\\|%))/.test(source.slice(end)))
+  if (name === '\\null' && /^\s*(?:$|\\(?:newpage|clearpage|cleardoublepage)\b)/.test(source.slice(end)))
     return { kind: 'blank' as const, end };
   if (name !== '\\pagenumbering' && name !== '\\thispagestyle') return;
   const argument = groupAt(source, whitespaceEnd(source, end));
@@ -140,7 +140,9 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
     const effect = (change: Omit<Extract<LatexBlockFlow, { kind: 'content' }>, 'kind'>) => {
       flow.set(position, { ...flow.get(position), ...change, kind: 'content' });
     };
-    const directive = readLatexPageDirective(source);
+    const directive = readLatexPageDirective(
+      node.type.name === 'latex_inline' ? String(node.attrs.source).trim() : source,
+    );
     if (directive?.kind === 'numbering' || directive?.kind === 'hide' || source.startsWith('%')) {
       const change: FolioEffect = {};
       if (directive?.kind === 'numbering') {

@@ -212,3 +212,13 @@ test('custom theorem counter formats keep numbering opaque', () => {
 \end{document}`;
   expect(latexNumbering(parseLatex(source))).toBeUndefined();
 });
+
+test('inline page directives keep surrounding prose in one paragraph', () => {
+  const source = String.raw`\begin{document}
+Before \thispagestyle{empty} and \null\textbf{after}.
+\end{document}`;
+  const document = parseLatex(source);
+  expect(document.childCount).toBe(1);
+  expect(latexPageNumbers(latexFlow(document), [])).toEqual([{ number: 1, visible: false }]);
+  expect(serializeLatex(document)).toBe(source);
+});

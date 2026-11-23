@@ -319,7 +319,8 @@ function blockStart(source: string, position: number, context: SourceContext) {
     !!readLatexParagraphMacro(source, context.macros, position) ||
     !!latexContentsRunEnd(source, context.macros, position) ||
     blockCommands.has(command) ||
-    !!readLatexPageDirective(source, position) ||
+    (!source.slice(source.lastIndexOf('\n', position - 1) + 1, position).trim() &&
+      !!readLatexPageDirective(source, position)) ||
     bibliographyCommands.has(command) ||
     headingLevel(command.slice(1)) > 0 ||
     (context.letter && !!latexLetterCommandAt(source, position)) ||
