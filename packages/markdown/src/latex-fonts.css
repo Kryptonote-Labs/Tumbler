@@ -115,6 +115,14 @@
 }
 
 @font-face {
+  font-family: 'Latin Modern Roman 12';
+  src: url('./fonts/latex/lmroman10-italic.otf') format('opentype');
+  font-display: swap;
+  font-style: italic;
+  font-weight: 400;
+}
+
+@font-face {
   font-family: 'Latin Modern Roman 17';
   src: url('./fonts/latex/lmroman17-regular.otf') format('opentype');
   font-display: swap;

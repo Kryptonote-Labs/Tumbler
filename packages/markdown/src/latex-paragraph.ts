@@ -18,8 +18,10 @@ export function latexInlineFlow(source: string): LatexInlineFlow | undefined {
 }
 
 /** A line end with an authored vertical skip. */
-export function latexLineBreakSkip(source: string, em?: number) {
+export function latexLineBreakSkip(source: string, em?: number, leading = 0) {
   const match = /^\\\\\*?\s*\[([^\]]*)\]\s*$/.exec(source.trim());
+  const baseline = match && /^([-+]?\d*\.?\d+)\s*\\baselineskip$/.exec(match[1]!.trim());
+  if (baseline) return Number(baseline[1]) * leading;
   return match && /^[-+]?\d*\.?\d+\s*em$/.test(match[1]!.trim()) && em === undefined
     ? 0
     : match ? latexLength(match[1], em) : undefined;
