@@ -270,3 +270,21 @@ test('an explicit center footer replaces the default folio, even when empty', ()
   expect(latexRunningFields(String.raw`\pagestyle{fancy}\fancyfoot[R]{Report}`)?.clearDefault)
     .toBe(false);
 });
+
+test('fancy running fields ignore comments and apply resets in source order', () => {
+  expect(latexRunningFields(String.raw`\pagestyle{fancy}
+% \fancyfoot[C]{} \fancyhf{}
+% \renewcommand{\headrulewidth}{0pt}
+\fancyfoot[R]{Right}`)).toMatchObject({
+    clearDefault: false,
+    fields: [{ area: 'foot', slot: 'R', source: 'Right' }],
+  });
+  expect(latexRunningFields(String.raw`\pagestyle{fancy}
+\fancyhead[L]{Old header}
+\fancyfoot[C]{Old footer}
+\fancyhf{}
+\fancyfoot[R]{New footer}`)).toMatchObject({
+    clearDefault: true,
+    fields: [{ area: 'foot', slot: 'R', source: 'New footer' }],
+  });
+});

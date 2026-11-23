@@ -113,23 +113,43 @@ export function latexPresentationColour(name: string | undefined, colours: Reado
 
 /** Running fields for the common fancy page style with literal left, centre and right slots. */
 export function latexRunningFields(prefix: string) {
-  if (!/\\pagestyle\s*\{fancy\}/.test(prefix)) return;
   const fields: { area: 'head' | 'foot'; slot: 'L' | 'C' | 'R'; source: string }[] = [];
-  for (const match of prefix.matchAll(/\\fancy(head|foot)\s*\[([LCR])\]/g)) {
-    const group = groupAt(prefix, whitespaceEnd(prefix, match.index + match[0].length));
+  let fancy = false;
+  let cleared = false;
+  let headRule = latexLength('0.4pt') ?? 0;
+  for (const { name, end } of latexCommands(prefix)) {
+    const at = whitespaceEnd(prefix, end);
+    if (name === 'pagestyle' || name === 'fancyhf' || name === 'renewcommand') {
+      const group = groupAt(prefix, at);
+      if (!group) continue;
+      const value = prefix.slice(group.from, group.to).trim();
+      if (name === 'pagestyle') fancy = value === 'fancy';
+      else if (name === 'fancyhf' && !value) {
+        fields.length = 0;
+        cleared = true;
+      } else if (name === 'renewcommand' && value === '\\headrulewidth') {
+        const length = groupAt(prefix, whitespaceEnd(prefix, group.end));
+        if (length) headRule = latexLength(prefix.slice(length.from, length.to)) ?? headRule;
+      }
+      continue;
+    }
+    if (name !== 'fancyhead' && name !== 'fancyfoot') continue;
+    const option = groupAt(prefix, at, '[', ']');
+    if (!option) continue;
+    const slot = prefix.slice(option.from, option.to).trim();
+    if (slot !== 'L' && slot !== 'C' && slot !== 'R') continue;
+    const group = groupAt(prefix, whitespaceEnd(prefix, option.end));
     if (!group) continue;
-    const area = match[1] === 'head' ? 'head' : 'foot';
-    const slot = match[2] === 'L' ? 'L' : match[2] === 'R' ? 'R' : 'C';
+    const area = name === 'fancyhead' ? 'head' : 'foot';
     const index = fields.findIndex((field) => field.area === area && field.slot === slot);
     if (index >= 0) fields.splice(index, 1);
     fields.push({ area, slot, source: prefix.slice(group.from, group.to) });
   }
-  const rule = /\\renewcommand\s*\{\\headrulewidth\}\s*\{([^{}]*)\}/.exec(prefix);
+  if (!fancy) return;
   return {
     fields,
-    headRule: latexLength(rule?.[1] ?? '0.4pt') ?? 0,
-    clearDefault: /\\fancyhf\s*\{\s*\}/.test(prefix) ||
-      fields.some(({ area, slot }) => area === 'foot' && slot === 'C'),
+    headRule,
+    clearDefault: cleared || fields.some(({ area, slot }) => area === 'foot' && slot === 'C'),
   };
 }
 
