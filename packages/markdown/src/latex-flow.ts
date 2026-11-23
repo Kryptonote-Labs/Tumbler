@@ -69,6 +69,22 @@ export function latexBreakCommand(source: string): LatexBreak | undefined {
   }
 }
 
+/** Page commands that are meaningful without any printed text. */
+export function readLatexPageDirective(source: string, position = 0) {
+  const end = commandEnd(source, position);
+  const name = source.slice(position, end);
+  if (name === '\\null' && /^(?:\s*(?:$|\\|%))/.test(source.slice(end)))
+    return { kind: 'blank' as const, end };
+  if (name !== '\\pagenumbering' && name !== '\\thispagestyle') return;
+  const argument = groupAt(source, whitespaceEnd(source, end));
+  if (!argument) return;
+  const value = source.slice(argument.from, argument.to).trim();
+  if (name === '\\pagenumbering' && (value === 'roman' || value === 'arabic'))
+    return { kind: 'numbering' as const, value, end: argument.end };
+  if (name === '\\thispagestyle' && value === 'empty')
+    return { kind: 'hide' as const, end: argument.end };
+}
+
 const chapterLists = new Set(['tableofcontents', 'listoffigures', 'listoftables']);
 
 /** Resolve source directives into layout effects at editor positions. Unknown classes keep
@@ -91,6 +107,7 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
   const included: { node: Node; position: number }[] = [];
   let titlePrinted = false;
   let numbering: FolioStyle | undefined;
+  let hideFolio = false;
 
   document.descendants((node, position) => {
     if (node.type.name === 'latex_include' && /^\\include\b/.test(node.attrs.open ?? ''))
@@ -112,13 +129,26 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
       flow.set(position, { kind: 'break', boundary: explicit === 'recto' && !recto ? 'page' : explicit });
       return false;
     }
-    if (numbering && node.isBlock && (node.isAtom || node.isTextblock)) {
-      flow.set(position, { kind: 'content', numbering });
-      numbering = undefined;
-    }
     const effect = (change: Omit<Extract<LatexBlockFlow, { kind: 'content' }>, 'kind'>) => {
       flow.set(position, { ...flow.get(position), ...change, kind: 'content' });
     };
+    const directive = readLatexPageDirective(source);
+    if (directive?.kind === 'numbering' || directive?.kind === 'hide' || source.startsWith('%')) {
+      if (directive?.kind === 'numbering') numbering = directive.value;
+      if (directive?.kind === 'hide') hideFolio = true;
+      flow.set(position, { kind: 'omit' });
+      return false;
+    }
+    if (node.isBlock && (node.isAtom || node.isTextblock)) {
+      if (numbering) effect({ numbering });
+      if (hideFolio) effect({ folio: { visible: false, restartAfter: false } });
+      numbering = undefined;
+      hideFolio = false;
+    }
+    if (standard && /^\\begin\s*\{titlepage\}/.test(source)) {
+      effect({ before: 'page', after: 'page', folio: { visible: false, restartAfter: !recto } });
+      return false;
+    }
     if (isLatexHeading(node) && chapters) {
       const open = String(node.attrs.open ?? '');
       const command = open.slice(1, commandEnd(open, 0));

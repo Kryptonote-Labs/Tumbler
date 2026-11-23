@@ -25,7 +25,7 @@ export type LatexNumbering = {
 
 // Commands and environments whose effect on counters the editor does not model.
 const opaqueCounters =
-  /\\(?:setcounter(?!\s*\{tocdepth\})|addtocounter|stepcounter|refstepcounter|numberwithin|counterwithin|counterwithout|(?:re)?newcommand\s*\{?\\the[a-z]+)\b|\\begin\s*\{(?:multline|flalign|alignat|eqnarray|subequations|xalignat)\*?\}/;
+  /\\(?:setcounter(?!\s*\{(?:tocdepth|secnumdepth)\})|addtocounter|stepcounter|refstepcounter|numberwithin|counterwithin|counterwithout|(?:re)?newcommand\s*\{?\\the(?:part|chapter|section|subsection|subsubsection|paragraph|subparagraph|equation|figure|table|footnote|lstlisting)(?![A-Za-z@]))\b|\\begin\s*\{(?:multline|flalign|alignat|eqnarray|subequations|xalignat)\*?\}/;
 const rawCounters =
   /\\(?:part|chapter|section|subsection|subsubsection|caption|captionof)\b|\\begin\s*\{(?:equation|align|gather|figure|table)\*?\}/;
 const latexHeadings = ['section', 'subsection', 'subsubsection', 'paragraph', 'subparagraph'];
@@ -65,7 +65,9 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
   if (documentClass && !['article', 'report', 'book'].includes(documentClass.trim())) return;
   if (opaqueCounters.test(prefix)) return;
   const chapters = documentClass === 'report' || documentClass === 'book';
-  const depth = chapters ? 2 : 3;
+  const explicitDepth = [...prefix.matchAll(/\\setcounter\s*\{secnumdepth\}\s*\{([^{}]*)\}/g)].at(-1)?.[1]?.trim();
+  if (explicitDepth !== undefined && !/^[+-]?\d+$/.test(explicitDepth)) return;
+  const depth = explicitDepth === undefined ? (chapters ? 2 : 3) : Number(explicitDepth);
   const levels = ['part', 'chapter', ...latexHeadings];
   const counters = new Map(levels.map((name) => [name, 0]));
   let equation = 0;

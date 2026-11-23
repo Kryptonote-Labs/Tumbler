@@ -117,3 +117,59 @@ test('internal anchors fit repeated content on the next page without changing th
   ]);
   expect(result.pages).toBe(3);
 });
+
+test('explicit title and blank pages preserve the front-matter and chapter folios', () => {
+  const source = String.raw`\documentclass{report}
+\setcounter{secnumdepth}{2}
+\newcommand{\thesisline}[1]{#1}
+\begin{document}
+\begin{titlepage}Cover\end{titlepage}
+\thispagestyle{empty}\null\newpage
+\pagenumbering{roman}
+\chapter*{Abstract}
+Summary.
+\newpage
+\null\newpage
+\pagenumbering{arabic}
+\chapter{Introduction}
+\section{Motivation}
+\end{document}`;
+  const document = parseLatex(source);
+  const flow = latexFlow(document);
+  const blocks: PageBlock[] = [];
+  document.forEach((_node, position, index) => {
+    const top = index * 5;
+    blocks.push({ position, top, bottom: top + 5, flow: flow.get(position) });
+  });
+  const { breaks } = paginateLatex(blocks, 100, 20);
+  expect(latexPageNumbers(flow, breaks.map(({ position }) => position))).toEqual([
+    { number: 1, visible: false },
+    { number: 1, visible: false },
+    { number: 1, style: 'roman', visible: true },
+    { number: 2, style: 'roman', visible: true },
+    { number: 1, visible: true },
+  ]);
+  expect([...latexNumbering(document)!.headings.values()].map(({ number }) => number)).toEqual(['1', '1.1']);
+  expect(serializeLatex(document)).toBe(source);
+});
+
+test('adjacent custom dotted contents entries stay together as an editable source block', () => {
+  const source = String.raw`\documentclass{report}
+\makeatletter
+\newcommand{\chapentry}[2]{\@dottedtocline{0}{0em}{1em}{#1}{#2}}
+\newcommand{\secentry}[2]{\@dottedtocline{1}{1em}{2em}{#1}{#2}}
+\makeatother
+\begin{document}
+\chapter*{Contents}
+\chapentry{Introduction}{1}
+\secentry{A nested {title}}{2}
+\newpage
+Ordinary body.
+\end{document}`;
+  const document = parseLatex(source);
+  expect(document.child(1).type.name).toBe('latex_raw');
+  expect(document.child(1).textContent).toBe(
+    '\\chapentry{Introduction}{1}\n\\secentry{A nested {title}}{2}',
+  );
+  expect(serializeLatex(document)).toBe(source);
+});

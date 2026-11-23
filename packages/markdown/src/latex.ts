@@ -1,9 +1,11 @@
+import { latexContentsRunEnd } from './latex-typeset-block';
+export { readLatexTypesetBlock } from './latex-typeset-block';
 export { latexMathMacros, interpretLatexParagraphMacro, interpretLatexText, readLatexTextMacros, type LatexPrintedText } from './latex-macros';
 import { latexDeclarations, latexVerticalSpace } from './latex-presentation';
 export { latexDeclarations, latexVerticalSpace, latexSectionPresentation, latexPresentationColour, latexRunningFields, latexTikzFragment, latexColumnAliasWidths } from './latex-presentation';
 export { readLatexColours } from './latex-colour';
 import { readLatexEnumitem } from './latex-list';
-import { readLatexBookMatter, readLatexClass } from './latex-flow';
+import { readLatexBookMatter, readLatexClass, readLatexPageDirective } from './latex-flow';
 import { latexColourDefinition, readLatexColours } from './latex-colour';
 import { readLatexTheorems, latexBoxTitle, latexEnvironmentName } from './latex-environments';
 import { latexLetterCommandAt } from './latex-letter';
@@ -51,7 +53,7 @@ export type { LatexTypography } from './latex-typography';
 export { latexLandscapeLayout, latexPageLayout, latexPaperSettings, latexSheetLayout, paginateLatex } from './latex-layout';
 export { paginateLatexRegions, type LatexRegionBlock } from './latex-page-regions';
 export type { LatexPageLayout, PageBlock, PageBreak, PageLine } from './latex-layout';
-export { latexBreakCommand, latexFlow, latexPageLabel, latexPageNumbers, readLatexBookMatter, readLatexClass } from './latex-flow';
+export { latexBreakCommand, latexFlow, latexPageLabel, latexPageNumbers, readLatexPageDirective, readLatexBookMatter, readLatexClass } from './latex-flow';
 export type { LatexBlockFlow, LatexBreak, LatexPageNumber } from './latex-flow';
 export {
   latexAuthorGroups,
@@ -315,7 +317,9 @@ function blockStart(source: string, position: number, context: SourceContext) {
     command === '\\begin' ||
     (!!context.include && !!readLatexInclude(source, position)) ||
     !!readLatexParagraphMacro(source, context.macros, position) ||
+    !!latexContentsRunEnd(source, context.macros, position) ||
     blockCommands.has(command) ||
+    !!readLatexPageDirective(source, position) ||
     bibliographyCommands.has(command) ||
     headingLevel(command.slice(1)) > 0 ||
     (context.letter && !!latexLetterCommandAt(source, position)) ||
@@ -508,6 +512,19 @@ function blocks(source: string, context: SourceContext, depth = 0): { nodes: Nod
     const start = whitespaceEnd(source, position);
     const before = source.slice(position, start);
     if (start === source.length) return { nodes, tail: before };
+    const contents = source[start] === '\\' && latexContentsRunEnd(source, context.macros, start);
+    if (contents) {
+      nodes.push(schema.nodes.latex_raw!.create({ before, source: source.slice(start, contents) }));
+      position = contents;
+      continue;
+    }
+    const directive = readLatexPageDirective(source, start);
+    if (directive || source[start] === '%') {
+      const end = directive?.end ?? lineEnd(source, start);
+      nodes.push(schema.nodes.latex_raw!.create({ before, source: source.slice(start, end) }));
+      position = end;
+      continue;
+    }
     const spacing = latexVerticalSpace(source, start);
     if (spacing) {
       nodes.push(schema.nodes.latex_raw!.create({ before, source: source.slice(start, spacing.end) }));
@@ -795,7 +812,10 @@ export function materializeLatexStructures(document: Node): Transform {
     const matter = node.type.name === 'paragraph' && node.children.some(child =>
       child.type.name === 'latex_inline' && readLatexBookMatter(child.attrs.source));
     const paragraphMacro = node.type.name === 'paragraph' && node.children.some(child =>
-      child.type.name === 'latex_inline' && readLatexParagraphMacro(child.attrs.source, context.macros));
+      child.type.name === 'latex_inline' && (
+        readLatexParagraphMacro(child.attrs.source, context.macros) ||
+        latexContentsRunEnd(child.attrs.source, context.macros)
+      ));
     const letter = context.letter && node.type.name === 'paragraph' && node.children.some(child =>
       child.type.name === 'latex_inline' && latexLetterCommandAt(child.attrs.source, 0));
     if (node.type.name === 'latex_raw' && typeof node.attrs.source === 'string') {
@@ -806,7 +826,8 @@ export function materializeLatexStructures(document: Node): Transform {
       child.type.name === 'latex_inline' && /^\\(?:definecolor|textcolor)\b/.test(child.attrs.source));
     const presentation = node.type.name === 'paragraph' && node.children.some(child =>
       child.type.name === 'latex_inline' && (
-        !!latexVerticalSpace(child.attrs.source) || !!declarationScope(child.attrs.source, 0)
+        !!latexVerticalSpace(child.attrs.source) || !!readLatexPageDirective(child.attrs.source) ||
+        String(child.attrs.source).startsWith('%') || !!declarationScope(child.attrs.source, 0)
       ));
     if (!raw && !matter && !letter && !styled && !paragraphMacro && !presentation) return;
     const source = blockSource(node);
