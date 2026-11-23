@@ -63,7 +63,12 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
   const prefix = latexEffectivePrefix(document);
   const documentClass = readLatexClass(prefix).name;
   if (documentClass && !['article', 'report', 'book'].includes(documentClass.trim())) return;
-  if (opaqueCounters.test(prefix)) return;
+  const theoremDefinitions = readLatexTheorems(prefix);
+  const theoremCounters = new Set([...theoremDefinitions.values()].map(({ counter }) => counter));
+  const changesTheoremNumber = (source: string) =>
+    [...source.matchAll(/\\(?:re)?newcommand\s*\{?\\the([A-Za-z@]+)(?![A-Za-z@])/g)]
+      .some((match) => theoremCounters.has(match[1]));
+  if (opaqueCounters.test(prefix) || changesTheoremNumber(prefix)) return;
   const chapters = documentClass === 'report' || documentClass === 'book';
   let depth = chapters ? 2 : 3;
   for (const command of latexCommands(prefix)) {
@@ -83,7 +88,6 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
   let appendix = false;
   let mainMatter = true;
   let current = '';
-  const theoremDefinitions = readLatexTheorems(prefix);
   const theoremCounts = new Map<string, number>();
   const labelScopes: { end: number; previous: string }[] = [];
   let opaque = false;
@@ -195,7 +199,7 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
         return false;
       }
       if (/\\footnote(?:mark|text)?\b/.test(source)) footnotesKnown = false;
-      if (opaqueCounters.test(source) || /\\setcounter\s*\{secnumdepth\}/.test(source)) {
+      if (opaqueCounters.test(source) || changesTheoremNumber(source) || /\\setcounter\s*\{secnumdepth\}/.test(source)) {
         opaque = true;
         return false;
       }

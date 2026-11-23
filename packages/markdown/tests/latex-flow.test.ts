@@ -202,3 +202,13 @@ test('only supported section-depth assignments affect heading numbers', () => {
   expect(latexNumbering(parseLatex(source))?.headings.size).toBe(0);
   expect(latexNumbering(parseLatex(source.replace('\\chapter{Two}', '\\setcounter{secnumdepth}{2}\\chapter{Two}')))).toBeUndefined();
 });
+
+test('custom theorem counter formats keep numbering opaque', () => {
+  const source = String.raw`\documentclass{article}
+\newtheorem{theorem}{Theorem}
+\renewcommand{\thetheorem}{A}
+\begin{document}
+\begin{theorem}Statement.\end{theorem}
+\end{document}`;
+  expect(latexNumbering(parseLatex(source))).toBeUndefined();
+});
