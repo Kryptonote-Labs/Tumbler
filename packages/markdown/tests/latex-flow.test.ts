@@ -197,6 +197,7 @@ test('only supported section-depth assignments affect heading numbers', () => {
 % \setcounter{secnumdepth}{3}
 \begin{document}
 \part{One}
+% \setcounter{secnumdepth}{3}
 \chapter{Two}
 \end{document}`;
   expect(latexNumbering(parseLatex(source))?.headings.size).toBe(0);

@@ -54,6 +54,16 @@ export function latexEquationRows(source: string) {
   return rows;
 }
 
+function* sectionDepthAssignments(source: string) {
+  for (const command of latexCommands(source)) {
+    if (command.name !== 'setcounter') continue;
+    const counter = groupAt(source, whitespaceEnd(source, command.end));
+    if (!counter || source.slice(counter.from, counter.to) !== 'secnumdepth') continue;
+    const value = groupAt(source, whitespaceEnd(source, counter.end));
+    yield value && source.slice(value.from, value.to).trim();
+  }
+}
+
 /**
  * Number headings, equations, figures and tables the way the standard article, report and book
  * classes do, and resolve labels. Returns undefined when the source changes counters in ways the
@@ -71,12 +81,7 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
   if (opaqueCounters.test(prefix) || changesTheoremNumber(prefix)) return;
   const chapters = documentClass === 'report' || documentClass === 'book';
   let depth = chapters ? 2 : 3;
-  for (const command of latexCommands(prefix)) {
-    if (command.name !== 'setcounter') continue;
-    const counter = groupAt(prefix, whitespaceEnd(prefix, command.end));
-    if (!counter || prefix.slice(counter.from, counter.to) !== 'secnumdepth') continue;
-    const value = groupAt(prefix, whitespaceEnd(prefix, counter.end));
-    const literal = value && prefix.slice(value.from, value.to).trim();
+  for (const literal of sectionDepthAssignments(prefix)) {
     if (!literal || !/^[+-]?\d+$/.test(literal)) return;
     depth = Number(literal);
   }
@@ -199,7 +204,7 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
         return false;
       }
       if (/\\footnote(?:mark|text)?\b/.test(source)) footnotesKnown = false;
-      if (opaqueCounters.test(source) || changesTheoremNumber(source) || /\\setcounter\s*\{secnumdepth\}/.test(source)) {
+      if (opaqueCounters.test(source) || changesTheoremNumber(source) || !sectionDepthAssignments(source).next().done) {
         opaque = true;
         return false;
       }
