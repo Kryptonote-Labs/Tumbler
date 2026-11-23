@@ -42,7 +42,7 @@ async function withLatexEditor(source: string | Node, run: (view: EditorView) =>
 test('copy and paste preserves equations, delimiters and opaque LaTeX', async () => {
   const source = String.raw`\chapter{Introduction}
 
-\section*[Short]{Long title}
+\section*[Short]{Long \textnormal{title} with $x^2$ and \%}
 
 \textit{Italic with \textbf{nested bold}}. Energy $x^2$ and \alpha.
 
@@ -54,10 +54,12 @@ test('copy and paste preserves equations, delimiters and opaque LaTeX', async ()
 raw & <value>
 \end{verbatim}`;
   await withLatexEditor(source, (view) => {
+    view.state.doc.check();
     view.dispatch(view.state.tr.setSelection(new AllSelection(view.state.doc)));
     const clipboard = view.serializeForClipboard(view.state.selection.content());
     expect(clipboard.text).toBe(source);
     expect(view.pasteHTML(clipboard.dom.innerHTML)).toBe(true);
+    view.state.doc.check();
     expect(serializeLatex(view.state.doc)).toBe(source);
   });
 });

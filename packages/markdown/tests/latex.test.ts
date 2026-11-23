@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 import { TextSelection } from 'prosemirror-state';
 import { Step } from 'prosemirror-transform';
+import { noteSchema } from '../src';
 import { noteState, receiveTransaction, sendableSteps, toggleLatexStyle, undo } from '../src/editor';
 import {
   latexBlockAtOffset,
@@ -45,7 +46,7 @@ An equation $v^2$ and an escaped \% with \R.
 test('LaTeX keeps original bytes around visual text, ribbon formatting and equation edits', () => {
   const document = parseLatex(article);
   expect(serializeLatex(document)).toBe(article);
-  expect(document.firstChild?.type.name).toBe('heading');
+  expect(document.firstChild?.textContent).toBe('Energy');
   expect(document.textContent).toContain('Ordinary prose.');
   let state = noteState('', 0, 'test', document);
   const dispatch = (tr: Parameters<typeof state.apply>[0]) => {
@@ -84,6 +85,34 @@ test('source edits use the same undo history and leave the rest of the article i
     state = state.apply(transaction);
   });
   expect(serializeLatex(state.doc)).toBe(article);
+});
+
+test('source edits retain the positions of headings saved by earlier editors', () => {
+  const source = String.raw`\section{Before}
+
+Body.
+
+\section{After}`;
+  const parsed = parseLatex(source);
+  const legacy = noteSchema.nodeFromJSON({
+    ...parsed.toJSON(),
+    content: [
+      { ...parsed.child(0).toJSON(), type: 'heading' },
+      parsed.child(1).toJSON(),
+      { ...parsed.child(2).toJSON(), type: 'heading' },
+    ],
+  });
+  legacy.check();
+  expect(serializeLatex(legacy)).toBe(source);
+  expect(latexNumbering(legacy).headings.size).toBe(2);
+  expect(replaceLatexSource(legacy, source).steps).toHaveLength(0);
+
+  const next = source.replace('Body.', 'Body edited.');
+  const edit = replaceLatexSource(legacy, next);
+  expect(edit.mapping.map(3)).toBe(3);
+  expect(edit.mapping.map(legacy.content.size - 3)).toBe(edit.doc.content.size - 3);
+  edit.doc.check();
+  expect(serializeLatex(edit.doc)).toBe(next);
 });
 
 test('reloading the LaTeX editor keeps preamble changes readable by ProseMirror', async () => {

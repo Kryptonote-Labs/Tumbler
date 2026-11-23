@@ -30,6 +30,7 @@ import {
   whitespaceEnd,
 } from './latex-syntax';
 
+export { isLatexHeading } from './latex-spec';
 export { latexEnvironmentName, latexEnvironmentOption } from './latex-environments';
 export { latexItemLabel, latexListOptions } from './latex-list';
 export { composeLatexParagraph, latexInterwordGlue, type LatexLine, type LatexTextMetrics } from './latex-lines';
@@ -537,7 +538,7 @@ function blocks(source: string, context: SourceContext, depth = 0): { nodes: Nod
     const heading = source[start] === '\\' ? headingAt(source, start) : undefined;
     if (heading) {
       nodes.push(
-        schema.nodes.heading!.create(
+        schema.nodes.latex_heading!.create(
           {
             level: heading.level,
             before,
@@ -694,7 +695,8 @@ function blockSource(node: Node): string {
     case 'latex_display_math':
       result = mathSource(node);
       break;
-    case 'heading': {
+    case 'heading':
+    case 'latex_heading': {
       const command = latexHeadings[node.attrs.level - 1] ?? latexHeadings[0];
       result = (open ?? '\\' + command + '{') + inlineSource(node) + (close ?? '}');
       break;
@@ -855,9 +857,15 @@ export function refreshRebasedLatexFiles(transform: Transform, rebased: Transfor
 /** Source mode and the hosted CLI turn source changes into normal, mappable editor steps. */
 export function replaceLatexSource(document: Node, source: string, file?: string): Transform {
   const project = serializeLatexProject(document);
-  if (project) project.files.set(file ?? project.entry, source);
-  const next = project ? parseLatexProject(project.entry, project.files) : parseLatex(source);
   const transform = new Transform(document);
+  if (project) {
+    const path = file ?? project.entry;
+    if (project.files.get(path) === source) return transform;
+    project.files.set(path, source);
+  } else if (serializeLatex(document) === source) {
+    return transform;
+  }
+  const next = project ? parseLatexProject(project.entry, project.files) : parseLatex(source);
   updateLatexBoundary(transform, 'prefix', next.attrs.prefix);
   updateLatexBoundary(transform, 'suffix', next.attrs.suffix);
   const previousProject: LatexProject | null = document.attrs.latexProject;
@@ -870,25 +878,32 @@ export function replaceLatexSource(document: Node, source: string, file?: string
     }
   }
 
-  const from = document.content.findDiffStart(next.content);
+  // Convert persisted headings without replacing their contents or remapping other edits.
+  document.descendants((node, position) => {
+    if (node.type === schema.nodes.heading)
+      transform.setNodeMarkup(position, schema.nodes.latex_heading, node.attrs);
+    return !node.isTextblock;
+  });
+  const previous = transform.doc;
+  const from = previous.content.findDiffStart(next.content);
   if (from === null) return transform;
-  const original = document.nodeAt(from);
+  const original = previous.nodeAt(from);
   const edited = next.nodeAt(from);
   if (original?.type === edited?.type && edited?.type.name.startsWith('latex_') &&
       typeof original?.attrs.source === 'string' && typeof edited.attrs.source === 'string') {
-    const sourceEdit = updateLatexNodeSource(new Transform(transform.doc), from, edited.attrs.source);
+    const sourceEdit = updateLatexNodeSource(new Transform(previous), from, edited.attrs.source);
     if (sourceEdit.doc.eq(next)) {
       for (const step of sourceEdit.steps) transform.step(step);
       return transform;
     }
   }
-  const end = document.content.findDiffEnd(next.content)!;
+  const end = previous.content.findDiffEnd(next.content)!;
   const overlap = from - Math.min(end.a, end.b);
   if (overlap > 0) {
     end.a += overlap;
     end.b += overlap;
   }
-  const precise = new Transform(transform.doc);
+  const precise = new Transform(previous);
   try {
     precise.replace(from, end.a, next.slice(from, end.b));
     if (precise.doc.eq(next)) {
@@ -900,18 +915,18 @@ export function replaceLatexSource(document: Node, source: string, file?: string
       throw error;
   }
   let left = 0;
-  let right = document.childCount;
+  let right = previous.childCount;
   let nextRight = next.childCount;
   let start = 0;
-  while (left < right && left < nextRight && document.child(left).eq(next.child(left)))
-    start += document.child(left++).nodeSize;
-  let stop = document.content.size;
+  while (left < right && left < nextRight && previous.child(left).eq(next.child(left)))
+    start += previous.child(left++).nodeSize;
+  let stop = previous.content.size;
   while (
     right > left &&
     nextRight > left &&
-    document.child(right - 1).eq(next.child(nextRight - 1))
+    previous.child(right - 1).eq(next.child(nextRight - 1))
   ) {
-    stop -= document.child(--right).nodeSize;
+    stop -= previous.child(--right).nodeSize;
     nextRight--;
   }
   const replacement: Node[] = [];

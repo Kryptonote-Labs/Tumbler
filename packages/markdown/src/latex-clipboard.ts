@@ -121,7 +121,10 @@ export function latexClipboard(schema: Schema) {
       return rendered;
     },
   } satisfies DOMSerializer['marks'];
-  const baseRules = DOMParser.fromSchema(schema).rules;
+  // Clipboard headings from Markdown and other editors become LaTeX headings.
+  const baseRules = DOMParser.fromSchema(schema).rules.map((rule) =>
+    rule.node === 'heading' ? { ...rule, node: 'latex_heading' } : rule,
+  );
   const include: TagParseRule = {
     tag: 'div[data-latex-include][data-latex-delimiters]',
     node: 'latex_include',

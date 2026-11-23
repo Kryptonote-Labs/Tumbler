@@ -1,3 +1,4 @@
+import { isLatexHeading } from './latex-spec';
 import type { Node } from 'prosemirror-model';
 import { noteColours } from './index';
 
@@ -152,7 +153,7 @@ export function paintNotePreview(
         ctx.fillStyle = palette.muted;
         ctx.fillText(marker, x - 16, y + 15);
       }
-      const heading = node.type.name === 'heading';
+      const heading = isLatexHeading(node);
       inline(
         node,
         x,
