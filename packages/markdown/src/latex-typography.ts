@@ -104,7 +104,11 @@ export function latexTypography(points: number, prefix: string, twoColumns = fal
   const subcaption = points === 12 ? classic[11].text : points === 11 ? classic[10].text : textSize(9, 11);
   // Caption packages add a strut whose baseline is at 70% of the line height.
   const captionShift = ({ size, leading }: TextSize) => 0.2 * leading - 0.4 * size;
-  const expansion = microtype && (usesClassicRoman || latinModern) && !microtype.options.some(option => /^expansion\s*=\s*false$/.test(option))
+  const expansionOption = microtype?.options.findLast(option => /^expansion(?:\s*=|$)/.test(option));
+  // The bundled pdfTeX runtime leaves expansion off for this family unless explicitly requested.
+  const expansion = microtype && (
+    expansionOption === undefined ? usesClassicRoman : /^expansion(?:\s*=\s*true)?$/.test(expansionOption)
+  ) && (usesClassicRoman || latinModern)
     ? { stretch: 0.02, shrink: 0.02 } : undefined;
   const titleAscent = title.leading / 2 + 0.4 * title.size;
   const titleDescent = title.leading - titleAscent;
