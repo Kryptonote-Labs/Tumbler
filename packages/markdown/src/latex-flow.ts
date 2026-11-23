@@ -10,17 +10,20 @@ export type LatexBreak = 'column' | 'page' | 'recto';
 type FolioStyle = 'roman' | 'arabic';
 
 /** A source command can occupy no space, or constrain where visible content flows. */
+type FolioEffect = {
+  folio?: { visible: false; restartAfter: boolean };
+  numbering?: FolioStyle;
+};
+
 export type LatexBlockFlow =
   | { kind: 'break'; boundary: LatexBreak }
-  | { kind: 'omit' }
-  | {
+  | ({ kind: 'omit' } & FolioEffect)
+  | ({
       kind: 'content';
       before?: LatexBreak;
       wideFloat?: true;
       after?: LatexBreak;
-      folio?: { visible: false; restartAfter: boolean };
-      numbering?: FolioStyle;
-    };
+    } & FolioEffect);
 
 export type LatexPageNumber = { number: number; visible: boolean; style?: 'roman' };
 
@@ -110,7 +113,7 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
   let titlePrinted = false;
   let numbering: FolioStyle | undefined;
   let hideFolio = false;
-  let lastContent: number | undefined;
+  let pageHasContent = false;
 
   document.descendants((node, position) => {
     if (node.type.name === 'latex_include' && /^\\include\b/.test(node.attrs.open ?? ''))
@@ -124,13 +127,13 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
     const matter = name === 'book' && readLatexBookMatter(source);
     if (matter) {
       flow.set(position, { kind: 'break', boundary: matter === 'back' ? chapterBoundary : recto ? 'recto' : 'page' });
-      lastContent = undefined;
+      pageHasContent = false;
       if (matter !== 'back') numbering = matter === 'front' ? 'roman' : 'arabic';
       return false;
     }
     const explicit = latexBreakCommand(source);
     if (explicit) {
-      lastContent = undefined;
+      pageHasContent = false;
       flow.set(position, { kind: 'break', boundary: explicit === 'recto' && !recto ? 'page' : explicit });
       return false;
     }
@@ -139,14 +142,16 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
     };
     const directive = readLatexPageDirective(source);
     if (directive?.kind === 'numbering' || directive?.kind === 'hide' || source.startsWith('%')) {
-      if (directive?.kind === 'numbering') numbering = directive.value;
-      if (directive?.kind === 'hide') {
-        if (lastContent === undefined) hideFolio = true;
-        else flow.set(lastContent, {
-          ...flow.get(lastContent), kind: 'content', folio: { visible: false, restartAfter: false },
-        });
+      const change: FolioEffect = {};
+      if (directive?.kind === 'numbering') {
+        if (pageHasContent) change.numbering = directive.value;
+        else numbering = directive.value;
       }
-      flow.set(position, { kind: 'omit' });
+      if (directive?.kind === 'hide') {
+        if (pageHasContent) change.folio = { visible: false, restartAfter: false };
+        else hideFolio = true;
+      }
+      flow.set(position, { kind: 'omit', ...change });
       return false;
     }
     if (node.isBlock && (node.isAtom || node.isTextblock)) {
@@ -154,11 +159,11 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
       if (hideFolio) effect({ folio: { visible: false, restartAfter: false } });
       numbering = undefined;
       hideFolio = false;
-      lastContent = position;
+      pageHasContent = true;
     }
     if (standard && /^\\begin\s*\{titlepage\}/.test(source)) {
       effect({ before: 'page', after: 'page', folio: { visible: false, restartAfter: !recto } });
-      lastContent = undefined;
+      pageHasContent = false;
       return false;
     }
     if (isLatexHeading(node) && chapters) {
@@ -168,7 +173,7 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
         effect(command === 'chapter'
           ? { before: chapterBoundary }
           : { before: chapterBoundary, after: chapterBoundary });
-        if (command === 'part') lastContent = undefined;
+        if (command === 'part') pageHasContent = false;
       }
     } else if (node.type.name === 'latex_raw') {
       if (name === 'letter' && /^\\opening\s*\{/.test(source)) {
@@ -187,7 +192,7 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
       if (source !== '\\' + command) return;
       if (command === 'maketitle' && titlePage && !titlePrinted) {
         titlePrinted = true;
-        lastContent = undefined;
+        pageHasContent = false;
         effect({
           before: name === 'book' && recto ? 'recto' : 'page',
           after: 'page',
@@ -228,7 +233,7 @@ export function latexPageNumbers(
   const overrides = new Map<number, { visible: false; restartAfter: boolean }>();
   const resets = new Map<number, FolioStyle>();
   for (const [position, effect] of flow) {
-    if (effect.kind !== 'content') continue;
+    if (effect.kind === 'break') continue;
     const page = pageStarts.findLastIndex(start => start <= position) + 1;
     if (effect.folio) overrides.set(page, effect.folio);
     if (effect.numbering) resets.set(page, effect.numbering);

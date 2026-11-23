@@ -173,3 +173,32 @@ Ordinary body.
   );
   expect(serializeLatex(document)).toBe(source);
 });
+
+test('page directives after a split paragraph affect the sheet where they occur', () => {
+  const source = String.raw`\begin{document}
+A paragraph across two pages.
+\pagenumbering{roman}
+\thispagestyle{empty}
+\newpage
+The next page.
+\end{document}`;
+  const document = parseLatex(source);
+  const nextPage = document.content.size - document.lastChild!.nodeSize;
+  expect(latexPageNumbers(latexFlow(document), [8, nextPage])).toEqual([
+    { number: 1, visible: true },
+    { number: 1, style: 'roman', visible: false },
+    { number: 2, style: 'roman', visible: true },
+  ]);
+});
+
+test('only supported section-depth assignments affect heading numbers', () => {
+  const source = String.raw`\documentclass{report}
+\setcounter{secnumdepth}{-2}
+% \setcounter{secnumdepth}{3}
+\begin{document}
+\part{One}
+\chapter{Two}
+\end{document}`;
+  expect(latexNumbering(parseLatex(source))?.headings.size).toBe(0);
+  expect(latexNumbering(parseLatex(source.replace('\\chapter{Two}', '\\setcounter{secnumdepth}{2}\\chapter{Two}')))).toBeUndefined();
+});

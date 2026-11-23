@@ -6,7 +6,7 @@ import { latexBoxTitle, latexEnvironmentName, latexEnvironmentOption, readLatexT
 import { latexRomanNumber } from './latex-number-format';
 import { readLatexBookMatter, readLatexClass } from './latex-flow';
 import type { Node } from 'prosemirror-model';
-import { commandEnd, environmentAt, groupAt } from './latex-syntax';
+import { commandEnd, environmentAt, groupAt, latexCommands, whitespaceEnd } from './latex-syntax';
 
 export type LatexNumbering = {
   /** Heading positions and the number LaTeX prints, such as `2.1`, `A` or `I` for a part. */
@@ -65,9 +65,16 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
   if (documentClass && !['article', 'report', 'book'].includes(documentClass.trim())) return;
   if (opaqueCounters.test(prefix)) return;
   const chapters = documentClass === 'report' || documentClass === 'book';
-  const explicitDepth = [...prefix.matchAll(/\\setcounter\s*\{secnumdepth\}\s*\{([^{}]*)\}/g)].at(-1)?.[1]?.trim();
-  if (explicitDepth !== undefined && !/^[+-]?\d+$/.test(explicitDepth)) return;
-  const depth = explicitDepth === undefined ? (chapters ? 2 : 3) : Number(explicitDepth);
+  let depth = chapters ? 2 : 3;
+  for (const command of latexCommands(prefix)) {
+    if (command.name !== 'setcounter') continue;
+    const counter = groupAt(prefix, whitespaceEnd(prefix, command.end));
+    if (!counter || prefix.slice(counter.from, counter.to) !== 'secnumdepth') continue;
+    const value = groupAt(prefix, whitespaceEnd(prefix, counter.end));
+    const literal = value && prefix.slice(value.from, value.to).trim();
+    if (!literal || !/^[+-]?\d+$/.test(literal)) return;
+    depth = Number(literal);
+  }
   const levels = ['part', 'chapter', ...latexHeadings];
   const counters = new Map(levels.map((name) => [name, 0]));
   let equation = 0;
@@ -147,7 +154,7 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
         return true;
       }
       const level = levels.indexOf(name);
-      if (name !== 'part' && level - 1 > depth) return true;
+      if ((name === 'part' && !chapters ? 0 : level - 1) > depth) return true;
       counters.set(name, counters.get(name)! + 1);
       // A part does not restart chapter or section numbers.
       if (name !== 'part') for (const lower of levels.slice(level + 1)) counters.set(lower, 0);
@@ -188,7 +195,7 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
         return false;
       }
       if (/\\footnote(?:mark|text)?\b/.test(source)) footnotesKnown = false;
-      if (opaqueCounters.test(source)) {
+      if (opaqueCounters.test(source) || /\\setcounter\s*\{secnumdepth\}/.test(source)) {
         opaque = true;
         return false;
       }
