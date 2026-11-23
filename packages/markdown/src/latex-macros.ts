@@ -1,4 +1,6 @@
 import { readLatexColours, resolveLatexColour } from './latex-colour';
+import { latexDeclarations } from './latex-presentation';
+import { latexLength } from './latex-lengths';
 import { usesLatexPackage } from './latex-preamble';
 import { commandEnd, groupAt, latexCommands, lineEnd, whitespaceEnd } from "./latex-syntax";
 
@@ -131,6 +133,8 @@ const symbols = new Map([
   ["textasciitilde", "~"],
   ["textasciicircum", "^"],
   [" ", "\u00a0"],
+  ["quad", "\u2003"],
+  ["qquad", "\u2003\u2003"],
 ]);
 
 /** Expand a source-backed inline command into text and native formatting. */
@@ -180,14 +184,15 @@ export function interpretLatexText(
       const style = styles.get(command);
       const symbol = symbols.get(command);
       const textColour = command === 'textcolor';
-      if (!macro && !style && !textColour) {
+      const link = command === 'href';
+      if (!macro && !style && !textColour && !link) {
         if (symbol === undefined) return;
         result.push(symbol);
         continue;
       }
       if (active.has(command)) return;
       const args: string[] = [];
-      const count = macro?.count ?? (textColour ? 2 : 1);
+      const count = macro?.count ?? (textColour || link ? 2 : 1);
       if (macro?.optional !== undefined) {
         const option = groupAt(input, position, "[", "]");
         if (option) position = whitespaceEnd(input, option.end);
@@ -213,6 +218,10 @@ export function interpretLatexText(
         );
         const content = read(replacement, depth + 1);
         active.delete(command);
+        if (!content) return;
+        result.push(...content);
+      } else if (link) {
+        const content = read(args[1]!, depth + 1);
         if (!content) return;
         result.push(...content);
       } else if (textColour) {
@@ -247,7 +256,9 @@ export function readLatexParagraphMacro(
   const name = source.slice(position + 1, command);
   const macro = macros.get(name);
   if (!macro) return;
-  const body = /^\s*\\par\b\s*(?:\\(smallskip|medskip|bigskip)\b\s*)?(\\noindent\b\s*)?([\s\S]*?)\s*\\par\b\s*(?:\\(smallskip|medskip|bigskip)\b\s*)?$/.exec(macro.replacement);
+  const replacement = macro.replacement.replace(/(?<!\\)%[^\r\n]*\r?\n[ \t]*/g, '');
+  const scoped = /^(\s*\\par\b)\s*\\begingroup\b([\s\S]*\\par)\s*\\endgroup\s*$/.exec(replacement);
+  const body = /^\s*\\par\b\s*(?:\\(smallskip|medskip|bigskip)\b\s*)?(\\noindent\b\s*)?([\s\S]*?)\s*\\par\b\s*(?:\\(smallskip|medskip|bigskip)\b\s*)?$/.exec(scoped ? scoped[1]! + scoped[2]! : replacement);
   if (!body) return;
   let end = command;
   let count = macro.count;
@@ -275,7 +286,34 @@ export function interpretLatexParagraphMacro(source: string, prefix: string) {
   const macros = readLatexTextMacros(prefix);
   const paragraph = readLatexParagraphMacro(source, macros);
   if (!paragraph || paragraph.end !== source.length) return;
-  macros.set(paragraph.name, paragraph.macro);
-  const content = interpretLatexText(source, macros, readLatexColours(prefix));
-  if (content) return { ...paragraph, content };
+  const colours = readLatexColours(prefix);
+  let text = paragraph.macro.replacement.trim();
+  const group = groupAt(text, 0);
+  if (group?.end === text.length) text = text.slice(group.from, group.to);
+  const style = latexDeclarations(text);
+  text = text.slice(style.end);
+  let box: { padding: number; background: string } | undefined;
+  const boxed = /^\\setlength\s*\{\\fboxsep\}\s*\{([^{}]+)\}\s*\\noindent\s*\\colorbox\s*\{([^{}]+)\}/.exec(text);
+  if (boxed) {
+    const padding = latexLength(boxed[1]);
+    const background = resolveLatexColour(boxed[2]!, colours);
+    const outer = groupAt(text, whitespaceEnd(text, boxed[0].length));
+    const inner = outer && /^\\parbox\s*/.exec(text.slice(outer.from, outer.to));
+    const width = inner && outer && groupAt(text, outer.from + inner[0].length);
+    const body = width && groupAt(text, whitespaceEnd(text, width.end));
+    if (padding !== undefined && background && outer && body && !text.slice(outer.end).trim()) {
+      box = { padding, background };
+      text = text.slice(body.from, body.to);
+    }
+  }
+  macros.set(paragraph.name, { ...paragraph.macro, replacement: text });
+  const content = interpretLatexText(source, macros, colours);
+  if (content) return { ...paragraph, content, style, box };
+}
+
+/** KaTeX accepts parameterized replacements, with TeX execution disabled by its caller. */
+export function latexMathMacros(prefix: string) {
+  return Object.fromEntries([...readLatexTextMacros(prefix)]
+    .filter(([, macro]) => macro.optional === undefined)
+    .map(([name, macro]) => ['\\' + name, macro.replacement]));
 }

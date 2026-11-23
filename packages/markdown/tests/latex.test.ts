@@ -218,3 +218,24 @@ test('a formatting alias stays editable and keeps the authored macro call', () =
   const state = noteState('', 0, 'test', document);
   expect(serializeLatex(state.tr.insertText('Ready', 1, 9).doc)).toBe(source.replace('Incoming', 'Ready'));
 });
+
+test('formatting scopes expose their text and tables without rewriting their source', () => {
+  const source = String.raw`\vspace*{5mm}
+{\fontsize{34}{39}\selectfont\bfseries Heading\par}
+
+{\small
+\begin{tabularx}{\linewidth}{XX}
+One & Two\\
+\end{tabularx}
+}`;
+  const document = parseLatex(source);
+  document.check();
+  expect(document.child(1).textContent).toBe('Heading');
+  const table = document.child(2).firstChild;
+  expect(table?.attrs.source).toContain('One & Two');
+  expect(serializeLatex(document)).toBe(source);
+  const position = document.child(0).nodeSize + 2;
+  const state = noteState('', 0, 'test', document);
+  const edited = state.apply(state.tr.insertText('Title', position, position + 'Heading'.length));
+  expect(serializeLatex(edited.doc)).toBe(source.replace('Heading', 'Title'));
+});

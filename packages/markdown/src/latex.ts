@@ -1,4 +1,7 @@
-export { interpretLatexParagraphMacro, interpretLatexText, readLatexTextMacros, type LatexPrintedText } from './latex-macros';
+export { latexMathMacros, interpretLatexParagraphMacro, interpretLatexText, readLatexTextMacros, type LatexPrintedText } from './latex-macros';
+import { latexDeclarations, latexVerticalSpace } from './latex-presentation';
+export { latexDeclarations, latexVerticalSpace, latexSectionPresentation, latexPresentationColour, latexRunningFields, latexTikzFragment } from './latex-presentation';
+export { readLatexColours } from './latex-colour';
 import { readLatexEnumitem } from './latex-list';
 import { readLatexBookMatter, readLatexClass } from './latex-flow';
 import { latexColourDefinition, readLatexColours } from './latex-colour';
@@ -290,12 +293,24 @@ function headingAt(source: string, position: number) {
   if (group) return { ...group, level };
 }
 
+function declarationScope(source: string, position: number) {
+  if (source[position] !== '{' || source.slice(source.lastIndexOf('\n', position - 1) + 1, position).trim())
+    return;
+  const bodyStart = latexDeclarations(source, position + 1).end;
+  if (bodyStart === position + 1) return;
+  const scope = groupAt(source, position);
+  if (scope && bodyStart < scope.to && /^[^\S\r\n]*(?:\r?\n|$)/.test(source.slice(scope.end)))
+    return { scope, bodyStart };
+}
+
 function blockStart(source: string, position: number, context: SourceContext) {
   if (source.startsWith('$$', position) || source.startsWith('\\[', position)) return true;
+  if (source[position] === '{') return !!declarationScope(source, position);
   if (source[position] !== '\\') return false;
   const command = source.slice(position, commandEnd(source, position));
   return (
     command === '\\begin' ||
+    !!latexVerticalSpace(source, position) ||
     (!!context.include && !!readLatexInclude(source, position)) ||
     !!readLatexParagraphMacro(source, context.macros, position) ||
     blockCommands.has(command) ||
@@ -491,6 +506,28 @@ function blocks(source: string, context: SourceContext, depth = 0): { nodes: Nod
     const start = whitespaceEnd(source, position);
     const before = source.slice(position, start);
     if (start === source.length) return { nodes, tail: before };
+    const spacing = latexVerticalSpace(source, start);
+    if (spacing) {
+      nodes.push(schema.nodes.latex_raw!.create({ before, source: source.slice(start, spacing.end) }));
+      position = spacing.end;
+      continue;
+    }
+    const group = depth < 64 && declarationScope(source, start);
+    if (group) {
+      const { scope, bodyStart } = group;
+      const body = source.slice(bodyStart, scope.to);
+      const paragraph = /\\par\s*$/.exec(body);
+      const content = blocks(paragraph ? body.slice(0, paragraph.index) : body, {
+        ...context, colours: new Map(context.colours),
+      }, depth + 1);
+      if (content.nodes.length) {
+        nodes.push(schema.nodes.latex_container!.create({
+          before, open: source.slice(start, bodyStart), close: content.tail + (paragraph?.[0] ?? '') + '}',
+        }, content.nodes));
+        position = scope.end;
+        continue;
+      }
+    }
     const command = source.slice(start, commandEnd(source, start));
     if (blockCommands.has(command)) {
       nodes.push(schema.nodes.latex_raw!.create({ before, source: command }));
@@ -765,7 +802,11 @@ export function materializeLatexStructures(document: Node): Transform {
     }
     const styled = node.type.name === 'paragraph' && node.children.some(child =>
       child.type.name === 'latex_inline' && /^\\(?:definecolor|textcolor)\b/.test(child.attrs.source));
-    if (!raw && !matter && !letter && !styled && !paragraphMacro) return;
+    const presentation = node.type.name === 'paragraph' && node.children.some(child =>
+      child.type.name === 'latex_inline' && (
+        !!latexVerticalSpace(child.attrs.source) || !!declarationScope(child.attrs.source, 0)
+      ));
+    if (!raw && !matter && !letter && !styled && !paragraphMacro && !presentation) return;
     const source = blockSource(node);
     const parsed = blocks(source, context);
     if (!parsed.nodes.length || (raw && parsed.nodes.every(block => block.type.name === 'latex_raw'))) return;
