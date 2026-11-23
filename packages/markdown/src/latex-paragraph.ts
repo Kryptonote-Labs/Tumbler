@@ -1,3 +1,4 @@
+import { readLatexPageDirective } from './latex-flow';
 import { latexLength } from './latex-lengths';
 import { commandEnd, groupAt, whitespaceEnd } from './latex-syntax';
 import type { Node } from 'prosemirror-model';
@@ -54,6 +55,10 @@ export function latexParagraphText(node: Node, resolvedInline?: (source: string)
   let supported = true;
   node.forEach((child, position) => {
     if (!supported) return;
+    if (child.type.name === 'latex_inline') {
+      const source = String(child.attrs.source).trim();
+      if (source === '\\null' || readLatexPageDirective(source)) return;
+    }
     const segment = segments.at(-1)!;
     const flow =
       child.type.name === 'hard_break'

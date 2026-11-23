@@ -216,7 +216,9 @@ test('custom theorem counter formats keep numbering opaque', () => {
 
 test('inline page directives keep surrounding prose in one paragraph', () => {
   const source = String.raw`\begin{document}
-Before \thispagestyle{empty} and \null\textbf{after}.
+Before
+\thispagestyle{empty}
+and \null\textbf{after}.
 \end{document}`;
   const document = parseLatex(source);
   expect(document.childCount).toBe(1);
