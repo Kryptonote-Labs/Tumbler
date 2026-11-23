@@ -1,15 +1,23 @@
 import { latexLength } from './latex-lengths';
+import { texPoint } from './latex-typography';
 import { resolveLatexColour } from './latex-colour';
 import { commandEnd, environmentAt, groupAt, latexCommands, whitespaceEnd } from './latex-syntax';
 
-const fontSizes = new Map([
-  ['tiny', 0.5], ['scriptsize', 0.7], ['footnotesize', 0.8], ['small', 0.9],
-  ['normalsize', 1], ['large', 1.2], ['Large', 1.44], ['LARGE', 1.73],
-  ['huge', 2.07], ['Huge', 2.49],
+const fontSizes = new Map<string, readonly [number, number, number]>([
+  ['tiny', [5, 6, 6]], ['scriptsize', [7, 8, 8]], ['footnotesize', [8, 9, 10]],
+  ['small', [9, 10, 10.95]], ['normalsize', [10, 10.95, 12]], ['large', [12, 12, 14.4]],
+  ['Large', [14.4, 14.4, 17.28]], ['LARGE', [17.28, 17.28, 20.74]],
+  ['huge', [20.74, 20.74, 24.88]], ['Huge', [24.88, 24.88, 24.88]],
+]);
+
+const fontLeading = new Map<string, readonly [number, number, number]>([
+  ['tiny', [6, 7, 7]], ['scriptsize', [8, 9.5, 9.5]], ['footnotesize', [9.5, 11, 12]],
+  ['small', [11, 12, 13.6]], ['normalsize', [12, 13.6, 14.5]], ['large', [14, 14, 18]],
+  ['Large', [18, 18, 22]], ['LARGE', [22, 22, 25]], ['huge', [25, 25, 30]], ['Huge', [30, 30, 30]],
 ]);
 
 /** Read scoped declarations without absorbing the text or environment they format. */
-export function latexDeclarations(source: string, start = 0) {
+export function latexDeclarations(source: string, start = 0, normalSize = 10 * texPoint) {
   let end = start;
   let family: 'sans' | 'roman' | 'mono' | undefined;
   let bold: boolean | undefined;
@@ -23,10 +31,14 @@ export function latexDeclarations(source: string, start = 0) {
     const position = whitespaceEnd(source, end);
     const next = commandEnd(source, position);
     const command = source.slice(position + 1, next);
-    const ratio = fontSizes.get(command);
-    if (ratio) {
-      scale = ratio;
-      size = leading = undefined;
+    const sizes = fontSizes.get(command);
+    if (sizes) {
+      const points = normalSize / texPoint;
+      const index = points >= 11.5 ? 2 : points >= 10.5 ? 1 : 0;
+      scale = (sizes[index] * texPoint) / normalSize;
+      size = undefined;
+      const baseline = fontLeading.get(command)?.[index];
+      leading = baseline === undefined ? undefined : baseline * texPoint;
     } else if (command === 'sffamily' || command === 'rmfamily' || command === 'ttfamily') {
       family = command === 'sffamily' ? 'sans' : command === 'ttfamily' ? 'mono' : 'roman';
     } else if (command === 'bfseries' || command === 'mdseries') {
@@ -73,13 +85,13 @@ export function latexVerticalSpace(source: string, start = 0) {
 }
 
 /** Read simple titlesec formatting and leave complex styles to the TeX compiler. */
-export function latexSectionPresentation(prefix: string) {
+export function latexSectionPresentation(prefix: string, normalSize?: number) {
   const formats = new Map<string, { style: ReturnType<typeof latexDeclarations>; unnumbered: boolean }>();
   for (const match of prefix.matchAll(/\\titleformat\s*\{\\([a-z]+)\}/g)) {
     const styleGroup = groupAt(prefix, whitespaceEnd(prefix, match.index + match[0].length));
     const label = styleGroup && groupAt(prefix, whitespaceEnd(prefix, styleGroup.end));
     if (!styleGroup || !label) continue;
-    const style = latexDeclarations(prefix.slice(styleGroup.from, styleGroup.to));
+    const style = latexDeclarations(prefix.slice(styleGroup.from, styleGroup.to), 0, normalSize);
     formats.set(match[1]!, { style, unnumbered: !prefix.slice(label.from, label.to).trim() });
   }
   const spacing = new Map<string, { before: number; after: number }>();
