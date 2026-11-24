@@ -204,6 +204,46 @@ export function pastedLatexText(text: string) {
   return result + text.slice(position);
 }
 
+const pendingInlineMath = /(?<![\\$\w])\$(?=[^\s$])([^$\n]*)$/;
+
+const smartQuote = new InputRule(/['"]$/, (state, [quote], start, end) => {
+  const position = state.doc.resolve(start);
+  const before = position.parent.textBetween(0, position.parentOffset, '', (node) =>
+    node.type === schema.nodes.latex_inline && typeof node.attrs.label === 'string'
+      ? node.attrs.label
+      : '\ufffc',
+  );
+  const formula = pendingInlineMath.exec(before)?.[1];
+  // Keep TeX commands and primes in unfinished math available to the existing math rules.
+  if (
+    /(?<!\\)(?:\\\\)*\\$/.test(before) ||
+    (formula && !currency.test(formula)) ||
+    /^\$\$[^$\n]*$/.test(before) ||
+    before.lastIndexOf('\\(') > before.lastIndexOf('\\)') ||
+    before.lastIndexOf('\\[') > before.lastIndexOf('\\]')
+  )
+    return null;
+
+  const previous = before.at(-1) ?? '';
+  const double = quote === '"';
+  const opening =
+    previous === '' || /[\s([{–—]/u.test(previous) || previous === (double ? '‘' : '“');
+  const label = double ? (opening ? '“' : '”') : opening ? '‘' : '’';
+  let source = opening ? (double ? '``' : '`') : double ? "''" : "'";
+  // Three consecutive TeX quote characters render the double quote first.
+  if (double && previous === (opening ? '‘' : '’')) {
+    source = opening ? '\\textquotedblleft{}' : '\\textquotedblright{}';
+  }
+  const marks =
+    state.storedMarks ??
+    (start === end ? position.marks() : position.marksAcross(state.doc.resolve(end)) ?? []);
+  return state.tr.replaceWith(
+    start,
+    end,
+    schema.nodes.latex_inline!.create({ source, label }, null, marks),
+  );
+});
+
 function latexInputRules() {
   const formatting = (pattern: RegExp, style: Style) =>
     new InputRule(pattern, (state, match, start, end) => {
@@ -284,6 +324,7 @@ function latexInputRules() {
               }),
             ),
       ),
+      smartQuote,
       wrappingInputRule(/^[-*] $/, schema.nodes.bullet_list!),
       wrappingInputRule(/^1\. $/, schema.nodes.ordered_list!),
     ],
