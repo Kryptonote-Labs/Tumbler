@@ -1,6 +1,6 @@
 import { groupAt, latexCommands, whitespaceEnd } from './latex-syntax';
 
-type Package = { name: string; options: string[] };
+type Package = { name: string; options: string[]; offset: number };
 
 function options(source: string) {
   return source.replace(/(?<!\\)%[^\r\n]*/g, '').split(',').map(option => option.trim());
@@ -27,7 +27,7 @@ export function readLatexPackages(prefix: string): Package[] {
     const settings = optional ? options(prefix.slice(optional.from, optional.to)) : [];
     for (const name of options(prefix.slice(names.from, names.to))) {
       if (name && !declarations.some(item => item.name === name))
-        declarations.push({ name, options: [...(passed.get(name) ?? []), ...settings] });
+        declarations.push({ name, options: [...(passed.get(name) ?? []), ...settings], offset: command.start });
     }
   }
   return declarations;
@@ -53,7 +53,7 @@ export function latexDriverUsesClassPaper(prefix: string, classOptions: readonly
   const packages = readLatexPackages(prefix);
   for (const { name } of packages) {
     for (const dependency of dependencies.get(name) ?? [])
-      if (!packages.some(item => item.name === dependency)) packages.push({ name: dependency, options: [] });
+      if (!packages.some(item => item.name === dependency)) packages.push({ name: dependency, options: [], offset: 0 });
   }
   return packages.some(({ name, options }) => {
     if (!['graphics','graphicx','color','xcolor','hyperref'].includes(name)) return false;

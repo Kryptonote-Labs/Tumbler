@@ -44,6 +44,8 @@ import {
   whitespaceEnd,
 } from './latex-syntax';
 
+export { readLatexPackages } from './latex-preamble';
+export { latexLineSpacing, setLatexLineSpacing, latexRomanFamily, setLatexRomanFamily, addLatexPackage } from './latex-format';
 export { isLatexHeading } from './latex-spec';
 export { latexEnvironmentName, latexEnvironmentOption } from './latex-environments';
 export { latexItemLabel, latexListOptions, withLatexItemLabel } from './latex-list';
