@@ -118,35 +118,55 @@ test('new documents use spaced, unindented paragraphs and parskip is understood'
   expect(later.paragraphSpacing).toBeCloseTo(later.leading / 4);
 });
 
+function typeLatex(text: string) {
+  let state: EditorState = noteState('', 0, 'typing', parseLatex(blankLatex));
+  state = state.apply(state.tr.setSelection(TextSelection.atStart(state.doc)));
+  const view = {
+    get state() {
+      return state;
+    },
+    composing: false,
+    someProp<T>(name: 'handleTextInput', apply: (handle: never) => T) {
+      for (const plugin of state.plugins) {
+        const handle = plugin.props[name];
+        const result = handle && apply(handle.bind(plugin) as never);
+        if (result) return result;
+      }
+    },
+    dispatch: (tr: Parameters<EditorState['apply']>[0]) => {
+      state = state.apply(tr);
+    },
+  } as unknown as EditorView;
+  for (const character of text) {
+    const { from, to } = state.selection;
+    const handled = view.someProp('handleTextInput', (handle) =>
+      handle(view, from, to, character, () => state.tr.insertText(character, from, to)),
+    );
+    if (!handled) view.dispatch(state.tr.insertText(character, from, to));
+  }
+  return state.doc;
+}
+
+function typed(text: string) {
+  return serializeLatex(typeLatex(text)).split('\\begin{document}\n')[1]!.split('\n\\end')[0];
+}
+
+test('typing straight quotes produces directional LaTeX quotes and apostrophes', () => {
+  const text = `"latex" and ('notes') don't need "manual quotes".`;
+  const doc = typeLatex(text);
+  expect(doc.textContent).toBe('“latex” and (‘notes’) don’t need “manual quotes”.');
+  expect(typed(text)).toBe("``latex'' and (`notes') don't need ``manual quotes''.");
+  const nested = typed(`"'nested'"`);
+  expect(nested).toBe("```nested'\\textquotedblright{}");
+  expect(parseLatex(nested).textContent).toBe('“‘nested’”');
+  expect(parseLatex(typed(`'"nested"'`)).textContent).toBe('‘“nested”’');
+  expect(typeLatex(`\\"{o}`).textContent).toBe(`\\"{o}`);
+  expect(typed(`$f'(x)$, $2x'$, and \\(g'(x)\\)`)).toBe(`$f'(x)$, $2x'$, and \\(g'(x)\\)`);
+  expect(typed("$$f'(x)$$")).toContain("$$f'(x)$$");
+  expect(typeLatex('"It costs $5"').textContent).toBe('“It costs $5”');
+});
+
 test('typing dollars keeps currency as text and turns delimited formulas into math', () => {
-  const typed = (text: string) => {
-    let state: EditorState = noteState('', 0, 'typing', parseLatex(blankLatex));
-    state = state.apply(state.tr.setSelection(TextSelection.atStart(state.doc)));
-    const view = {
-      get state() {
-        return state;
-      },
-      composing: false,
-      someProp<T>(name: 'handleTextInput', apply: (handle: never) => T) {
-        for (const plugin of state.plugins) {
-          const handle = plugin.props[name];
-          const result = handle && apply(handle.bind(plugin) as never);
-          if (result) return result;
-        }
-      },
-      dispatch: (tr: Parameters<EditorState['apply']>[0]) => {
-        state = state.apply(tr);
-      },
-    } as unknown as EditorView;
-    for (const character of text) {
-      const { from, to } = state.selection;
-      const handled = view.someProp('handleTextInput', (handle) =>
-        handle(view, from, to, character, () => state.tr.insertText(character, from, to)),
-      );
-      if (!handled) view.dispatch(state.tr.insertText(character, from, to));
-    }
-    return serializeLatex(state.doc).split('\\begin{document}\n')[1]!.split('\n\\end')[0];
-  };
   expect(typed('costs $5 and $10 ')).toBe('costs \\$5 and \\$10 ');
   expect(typed('from $5-$')).toBe('from \\$5-\\$');
   expect(typed('area $x^2$')).toBe('area $x^2$');

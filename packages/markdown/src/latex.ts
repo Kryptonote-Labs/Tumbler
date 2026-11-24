@@ -133,6 +133,8 @@ const escaped = new Map([
   ['\\textbackslash{}', '\\'],
   ['\\textasciicircum{}', '^'],
   ['\\textasciitilde{}', '~'],
+  ['\\textquotedblleft{}', '“'],
+  ['\\textquotedblright{}', '”'],
   ['~', '\u00a0'],
 ]);
 const textLiterals = [
