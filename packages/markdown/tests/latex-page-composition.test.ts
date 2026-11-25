@@ -15,8 +15,8 @@ function fillLine(source: string, index: number, text: string) {
   return source.slice(0, line.from) + latexComposedTextSource(text) + source.slice(line.to);
 }
 
-function baselines(source: string) {
-  const page = interpretLatexComposedPage(prefix, layout, source)!;
+function baselines(source: string, preamble = prefix) {
+  const page = interpretLatexComposedPage(preamble, latexPageLayout(preamble), source)!;
   const fills = page.items.filter((item) => item.kind === 'fill');
   const order = Math.max(0, ...fills.map((item) => item.order));
   const weight = fills.reduce((sum, item) => sum + (item.order === order ? item.weight : 0), 0);
@@ -64,6 +64,8 @@ test('an ordinary centred dedication matches pdfTeX and preserves the running fo
   expect(readLatexPageComposition(source)?.alignment).toBe('center');
   const [line] = baselines(source);
   expect(Math.abs(line!.y - 489.188)).toBeLessThan(0.5);
+  const [spaced] = baselines(source, prefix + '\n\\setlength{\\parskip}{8pt}');
+  expect(Math.abs(spaced!.y - 494.502)).toBeLessThan(0.5);
   const tex = prefix + '\n\\begin{document}\nBefore.\n\n' + source + '\n\nAfter.\n\\end{document}';
   const parsed = parseLatex(tex);
   expect(serializeLatex(parsed)).toBe(tex);

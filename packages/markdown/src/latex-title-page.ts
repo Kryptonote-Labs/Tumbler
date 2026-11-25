@@ -131,7 +131,6 @@ function interpretPage(
   let expansions = 0;
   let topAnchored = false;
   let topSeen = false;
-  let startAfterNull = false;
 
   const quad = () => state.style.size;
   const leading = () => state.baseline * state.stretch;
@@ -157,8 +156,7 @@ function interpretPage(
   const append = (piece: Piece) => {
     if (!lines) {
       // TeX adds \parskip before a paragraph unless it starts an internal vertical list.
-      if (list.length && !(explicit && startAfterNull)) list.push({ kind: 'glue', size: parskip, order: 0, shrink: parskipShrink });
-      startAfterNull = false;
+      if (list.length) list.push({ kind: 'glue', size: parskip, order: 0, shrink: parskipShrink });
       lines = [[]];
     }
     lines.at(-1)!.push(piece);
@@ -342,7 +340,6 @@ function interpretPage(
         topAnchored = topSeen = true;
         glue({ size: layout.firstBaseline, order: 0 });
         list.push({ kind: 'line', align: state.align, leading: leading(), runs: [] });
-        startAfterNull = true;
       }
       if (!explicit || list !== page || topSeen) {
         const weight = value === '\\fill' ? 1 : Number(/\{([^{}]*)\}$/.exec(value)?.[1]);
@@ -383,7 +380,7 @@ function interpretPage(
       append({ text: today.format(new Date()), style: state.style, ...traced(position, end) });
       position = after;
     } else if (explicit && command === 'null' && !lines && list === page && !topSeen) {
-      topAnchored = topSeen = startAfterNull = true;
+      topAnchored = topSeen = true;
       glue({ size: layout.firstBaseline, order: 0 });
       list.push({ kind: 'line', align: state.align, leading: leading(), runs: [] });
       position = after;
