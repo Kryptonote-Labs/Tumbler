@@ -598,7 +598,7 @@
   {#each flow.pages as page (page.id)}
     {@const compatibility = compatibilityPages.has(page.source.index)}
     {@const tiled = page.source.index >= 0 && !page.continuation && !page.rotation &&
-      (compatibility || (!changedSources.has(page.source.index) && !selectedPages.has(page.index))) &&
+      !changedSources.has(page.source.index) && (compatibility || !selectedPages.has(page.index)) &&
       !model.pages.records.get(page.source.id)?.get('snapshot')}
     <div
       class="pdf-page-frame"
