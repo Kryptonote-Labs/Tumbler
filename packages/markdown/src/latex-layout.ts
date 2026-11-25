@@ -395,6 +395,7 @@ export function paginateLatex(
 ) {
   const breaks: PageBreak[] = [];
   const breakSlots: number[] = [];
+  const folioLeadIns = new Set<number>();
   const footnotes: number[] = [];
   const footHeights: number[] = [0];
   const wideFloats: LatexWideFloat[] = [];
@@ -530,13 +531,21 @@ export function paginateLatex(
       if (occupied) pending = strongerBreak(pending, flow.boundary);
       continue;
     }
-    const before = strongerBreak(pending, flow?.before);
+    const reset = flow?.startAt ?? (flow?.numbering ? 1 : undefined);
+    // An explicit page break ships before the reset. The chapter's own break runs afterwards.
+    const before = reset !== undefined && !flow?.folio && pending
+      ? pending
+      : strongerBreak(pending, flow?.before);
     if (occupied && before) advance(block, before);
     pending = flow?.after;
-    if (flow) {
-      folio = flow.startAt ?? (flow.numbering ? 1 : folio);
-      if (flow.folio) restartOnNextSheet = flow.folio.restartAfter;
+    if (reset !== undefined) {
+      folio = reset;
+      if (flow?.before === 'recto' && reset % 2 === 0) {
+        folioLeadIns.add(block.position);
+        advance(block, 'recto');
+      }
     }
+    if (flow?.folio) restartOnNextSheet = flow.folio.restartAfter;
     const internal = block.forceFragments ? block.split?.() : undefined;
     const forced = internal?.some(line => line.before);
     if (!forced && (fits(block, !block.preferFragments && !block.keepHeadingWithNext) || (!occupied && !block.split))) {
@@ -567,5 +576,5 @@ export function paginateLatex(
     pages = sheet * columns + 1;
     while (footHeights.length < pages) footHeights.push(0);
   }
-  return { breaks, breakSlots, pages, footnotes, footHeights, wideFloats, floatSpans, shrinkages };
+  return { breaks, breakSlots, folioLeadIns, pages, footnotes, footHeights, wideFloats, floatSpans, shrinkages };
 }

@@ -32,12 +32,13 @@ function measuredPages(document: ReturnType<typeof parseLatex>) {
   plan.breaks.forEach(({ position }, index) => {
     while (starts.length < plan.breakSlots[index]!) starts.push(position);
   });
+  const folios = latexPageNumbers(flow, starts, plan.folioLeadIns).map(latexPageLabel);
   return {
     starts,
-    labels: latexPageNumbers(flow, starts).map(latexPageLabel),
+    labels: folios,
     contents: latexContentsEntries(document).map(entry => {
       const page = starts.findLastIndex(position => position <= entry.position) + 1;
-      return [entry.title, entry.number, latexPageLabel(latexPageNumbers(flow, starts)[page]!)];
+      return [entry.title, entry.number, folios[page]];
     }),
   };
 }
@@ -136,4 +137,20 @@ test('renaming a visual heading updates its matching contents title', async () =
   expect(serializeLatex(state.apply(state.tr.insertText('New', 1, 4)).doc)).toBe(source.replaceAll('Old', 'New'));
   expect(serializeLatex(state.apply(state.tr.insertText('New', 1, 4).setMeta('latexSourceEdit', true)).doc))
     .toBe(source.replace('Old', 'New'));
+});
+
+
+test('an even restart before an open-right chapter ships the even folio first', () => {
+  const document = parseLatex(String.raw`\documentclass{book}
+\begin{document}
+\chapter{First}
+\clearpage
+\pagenumbering{roman}
+\setcounter{page}{4}
+\chapter{Second}
+\end{document}`);
+  expect(measuredPages(document)).toMatchObject({
+    labels: ['1', 'iv', 'v'],
+    contents: [['First', '1', '1'], ['Second', '2', 'v']],
+  });
 });

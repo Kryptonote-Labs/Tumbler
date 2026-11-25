@@ -113,8 +113,10 @@ export function readLatexPageDirective(source: string, position = 0) {
     if (!group || source.slice(group.from, group.to).trim() !== '\\thepage') return;
     const body = groupAt(source, whitespaceEnd(source, group.end));
     const alias = body && /^\\tumblerPage([Aa]lph)\{\\value\{page\}\}$/.exec(source.slice(body.from, body.to).trim())?.[1];
-    if (body && (alias === 'alph' || alias === 'Alph'))
-      return { kind: 'extended-letters' as const, value: alias, end: body.end };
+    if (body && (alias === 'alph' || alias === 'Alph')) {
+      const value: 'alph' | 'Alph' = alias;
+      return { kind: 'extended-letters' as const, value, end: body.end };
+    }
     return;
   }
   if (name === '\\setcounter') {
@@ -398,6 +400,7 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
 export function latexPageNumbers(
   flow: ReadonlyMap<number, LatexBlockFlow>,
   pageStarts: readonly number[],
+  folioLeadIns: ReadonlySet<number> = new Set(),
 ): LatexPageNumber[] {
   const overrides = new Map<number, { visible: false; restartAfter: boolean }>();
   const resets = new Map<number, number>();
@@ -408,19 +411,20 @@ export function latexPageNumbers(
   for (const [position, effect] of [...flow].sort(([a], [b]) => a - b)) {
     if (effect.kind === 'break') continue;
     const page = pageStarts.findLastIndex(start => start <= position) + 1;
+    const folioPage = folioLeadIns.has(position) ? page - 1 : page;
     if (effect.folio) overrides.set(page, effect.folio);
     if (effect.numbering) {
-      formats.set(page, effect.numbering);
-      resets.set(page, 1);
-      extensions.set(page, false);
+      formats.set(folioPage, effect.numbering);
+      resets.set(folioPage, 1);
+      extensions.set(folioPage, false);
     }
     if (effect.extendedLetters) {
-      extensions.set(page, true);
-      formats.set(page, effect.extendedLetters);
+      extensions.set(folioPage, true);
+      formats.set(folioPage, effect.extendedLetters);
     }
-    if (effect.startAt !== undefined) resets.set(page, effect.startAt);
+    if (effect.startAt !== undefined) resets.set(folioPage, effect.startAt);
     if (effect.pageStyle) pageStyles.set(page, effect.pageStyle);
-    if (effect.documentStyle) documentStyles.set(page, effect.documentStyle);
+    if (effect.documentStyle) documentStyles.set(folioPage, effect.documentStyle);
   }
   let number = 1;
   let style: LatexPageNumberFormat = 'arabic';
