@@ -105,3 +105,18 @@ export function latexItemLabel(open: string) {
   const label = groupAt(open, whitespaceEnd(open, end), '[', ']');
   if (label) return open.slice(label.from, label.to);
 }
+
+/** Labels that can be edited as ordinary text without changing their TeX meaning. */
+export function plainLatexItemLabel(label: string) {
+  return !/[\\{}\[\]%$#&_^~\u0000-\u001f]/.test(label);
+}
+
+/** Replace a plain list label while retaining the original command and spacing. */
+export function withLatexItemLabel(open: string, label: string) {
+  if (!plainLatexItemLabel(label)) return;
+  const end = commandEnd(open, 0);
+  if (open.slice(0, end) !== '\\item') return;
+  const group = groupAt(open, whitespaceEnd(open, end), '[', ']');
+  if (group) return open.slice(0, group.from) + label + open.slice(group.to);
+  return open.slice(0, end) + '[' + label + ']' + open.slice(end);
+}

@@ -8,7 +8,7 @@ import { latexDeclarations, latexTikzFragment, latexVerticalSpace } from './late
 export { latexDeclarations, latexVerticalSpace, latexSectionPresentation, latexPresentationColour, latexRunningFields, latexRunningStyles, latexTikzFragment, latexColumnAliasWidths } from './latex-presentation';
 export { readLatexColours } from './latex-colour';
 export { latexPageMarks } from './latex-running-marks';
-import { readLatexEnumitem } from './latex-list';
+import { plainLatexItemLabel, readLatexEnumitem } from './latex-list';
 import { readLatexBookMatter, readLatexClass, readLatexPageDirective } from './latex-flow';
 import { latexColourDefinition, readLatexColours } from './latex-colour';
 import { readLatexTheorems, latexBoxTitle, latexEnvironmentName } from './latex-environments';
@@ -41,7 +41,7 @@ import {
 
 export { isLatexHeading } from './latex-spec';
 export { latexEnvironmentName, latexEnvironmentOption } from './latex-environments';
-export { latexItemLabel, latexListOptions } from './latex-list';
+export { latexItemLabel, latexListOptions, withLatexItemLabel } from './latex-list';
 export { composeLatexParagraph, latexInterwordGlue, type LatexLine, type LatexTextMetrics } from './latex-lines';
 export { latexInlineFlow, latexInlineRule, latexLineBreakSkip, latexParagraphText, type LatexParagraphSegment } from './latex-paragraph';
 export { latexRomanGlue, measureLatexRoman, type LatexRomanFont } from './latex-font-metrics';
@@ -390,7 +390,7 @@ function listItems(source: string, context: SourceContext, depth: number, descri
     if (source.slice(position, command) !== '\\item') return;
     const optionStart = whitespaceEnd(source, command);
     const option = groupAt(source, optionStart, '[', ']');
-    if (option && !description) return;
+    if (option && !description && !plainLatexItemLabel(source.slice(option.from, option.to))) return;
     const start = whitespaceEnd(source, option?.end ?? command);
     let next = start;
     while (next < source.length) {
@@ -735,10 +735,10 @@ export function parseLatexProject(entry: string, files: ReadonlyMap<string, stri
   return parsed.type.create({ ...parsed.attrs, latexProject }, parsed.content);
 }
 
-function inlineSource(node: Node) {
+function inlineSource(node: Node, record?: (position: number, offset: number) => void) {
   let result = '';
   let active: Mark[] = [];
-  node.forEach((child) => {
+  node.forEach((child, position) => {
     const next = child.marks.filter((mark) =>
       ['strong', 'em', 'latex_style'].includes(mark.type.name),
     );
@@ -750,14 +750,22 @@ function inlineSource(node: Node) {
     for (const mark of next.slice(keep))
       result += mark.attrs.open ?? (mark.type.name === 'strong' ? '\\textbf{' : '\\emph{');
     active = next;
-    if (child.isText)
-      result += child.text!.replace(
-        /[\\%${}#&_\^~\u00a0]/g,
-        (value) => escapeText.get(value) ?? value,
-      );
+    record?.(position, result.length);
+    if (child.isText) {
+      const text = child.text!;
+      if (record) {
+        for (let index = 0; index < text.length; index++) {
+          result += escapeText.get(text[index]!) ?? text[index]!;
+          record(position + index + 1, result.length);
+        }
+      } else {
+        result += text.replace(/[\\%${}#&_\^~\u00a0]/g, (value) => escapeText.get(value) ?? value);
+      }
+    }
     else if (child.type.name === 'latex_math') result += mathSource(child);
     else if (child.type.name === 'hard_break') result += '\\\\\n';
     else result += child.attrs.source ?? child.textContent;
+    if (!child.isText) record?.(position + child.nodeSize, result.length);
   });
   for (const mark of active.reverse()) result += mark.attrs.close ?? '}';
   return result;
@@ -1053,43 +1061,91 @@ const containerDefaults: Record<string, string> = {
   list_item: '\\item ',
 };
 
-/**
- * The innermost block whose source contains `offset` in `serializeLatex(document)`, with its
- * document position. Undefined for the preamble and the text after `\end{document}`. Error
- * reports from TeX use this to select the block a line belongs to.
- */
-export function latexBlockAtOffset(
-  document: Node,
-  offset: number,
-): { position: number; node: Node } | undefined {
-  const locate = (
-    parent: Node,
-    contentStart: number,
-    at: number,
-  ): { position: number; node: Node } | undefined => {
-    let cursor = 0;
-    let found: { position: number; node: Node } | undefined;
-    parent.forEach((child, childOffset, index) => {
-      if (found) return;
-      const before =
-        child.attrs.before ??
-        (index === 0 ? '' : child.type.name === 'list_item' ? '\n' : '\n\n');
-      const start = cursor + before.length;
-      const end = start + blockSource(child).length;
-      cursor = end;
-      if (at < start || at >= end) return;
-      const position = contentStart + childOffset;
-      const open = child.attrs.open ?? containerDefaults[child.type.name];
-      if (!child.isTextblock && !child.isAtom && open !== undefined && child.childCount) {
-        const inner = locate(child, position + 1, at - start - open.length);
-        if (inner) {
-          found = inner;
-          return;
+type SourceBlock = { position: number; node: Node; offset: number; end: number; depth: number };
+export type LatexSourcePoint = { file?: string | undefined; offset: number };
+
+/** Index serialized block boundaries per file, including the editable children of input files. */
+export function latexSourceMap(document: Node) {
+  const project: LatexProject | null = document.attrs.latexProject;
+  const files = new Map<string | undefined, SourceBlock[]>();
+  const entry = project?.entry;
+  files.set(entry, []);
+  function visit(parent: Node, position: number, start: number, depth: number, file?: string) {
+    const blocks = files.get(file)!;
+    let offset = start;
+    parent.forEach((node, childOffset, index) => {
+      const before = node.attrs.before ?? (index === 0 ? '' : node.type.name === 'list_item' ? '\n' : '\n\n');
+      offset += before.length;
+      const end = offset + blockSource(node).length;
+      const at = position + childOffset;
+      blocks.push({ position: at, node, offset, end, depth });
+      if (node.type.name === 'latex_include') {
+        const path: string = node.attrs.path;
+        // Repeated inputs display the same file. Use the first occurrence for source navigation.
+        if (!files.has(path)) {
+          files.set(path, []);
+          visit(node, at + 1, 0, depth + 1, path);
+        }
+      } else if (!node.isTextblock && !node.isAtom && node.childCount) {
+        const open = node.attrs.open ?? containerDefaults[node.type.name] ?? '';
+        visit(node, at + 1, offset + open.length, depth + 1, file);
+      }
+      offset = end;
+    });
+  }
+  visit(document, 0, String(document.attrs.prefix).length, 0, entry);
+
+  function blockAt({ file = entry, offset }: LatexSourcePoint) {
+    return files.get(file)?.findLast(block => offset >= block.offset && offset < block.end);
+  }
+
+  function inlineOffsets(block: SourceBlock) {
+    const { node } = block;
+    const heading = node.type.name === 'heading' || node.type.name === 'latex_heading';
+    const start = block.offset + (heading
+      ? (node.attrs.open ?? '\\' + (latexHeadings[node.attrs.level - 1] ?? latexHeadings[0]) + '{').length
+      : 0);
+    const offsets = [start];
+    inlineSource(node, (position, relative) => { offsets[position] = start + relative; });
+    return offsets;
+  }
+
+  return {
+    blockAt,
+    sourceAt(position: number): LatexSourcePoint | undefined {
+      let match: SourceBlock | undefined;
+      let file: string | undefined;
+      for (const [path, blocks] of files) {
+        const block = blocks.findLast(({ position: at, node }) => position >= at && position < at + node.nodeSize);
+        if (block && (!match || block.depth > match.depth)) {
+          match = block;
+          file = path;
         }
       }
-      found = { position, node: child };
-    });
-    return found;
+      if (!match) return;
+      const offsets = match.node.isTextblock ? inlineOffsets(match) : [];
+      return { file, offset: offsets[position - match.position - 1] ?? match.offset };
+    },
+    positionAt(point: LatexSourcePoint) {
+      const blocks = files.get(point.file ?? entry);
+      const block = blockAt(point) ??
+        blocks?.find(({ offset }) => offset >= point.offset) ?? blocks?.at(-1);
+      if (!block) return;
+      if (!block.node.isTextblock) return block.position;
+      const offsets = inlineOffsets(block);
+      let left = 0;
+      let right = offsets.length;
+      while (left < right) {
+        const middle = (left + right) >>> 1;
+        if (offsets[middle]! <= point.offset) left = middle + 1;
+        else right = middle;
+      }
+      return block.position + 1 + Math.max(0, left - 1);
+    },
   };
-  return locate(document, 0, offset - String(document.attrs.prefix).length);
+}
+
+/** The innermost block at a source offset in the main file. */
+export function latexBlockAtOffset(document: Node, offset: number) {
+  return latexSourceMap(document).blockAt({ offset });
 }
