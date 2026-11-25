@@ -112,15 +112,15 @@ export function latexClipboard(schema: Schema) {
         : withDelimiters(spec, before, open, close);
     };
   }
-  const marks = {
-    ...base.marks,
-    latex_style(mark, inline) {
+  const marks = { ...base.marks };
+  for (const name of ['latex_style', 'latex_link']) {
+    marks[name] = (mark, inline) => {
       const { open, close, order } = mark.attrs;
-      const rendered = withDelimiters(base.marks.latex_style!(mark, inline), null, open, close);
+      const rendered = withDelimiters(base.marks[name]!(mark, inline), null, open, close);
       rendered.dom.setAttribute('data-latex-order', String(order));
       return rendered;
-    },
-  } satisfies DOMSerializer['marks'];
+    };
+  }
   // Clipboard headings from Markdown and other editors become LaTeX headings.
   const baseRules = DOMParser.fromSchema(schema).rules.map((rule) =>
     'node' in rule && rule.node === 'heading' ? { ...rule, node: 'latex_heading' } : rule,
@@ -152,7 +152,7 @@ export function latexClipboard(schema: Schema) {
     ];
   });
   const style: TagParseRule = {
-    tag: '[data-latex-style][data-latex-order]',
+    tag: '[data-latex-style]:not([data-latex-style=link])[data-latex-order]',
     mark: 'latex_style',
     getAttrs: (element) => {
       const delimiters = readDelimiters(element);
@@ -181,6 +181,7 @@ export function latexClipboard(schema: Schema) {
       ...latexAtomPasteRules,
       include,
       ...structureRules,
+      { ...style, tag: '[data-latex-style=link][data-latex-order]', mark: 'latex_link' },
       style,
       ...baseRules,
     ]),

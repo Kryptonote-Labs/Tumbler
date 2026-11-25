@@ -1,5 +1,5 @@
 import { latexAlignment } from './latex-alignment';
-import { latexStyleMark } from './latex-inline-format';
+import { latexLinkMark, latexStyleMark } from './latex-inline-format';
 import { latexBlockAttrs, latexDocumentAttrs, latexNodes, latexStructureNodes } from './latex-spec';
 import MarkdownIt from 'markdown-it';
 import { Schema, type MarkSpec, type Node as MarkdownNode } from 'prosemirror-model';
@@ -131,6 +131,7 @@ export const noteSchema = new Schema({
   nodes,
   marks: baseSchema.spec.marks
     .addToEnd('latex_style', latexStyleMark)
+    .addToEnd('latex_link', latexLinkMark)
     .update('code', {
       ...baseSchema.spec.marks.get('code'),
       toDOM: () => ['code', { spellcheck: 'false', autocorrect: 'off', autocapitalize: 'off' }, 0],

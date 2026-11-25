@@ -1,5 +1,5 @@
 import { latexAlignedParagraph } from './latex-alignment';
-import { latexInlineFormat, latexInlineSize } from './latex-inline-format';
+import { authoredLatexStyleOrder, isLatexStyleMark, latexInlineFormat, latexInlineSize } from './latex-inline-format';
 export { latexFontSizes, latexFontSizeProperties, latexLinkUrl, type LatexFontSize } from './latex-inline-format';
 import { latexContentsLineAt } from './latex-contents-line';
 export { latexContentsLineStyle } from './latex-contents-line';
@@ -219,7 +219,7 @@ function inline(
       );
       if (argument && argument.from < argument.to) {
         const { style, colour, href, size } = argument;
-        const formatting = schema.marks.latex_style!.create({
+        const formatting = schema.marks[style === 'link' ? 'latex_link' : 'latex_style']!.create({
           style, colour, href, size,
           order: order.next++,
           open: source.slice(position, argument.from),
@@ -758,15 +758,24 @@ function escapedText(text: string) {
   return text.replace(/[\\%${}#&_\^~\u00a0]/g, (value) => escapeText.get(value) ?? value);
 }
 
+function isLatexUrlMark(mark: Mark) {
+  return /^\\url\b/.test(mark.attrs.open ?? '');
+}
+
+function isLatexUlemMark(mark: Mark) {
+  return /^\\(?:uline|sout|bgroup\\markoverwith)\b/.test(mark.attrs.open ?? '');
+}
+
+function latexMarkOrder(mark: Mark) {
+  const order: number = mark.attrs.order ?? 100;
+  // Keep authored ulem wrappers inside font and colour scopes so their text can wrap.
+  return order === authoredLatexStyleOrder && isLatexUlemMark(mark) ? order + 1 : order;
+}
+
 function inlineSource(node: Node, record?: (position: number, offset: number) => void) {
   let result = '';
-  let active: Mark[] = [];
-  node.forEach((child, position) => {
-    const next = child.marks.filter((mark) =>
-      ['strong', 'em', 'latex_style'].includes(mark.type.name),
-    );
-    const url = (mark: Mark) => /^\\url\b/.test(mark.attrs.open ?? '');
-    next.sort((a, b) => Number(url(a)) - Number(url(b)) || (a.attrs.order ?? 100) - (b.attrs.order ?? 100));
+  let active: readonly Mark[] = [];
+  function write(content: string, next: readonly Mark[], position?: number, text = false) {
     let keep = 0;
     while (keep < active.length && keep < next.length && active[keep]!.eq(next[keep]!)) keep++;
     for (let index = active.length - 1; index >= keep; index--)
@@ -774,26 +783,51 @@ function inlineSource(node: Node, record?: (position: number, offset: number) =>
     for (const mark of next.slice(keep))
       result += mark.attrs.open ?? (mark.type.name === 'strong' ? '\\textbf{' : '\\emph{');
     active = next;
-    record?.(position, result.length);
+    const inner = active.at(-1);
+    // A size command that relied on the next token to delimit it may need an explicit
+    // delimiter when an edit replaces that token with ordinary text.
+    if (inner?.attrs.style === 'size' && result.endsWith(inner.attrs.open) &&
+        ((/[A-Za-z]$/.test(inner.attrs.open) && /^[A-Za-z@]/.test(content)) ||
+         (!inner.attrs.open.endsWith('{}') && /^\s/.test(content)))) result += '{}';
+    if (position !== undefined) record?.(position, result.length);
+    if (text && record && position !== undefined) {
+      for (let index = 0; index < content.length; index++) {
+        const char = content[index]!;
+        result += escapeText.get(char) ?? char;
+        record(position + index + 1, result.length);
+      }
+    } else {
+      result += text ? escapedText(content) : content;
+    }
+  }
+  node.forEach((child, position) => {
+    const next = child.marks.filter(mark =>
+      mark.type.name === 'strong' || mark.type.name === 'em' || isLatexStyleMark(mark),
+    );
+    next.sort((a, b) => latexMarkOrder(a) - latexMarkOrder(b));
     if (child.isText) {
       const text = child.text!;
-      if (record) {
-        for (let index = 0; index < text.length; index++) {
-          result += escapeText.get(text[index]!) ?? text[index]!;
-          record(position + index + 1, result.length);
+      const decorators = next.filter(isLatexUlemMark);
+      if (decorators.length > 1 && decorators.some(mark => mark.attrs.order === authoredLatexStyleOrder)) {
+        // ulem boxes a nested decoration. Keep interword glue outside those boxes.
+        const outer = next.filter(mark => mark === decorators[0] || !isLatexUlemMark(mark));
+        let at = position;
+        for (const chunk of text.split(/( +)/).filter(Boolean)) {
+          write(chunk, chunk.startsWith(' ') ? outer : next, at, true);
+          at += chunk.length;
         }
       } else {
-        result += text.replace(/[\\%${}#&_\^~\u00a0]/g, (value) => escapeText.get(value) ?? value);
+        write(text, next, position, true);
       }
+      return;
     }
-    else if (child.attrs.urlArgument && !active.some(mark => /^\\url\b/.test(mark.attrs.open ?? '')))
-      result += escapedText(child.attrs.label);
-    else if (child.type.name === 'latex_math') result += mathSource(child);
-    else if (child.type.name === 'hard_break') result += '\\\\\n';
-    else result += child.attrs.source ?? child.textContent;
-    if (!child.isText) record?.(position + child.nodeSize, result.length);
+    if (child.attrs.urlArgument && !next.some(isLatexUrlMark)) write(escapedText(child.attrs.label), next, position);
+    else if (child.type.name === 'latex_math') write(mathSource(child), next, position);
+    else if (child.type.name === 'hard_break') write('\\\\\n', next, position);
+    else write(child.attrs.source ?? child.textContent, next, position);
+    record?.(position + child.nodeSize, result.length);
   });
-  for (const mark of active.reverse()) result += mark.attrs.close ?? '}';
+  write('', []);
   return result;
 }
 
@@ -829,9 +863,13 @@ function blockSource(node: Node): string {
       result = (open ?? '\\' + command + '{') + inlineSource(node) + (close ?? '}');
       break;
     }
-    case 'paragraph':
-      result = (open ?? '') + inlineSource(node) + (close ?? '');
+    case 'paragraph': {
+      const last = node.lastChild;
+      const comment = last?.type.name === 'latex_inline' && String(last.attrs.source).startsWith('%');
+      const endComment = close && comment && !String(last.attrs.source).endsWith('\n') ? '\n' : '';
+      result = (open ?? '') + inlineSource(node) + endComment + (close ?? '');
       break;
+    }
     case 'latex_contents_line':
       result = (open ?? '') + childrenSource(node) + (close ?? '');
       break;

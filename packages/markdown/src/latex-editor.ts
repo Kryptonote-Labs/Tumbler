@@ -376,6 +376,14 @@ export function latexState(
   const split = splitBlockAs((node, atEnd) => ({
     type: isLatexHeading(node) && atEnd ? schema.nodes.paragraph! : node.type,
   }));
+  const enter = chainCommands(splitListItem(schema.nodes.list_item!), createParagraphNear, split);
+  const continueParagraph: Command = (state, dispatch, view) => enter(state, dispatch && (tr => {
+    const { latexAlignment, open, close } = state.selection.$from.parent.attrs;
+    const next = tr.selection.$from;
+    if (latexAlignment && next.parent.type === schema.nodes.paragraph && !next.parent.attrs.latexAlignment)
+      tr.setNodeMarkup(next.before(), undefined, { ...next.parent.attrs, latexAlignment, open, close });
+    dispatch(tr);
+  }), view);
   return EditorState.create({
     schema,
     doc: document,
@@ -404,7 +412,7 @@ export function latexState(
         'Mod-m': insertLatexMath(false),
         'Shift-Mod-m': insertLatexMath(true),
         Backspace: undoInputRule,
-        Enter: chainCommands(splitListItem(schema.nodes.list_item!), createParagraphNear, split),
+        Enter: continueParagraph,
         Tab: sinkListItem(schema.nodes.list_item!),
         'Shift-Tab': liftListItem(schema.nodes.list_item!),
         ...Object.fromEntries(
@@ -417,7 +425,11 @@ export function latexState(
       new Plugin({
         appendTransaction(transactions, previous, current) {
           const transaction = current.tr;
-          if (transactions.some(item => item.docChanged)) addLatexFormattingPackages(transaction);
+          if (transactions.some(item => item.docChanged))
+            addLatexFormattingPackages(transaction, previous.doc, {
+              rebased: transactions.some(item => item.getMeta('rebased')),
+              pasted: transactions.some(item => item.getMeta('uiEvent') === 'paste'),
+            });
           retainDetachedLatexFiles(transaction, previous.doc);
           for (const received of transactions)
             if (received.getMeta('rebased')) refreshRebasedLatexFiles(transaction, received);

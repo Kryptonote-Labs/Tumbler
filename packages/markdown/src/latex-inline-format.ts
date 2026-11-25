@@ -1,8 +1,22 @@
-import type { Mark, MarkSpec } from 'prosemirror-model';
+import type { Mark, MarkSpec, Node } from 'prosemirror-model';
 import { resolveLatexColour } from './latex-colour';
 import { latexFontSizePoints } from './latex-presentation';
 import { texPoint } from './latex-typography';
 import { groupAt, latexUrlArgument, whitespaceEnd } from './latex-syntax';
+
+export const authoredLatexStyleOrder = Number.MAX_SAFE_INTEGER;
+
+export function isLatexStyleMark(mark: Mark) {
+  return mark.type.name === 'latex_style' || mark.type.name === 'latex_link';
+}
+
+export function formattableLatexText(node: Node) {
+  return node.isText || (
+    node.type.name === 'latex_inline' &&
+    typeof node.attrs.label === 'string' &&
+    !node.attrs.urlArgument
+  );
+}
 
 const textCommands = {
   strong: 'textbf',
@@ -14,6 +28,19 @@ const textCommands = {
   superscript: 'textsuperscript',
   subscript: 'textsubscript',
 } as const;
+// ulem paints the rule behind the text and breaks the highlight at interword spaces.
+const highlightPrefix = '\\bgroup\\markoverwith{\\textcolor[HTML]{';
+const highlightSuffix = '}{\\rule[-0.5ex]{2pt}{2.5ex}}}\\ULon';
+const highlightOpen = (colour: string) => highlightPrefix + colour + highlightSuffix + '{';
+
+function readHighlightOpen(source: string, start: number) {
+  if (!source.startsWith(highlightPrefix, start)) return;
+  const first = start + highlightPrefix.length;
+  const end = first + 6;
+  const colour = hexColour('#' + source.slice(first, end));
+  if (colour && source.startsWith(highlightSuffix, end)) return { colour, end: end + highlightSuffix.length };
+}
+
 const commandStyles = new Map<string, string>(Object.entries(textCommands).map(([style, command]) => [command, style]));
 commandStyles.set('underline', 'underline');
 
@@ -64,8 +91,9 @@ export function authoredLatexStyle(format: LatexStyle) {
     case 'highlight': {
       const colour = hexColour(format.colour);
       if (!colour) return;
-      const command = format.style === 'colour' ? 'textcolor' : 'colorbox';
-      return { ...format, colour, open: '\\' + command + '[HTML]{' + colour.slice(1).toUpperCase() + '}{', close: '}' };
+      const hex = colour.slice(1).toUpperCase();
+      const open = format.style === 'colour' ? '\\textcolor[HTML]{' + hex + '}{' : highlightOpen(hex);
+      return { ...format, colour, open, close: '}' };
     }
     case 'link': {
       const href = latexLinkUrl(format.href);
@@ -73,22 +101,26 @@ export function authoredLatexStyle(format: LatexStyle) {
       return { ...format, href, open: '\\href{' + href.replace(/[%#]/g, '\\$&') + '}{', close: '}' };
     }
     case 'size':
-      return { ...format, open: '{\\' + format.size + ' ', close: '}' };
+      return { ...format, open: '{\\' + format.size + '{}', close: '}' };
     default:
       return { ...format, open: '\\' + textCommands[format.style] + '{', close: '}' };
   }
 }
 
-export function latexStylePackage(mark: Mark) {
-  if (mark.type.name !== 'latex_style') return;
+export function latexStylePackages(mark: Mark, includeImported: boolean): readonly string[] {
+  if (!isLatexStyleMark(mark) || (!includeImported && mark.attrs.order !== authoredLatexStyleOrder))
+    return [];
   const open: string = mark.attrs.open;
-  if (/^\\(?:sout|uline)\b/.test(open)) return 'ulem';
-  if (/^\\(?:textcolor|colorbox)\b/.test(open)) return 'xcolor';
-  if (/^\\(?:href|url)\b/.test(open)) return 'hyperref';
+  if (readHighlightOpen(open, 0)) return ['xcolor', 'ulem'];
+  if (/^\\(?:sout|uline)\b/.test(open)) return ['ulem'];
+  if (/^\\(?:textcolor|colorbox)\b/.test(open)) return ['xcolor'];
+  if (/^\\href\b/.test(open)) return ['hyperref'];
+  if (/^\\url\b/.test(open)) return ['url'];
+  return [];
 }
 
 export function latexInlineSize(source: string, start: number) {
-  const declaration = /^\{\s*\\([A-Za-z]+)\b\s*/.exec(source.slice(start));
+  const declaration = /^\{\s*\\([A-Za-z]+)\b\s*(?:\{\})?/.exec(source.slice(start));
   const size = fontSize(declaration?.[1]);
   const scope = size && groupAt(source, start);
   if (scope && declaration) {
@@ -109,6 +141,11 @@ export function latexInlineFormat(
   alias: string | undefined,
 ): { style: string; from: number; to: number; end: number; colour?: string; size?: LatexFontSize; href?: string; url?: boolean } | undefined {
   if (command === '{') return latexInlineSize(source, start);
+  if (command === '\\bgroup') {
+    const highlight = readHighlightOpen(source, start);
+    const argument = highlight && groupAt(source, highlight.end);
+    if (argument) return { ...argument, colour: highlight.colour, style: 'highlight' };
+  }
   const at = whitespaceEnd(source, end);
   if (command === '\\textcolor' || command === '\\colorbox') {
     const model = groupAt(source, at, '[', ']');
@@ -176,8 +213,11 @@ export const latexStyleMark: MarkSpec = {
     }
     if (colour && (style === 'colour' || style === 'highlight')) {
       attrs['data-latex-colour'] = colour;
+      if (style === 'highlight' && /^\\colorbox\b/.test(mark.attrs.open)) attrs['data-latex-unbreakable'] = '';
       attrs.style = (style === 'colour' ? 'color:' : 'background-color:') + colour;
     }
     return ['span', attrs, 0];
   },
 };
+
+export const latexLinkMark: MarkSpec = { ...latexStyleMark, inclusive: false };

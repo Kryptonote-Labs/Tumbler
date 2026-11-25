@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { Window } from 'happy-dom';
 import type { Node } from 'prosemirror-model';
-import { AllSelection } from 'prosemirror-state';
+import { AllSelection, TextSelection } from 'prosemirror-state';
 import { EditorView, noteState } from '../src/editor';
 import { parseLatex, parseLatexProject, serializeLatex, serializeLatexProject } from '../src/latex';
 
@@ -114,3 +114,12 @@ test.each(['LF', 'CRLF'])(
     });
   },
 );
+
+test('Enter continues the current paragraph alignment', async () => {
+  await withLatexEditor(String.raw`{\centering OneTwo\par}`, (view) => {
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, 4)));
+    const event = new window.KeyboardEvent('keydown', { key: 'Enter' });
+    expect(view.someProp('handleKeyDown', (handle) => handle(view, event))).toBe(true);
+    expect(serializeLatex(view.state.doc)).toBe('{\\centering One\\par}\n\n{\\centering Two\\par}');
+  });
+});

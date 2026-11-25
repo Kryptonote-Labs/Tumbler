@@ -105,7 +105,7 @@ export function latexParagraphText(node: Node, resolvedInline?: (source: string)
       typeof content !== 'string' ||
       content.length !== child.nodeSize ||
       /[\u0590-\u08ff\u3000-\u9fff]/.test(content) ||
-      child.marks.some((mark) => !['strong', 'em', 'latex_style'].includes(mark.type.name))
+      child.marks.some((mark) => !['strong', 'em', 'latex_style', 'latex_link'].includes(mark.type.name))
     ) {
       supported = false;
       return;
