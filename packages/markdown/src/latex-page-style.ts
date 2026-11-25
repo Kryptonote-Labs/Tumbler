@@ -14,6 +14,7 @@ const customStyle = 'tumblerpages';
 export function latexPageFurniture(prefix: string) {
   const { name, options } = readLatexClass(prefix);
   const { defaultStyle, styles } = latexRunningStyles(prefix);
+  const selected = defaultStyle ?? (name === 'book' ? 'headings' : 'plain');
   const sided = options.findLast(option => option === 'twoside' || option === 'oneside');
   const twoSided = sided ? sided === 'twoside' : name === 'book';
   const supported = ['article', 'report', 'book'].includes(name);
@@ -28,12 +29,21 @@ export function latexPageFurniture(prefix: string) {
   });
   const odd = make('R', 'L', '\\rightmark');
   const even = make('L', 'R', '\\leftmark');
+  const prepare = (style: NonNullable<ReturnType<typeof styles.get>>) => ({
+    ...style,
+    usesRunningMarks: style.fields.some(({ source }) => /\\(?:leftmark|rightmark)\b/.test(source)),
+  });
+  const named = new Map([...styles].map(([key, style]) => [key, prepare(style)]));
+  const oddHeadings = prepare(odd);
+  const evenHeadings = prepare(even);
   return {
-    defaultStyle: defaultStyle ?? (name === 'book' ? 'headings' : 'plain'),
+    defaultStyle: selected,
+    /** Styles returned by `style`, with stable identities for preparing their fields. */
+    styles: [...named.values(), ...(supported ? [oddHeadings, evenHeadings] : [])],
     style(folio: LatexPageNumber) {
-      const style = folio.pageStyle ?? defaultStyle ?? (name === 'book' ? 'headings' : 'plain');
-      return styles.get(style) ?? (supported && style === 'headings'
-        ? twoSided && folio.number % 2 === 0 ? even : odd
+      const style = folio.pageStyle ?? selected;
+      return named.get(style) ?? (supported && style === 'headings'
+        ? twoSided && folio.number % 2 === 0 ? evenHeadings : oddHeadings
         : undefined);
     },
   };

@@ -116,11 +116,17 @@ test('custom page furniture follows chapter pages and standard running headings 
   const updated = setLatexPageStyle(prefix, settings);
   expect(readLatexPageStyle(updated)).toEqual(settings);
   expect(setLatexPageStyle(updated, settings)).toBe(updated);
-  expect(latexPageFurniture(updated).style({ number: 1, visible: true, pageStyle: 'plain' })?.fields)
-    .toContainEqual({ area: 'head', slot: 'R', source: '\\thepage' });
+  const custom = latexPageFurniture(updated);
+  const chapterStyle = custom.style({ number: 1, visible: true, pageStyle: 'plain' });
+  expect(chapterStyle?.fields).toContainEqual({ area: 'head', slot: 'R', source: '\\thepage' });
+  expect(chapterStyle?.usesRunningMarks).toBe(false);
   const headings = setLatexPageStyle(updated, { kind: 'headings' });
   expect(headings).not.toContain('\\fancypagestyle');
-  expect(latexPageFurniture(headings).style({ number: 8, visible: true })?.fields[0]?.slot).toBe('L');
+  const furniture = latexPageFurniture(headings);
+  const evenStyle = furniture.style({ number: 8, visible: true });
+  expect(evenStyle?.fields[0]?.slot).toBe('L');
+  expect(evenStyle?.usesRunningMarks).toBe(true);
+  expect(furniture.styles.some(style => style === evenStyle)).toBe(true);
   const document = parseLatex(headings + '\n\\appendix\n\\chapter{Supplement}\n\\end{document}');
   expect(latexPageMarks(document, [])[0]?.left.text).toBe('Appendix A.  Supplement');
 });
