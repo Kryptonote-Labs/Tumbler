@@ -1,6 +1,6 @@
 import { latexAlignedParagraph } from './latex-alignment';
 import { authoredLatexStyleOrder, isLatexStyleMark, latexInlineFormat, latexInlineSize } from './latex-inline-format';
-export { latexFontSizes, latexFontSizeProperties, latexLinkUrl, type LatexFontSize } from './latex-inline-format';
+export { latexFontSizes, latexFontSizePointSizes, latexFontSizeProperties, latexLinkUrl, type LatexFontSize } from './latex-inline-format';
 import { latexContentsLineAt } from './latex-contents-line';
 export { latexContentsLineStyle } from './latex-contents-line';
 export { readLatexHyperref } from './latex-links';
