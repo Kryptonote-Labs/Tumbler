@@ -1,4 +1,5 @@
 import { latexBaseSize } from './latex-class';
+import { latexComposedPageAt } from './latex-page-composition';
 import { latexLineSpacing } from './latex-format';
 import type { LatexPageLayout } from './latex-layout';
 import { readLatexTextMacros } from './latex-macros';
@@ -66,7 +67,7 @@ const environments = new Map<string, LatexTitleAlign>([
 ]);
 const symbols = new Map([
   ['&', '&'], ['%', '%'], ['$', '$'], ['#', '#'], ['_', '_'], ['{', '{'], ['}', '}'], [' ', ' '],
-  [',', ' '], ['textbackslash', '\\'], ['quad', ' '], ['qquad', '  '],
+  [',', ' '], ['textbackslash', '\\'], ['textasciicircum', '^'], ['textasciitilde', '~'], ['quad', ' '], ['qquad', '  '],
   ['TeX', 'TeX'], ['LaTeX', 'LaTeX'], ['ldots', '…'], ['dots', '…'],
 ]);
 const namedSkips = new Map([['smallskip', 3], ['medskip', 6], ['bigskip', 12]]);
@@ -87,6 +88,24 @@ export function interpretLatexTitlePage(
 ) {
   const macros = readLatexTextMacros(prefix);
   if (!latexCustomTitlePage(prefix, macros)) return;
+  return interpretPage(prefix, layout, '\\maketitle', fields, macros);
+}
+
+/** Set an explicit page's vertical material, retaining ranges in the original body source. */
+export function interpretLatexComposedPage(prefix: string, layout: LatexPageLayout, source: string) {
+  if (latexComposedPageAt(source)?.end !== source.length) return;
+  const macros = readLatexTextMacros(prefix);
+  return interpretPage(prefix, layout, source, new Map(), macros, true);
+}
+
+function interpretPage(
+  prefix: string,
+  layout: LatexPageLayout,
+  input: string,
+  fields: ReadonlyMap<LatexTitleField, string>,
+  macros: ReturnType<typeof readLatexTextMacros>,
+  explicit = false,
+) {
   const points = latexBaseSize(prefix);
   const normalSize = layout.fontSize;
   const parskip = layout.paragraphSpacing;
@@ -96,7 +115,7 @@ export function interpretLatexTitlePage(
   const initialStretch = latexLineSpacing(prefix, points).stretch;
   let state: State = {
     style: normal,
-    baseline: layout.leading,
+    baseline: explicit ? layout.leading / initialStretch : layout.leading,
     stretch: initialStretch,
     pendingStretch: initialStretch,
     align: 'justify',
@@ -105,10 +124,13 @@ export function interpretLatexTitlePage(
   const frames: Frame[] = [];
   let list = page;
   let lines: Piece[][] | undefined;
-  let source = '\\maketitle';
-  // Where each character came from: offset * 4 + field index, or -1 for class and macro code.
-  let origin: number[] = Array.from(source, () => -1);
-  let budget = 4096;
+  let source = input;
+  // A source offset plus a channel for the body, each title field, or synthetic macro code.
+  const channels = titleFields.length + 1;
+  let origin = source.split('').map((_, index) => explicit ? index * channels : -1);
+  let expansions = 0;
+  let topAnchored = false;
+  let topSeen = false;
 
   const quad = () => state.style.size;
   const leading = () => state.baseline * state.stretch;
@@ -116,16 +138,18 @@ export function interpretLatexTitlePage(
   const traced = (from: number, to: number): Pick<LatexTitleRun, 'field' | 'source'> => {
     const first = origin[from] ?? -1;
     if (first < 0) return {};
-    const field = titleFields[first % 4]!;
+    const field = titleFields[first % channels - 1];
     for (let index = from + 1; index < to; index++)
-      if (origin[index] !== first + 4 * (index - from)) return { field };
-    return { field, source: { from: first >> 2, to: (first >> 2) + to - from } };
+      if (origin[index] !== first + channels * (index - from)) return field ? { field } : {};
+    const offset = Math.floor(first / channels);
+    return { ...(field && { field }), source: { from: offset, to: offset + to - from } };
   };
   /** TeX ends a paragraph by breaking it into lines with the parameters in force at its end. */
   const endParagraph = () => {
     if (!lines) return;
     const paragraph = lines;
     lines = undefined;
+    if (list === page) topSeen = true;
     for (const line of paragraph)
       list.push({ kind: 'line', align: state.align, leading: leading(), runs: mergeLine(line) });
   };
@@ -139,13 +163,13 @@ export function interpretLatexTitlePage(
   };
   const glue = (entry: Omit<Extract<LatexTitleMaterial, { kind: 'glue' }>, 'kind'>) => {
     endParagraph();
-    list.push({ kind: 'glue', ...entry });
+    if (!explicit || list !== page || topSeen) list.push({ kind: 'glue', ...entry });
   };
   const open = (frame: Omit<Frame, 'state'> = {}) => frames.push({ state, ...frame });
   const close = (environment?: string) => {
     const frame = frames.pop();
     if (!frame || frame.environment !== environment) return false;
-    if (frame.material) endParagraph();
+    if (frame.material || (explicit && environment === 'titlepage')) endParagraph();
     state = frame.state;
     if (frame.material) {
       list = frames.findLast((entry) => entry.material)?.material ?? page;
@@ -161,11 +185,10 @@ export function interpretLatexTitlePage(
   const splice = (from: number, to: number, replacement: string, origins = Array.from(replacement, () => -1)) => {
     source = source.slice(0, from) + replacement + source.slice(to);
     origin = [...origin.slice(0, from), ...origins, ...origin.slice(to)];
-    return source.length <= 65536;
+    return ++expansions <= 4096 && source.length <= Math.max(65536, input.length * 4);
   };
 
   for (let position = 0; position < source.length;) {
-    if (--budget < 0) return;
     const character = source[position]!;
     if (character === '%') {
       position = lineEnd(source, position) + 1;
@@ -212,12 +235,13 @@ export function interpretLatexTitlePage(
       const printed = value.trim() ? value : '';
       // An empty field still prints a place to type its value.
       if (!printed) append({ text: '', style: state.style, field, source: { from: 0, to: value.length } });
-      if (!splice(position, after, printed, Array.from(printed, (_, offset) => offset * 4 + index))) return;
+      if (!splice(position, after, printed, printed.split('').map((_, offset) => offset * channels + index + 1))) return;
     } else if (command === 'begin' || command === 'end') {
       const group = argument();
       if (!group) return;
       const name = source.slice(group.from, group.to).trim();
       const definition = macros.get(command === 'begin' ? name : 'end' + name);
+      if (explicit && !definition && name !== 'titlepage' && !environments.has(name)) return;
       if (definition && (definition.count || definition.optional !== undefined)) return;
       const align = command === 'begin' && environments.get(name);
       if (align) endParagraph();
@@ -312,13 +336,23 @@ export function interpretLatexTitlePage(
       const fill = value === '\\fill' || /^\\stretch\s*\{[^{}]*\}$/.test(value);
       const height = fill ? 0 : dimension(value, quad(), textHeight);
       if (height === undefined) return;
-      glue({ size: height, order: fill ? 2 : 0 });
+      if (explicit && list === page && !topSeen && starred) {
+        topAnchored = topSeen = true;
+        glue({ size: layout.firstBaseline, order: 0 });
+        list.push({ kind: 'line', align: state.align, leading: leading(), runs: [] });
+      }
+      if (!explicit || list !== page || topSeen) {
+        const weight = value === '\\fill' ? 1 : Number(/\{([^{}]*)\}$/.exec(value)?.[1]);
+        if (fill && !Number.isFinite(weight)) return;
+        glue({ size: height, order: fill ? 2 : 0, ...(fill && { weight }) });
+      }
       position = group.end;
     } else if (namedSkips.has(command)) {
       glue({ size: namedSkips.get(command)! * texPoint, order: 0 });
       position = after;
     } else if (fills.has(command)) {
-      glue({ size: 0, order: fills.get(command)!, ...(command === 'vss' && { vss: true }) });
+      if (!explicit || list !== page || topSeen || lines)
+        glue({ size: 0, order: fills.get(command)!, ...(command === 'vss' && { vss: true }) });
       position = after;
     } else if (command === 'vbox') {
       if (lines) return;
@@ -345,6 +379,14 @@ export function interpretLatexTitlePage(
     } else if (command === 'today') {
       append({ text: today.format(new Date()), style: state.style, ...traced(position, end) });
       position = after;
+    } else if (explicit && command === 'null' && !lines && list === page && !topSeen) {
+      topAnchored = topSeen = true;
+      glue({ size: layout.firstBaseline, order: 0 });
+      list.push({ kind: 'line', align: state.align, leading: leading(), runs: [] });
+      position = after;
+    } else if (explicit && command === 'mbox' && source.startsWith('{}', after)) {
+      append({ text: '', style: state.style, ...traced(position, after + 2) });
+      position = after + 2;
     } else if (ignored.has(command)) {
       position = after;
     } else if (ignoredWithArgument.has(command)) {
@@ -356,14 +398,15 @@ export function interpretLatexTitlePage(
       }
       position = next;
     } else if (symbols.has(command)) {
-      const { field } = traced(position, end);
-      append({ text: symbols.get(command)!, style: state.style, ...(field && { field }) });
-      position = command === ' ' ? end : after;
+      const next = source.startsWith('{}', end) && /^[A-Za-z]+$/.test(command) ? end + 2 : end;
+      const range = traced(position, next);
+      append({ text: symbols.get(command)!, style: state.style, ...(explicit ? range : range.field ? { field: range.field } : {}) });
+      position = next > end || command === ' ' ? next : after;
     } else return;
   }
   endParagraph();
   if (frames.length) return;
-  return latexTitleBox(page);
+  return latexTitleBox(page, explicit ? textHeight : undefined, explicit && !topAnchored ? layout.firstBaseline : 0, explicit);
 }
 
 /** Drop the spaces TeX discards at line ends, then join text that edits as one piece. */

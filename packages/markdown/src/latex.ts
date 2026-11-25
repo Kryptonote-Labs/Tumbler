@@ -6,6 +6,10 @@ export { latexSpacingRegion, type LatexLineSpacingChoice } from './latex-spacing
 export { readLatexSpacingCommand } from './latex-spacing-syntax';
 export { applyLatexRegionSpacing, insertLatexVerticalGap, latexParagraphGap, latexSelectedList, latexSelectedSpacingRegion, setLatexListItemGap, setLatexParagraphGap } from './latex-spacing-commands';
 export { latexBodySpacing, latexSpacingRegionLayout } from './latex-body-spacing';
+import { latexComposedPageAt, readLatexPageComposition } from './latex-page-composition';
+import { latexPageLayout } from './latex-layout';
+import { interpretLatexComposedPage } from './latex-title-page';
+export { latexComposedLineGap, latexComposedPageKind, latexComposedPageSource, readLatexPageComposition, editLatexPageComposition, latexComposedTextSource, type LatexCompositionEdit, type LatexComposedPageKind, type LatexVerticalAlignment } from './latex-page-composition';
 import { latexAlignedParagraph } from './latex-alignment';
 import { authoredLatexStyleOrder, isLatexStyleMark, latexInlineFormat, latexInlineSize } from './latex-inline-format';
 export { latexFontSizes, latexFontSizePointSizes, latexFontSizeProperties, latexLinkUrl, type LatexFontSize } from './latex-inline-format';
@@ -22,7 +26,7 @@ export { latexPageMarks } from './latex-running-marks';
 import { plainLatexItemLabel, readLatexEnumitem } from './latex-list';
 import { readLatexContentsEntry, readLatexListSequence, readLatexStateMacro } from './latex-state-command';
 export { latexCustomTitlePage, readLatexContentsEntry, readLatexListSequence, readLatexStateMacro } from './latex-state-command';
-export { interpretLatexTitlePage } from './latex-title-page';
+export { interpretLatexTitlePage, interpretLatexComposedPage } from './latex-title-page';
 export type { LatexTitleItem, LatexTitleRun, LatexTitleStyle } from './latex-title-page';
 import { readLatexTitledEnvironments } from './latex-titled-environments';
 export { readLatexTitledEnvironments } from './latex-titled-environments';
@@ -414,6 +418,7 @@ function paragraphEnd(source: string, position: number, context: SourceContext) 
 }
 
 type SourceContext = {
+  prefix: string;
   macros: ReturnType<typeof readLatexTextMacros>;
   enumitem: boolean;
   setspace: boolean;
@@ -428,7 +433,7 @@ type SourceContext = {
 
 function sourceContext(prefix: string): SourceContext {
   const macros = readLatexTextMacros(prefix);
-  return { macros, titled: readLatexTitledEnvironments(prefix, macros), enumitem: usesLatexPackage(prefix, 'enumitem'), setspace: usesLatexPackage(prefix, 'setspace'), letter: latexBaseClass(readLatexClass(prefix).name) === 'letter', colours: readLatexColours(prefix), theorems: readLatexTheorems(prefix),
+  return { prefix, macros, titled: readLatexTitledEnvironments(prefix, macros), enumitem: usesLatexPackage(prefix, 'enumitem'), setspace: usesLatexPackage(prefix, 'setspace'), letter: latexBaseClass(readLatexClass(prefix).name) === 'letter', colours: readLatexColours(prefix), theorems: readLatexTheorems(prefix),
     proof: usesLatexPackage(prefix, 'amsthm'), boxes: usesLatexPackage(prefix, 'tcolorbox') };
 }
 
@@ -594,6 +599,16 @@ function blocks(source: string, context: SourceContext, depth = 0): { nodes: Nod
     const start = whitespaceEnd(source, position);
     const before = source.slice(position, start);
     if (start === source.length) return { nodes, tail: before };
+    const composition = source[start] === '\\' && latexComposedPageAt(source, start);
+    if (composition && ['article', 'report', 'book'].includes(readLatexClass(context.prefix).name)) {
+      const page = source.slice(start, composition.end);
+      if ((composition.kind === 'page' || readLatexPageComposition(page)) &&
+          interpretLatexComposedPage(context.prefix, latexPageLayout(context.prefix), page)) {
+        nodes.push(schema.nodes.latex_raw!.create({ before, source: page }));
+        position = composition.end;
+        continue;
+      }
+    }
     const contents = source[start] === '\\' && latexContentsLineAt(source, context.macros, start);
     if (contents) {
       const { title, folio } = contents;
