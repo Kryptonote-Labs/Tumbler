@@ -32,6 +32,7 @@ import { noteSchema as schema } from './index';
 import { isLatexHeading, latexHeadingDOMRules } from './latex-spec';
 import { latexClipboard } from './latex-clipboard';
 import { syncLatexIncludes } from './latex-includes';
+import { latexIncludeEditing } from './latex-include-editing';
 import { latexHeadings, parseLatex, refreshRebasedLatexFiles, retainDetachedLatexFiles, serializeLatex } from './latex';
 import { latexNumberingPlugin } from './latex-numbering-view';
 import { latexObjectSelection } from './latex-selection';
@@ -393,6 +394,7 @@ export function latexState(
       latexInputRules(),
       latexNumberingPlugin(),
       latexObjectSelection(),
+      latexIncludeEditing(),
       notePresencePlugin(),
       noteProofreadingPlugin(),
       keymap({
