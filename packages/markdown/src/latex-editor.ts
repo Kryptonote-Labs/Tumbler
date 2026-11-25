@@ -31,6 +31,7 @@ import { environmentAt, verbatimEnd } from './latex-syntax';
 import { noteSchema as schema } from './index';
 import { isLatexHeading, latexHeadingDOMRules } from './latex-spec';
 import { latexClipboard } from './latex-clipboard';
+import { syncLatexIncludes } from './latex-includes';
 import { latexHeadings, parseLatex, refreshRebasedLatexFiles, retainDetachedLatexFiles, serializeLatex } from './latex';
 import { latexNumberingPlugin } from './latex-numbering-view';
 import { latexObjectSelection } from './latex-selection';
@@ -430,6 +431,7 @@ export function latexState(
               rebased: transactions.some(item => item.getMeta('rebased')),
               pasted: transactions.some(item => item.getMeta('uiEvent') === 'paste'),
             });
+          syncLatexIncludes(transaction, previous.doc);
           retainDetachedLatexFiles(transaction, previous.doc);
           for (const received of transactions)
             if (received.getMeta('rebased')) refreshRebasedLatexFiles(transaction, received);

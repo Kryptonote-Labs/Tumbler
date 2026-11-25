@@ -141,13 +141,13 @@ export function documentBody(source: string) {
 }
 
 
-/** Visit commands in a source region without interpreting groups, comments, or verbatim. */
-export function* latexCommands(source: string) {
+/** Visit literal commands, skipping comments and verbatim regions. */
+export function* latexCommands(source: string, { nested = false } = {}) {
   for (let start = 0; start < source.length;) {
     const character = source[start];
     if (character === '%') {
       start = lineEnd(source, start) + 1;
-    } else if (character === '{') {
+    } else if (character === '{' && !nested) {
       start = groupAt(source, start)?.end ?? source.length;
     } else if (character === '\\') {
       const end = commandEnd(source, start);
