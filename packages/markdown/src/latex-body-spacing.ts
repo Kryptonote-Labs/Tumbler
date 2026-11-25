@@ -5,8 +5,12 @@ import { readLatexTextMacros } from './latex-macros';
 import { latexEffectivePrefix } from './latex-project';
 import { readLatexListSequence, readLatexStateMacro } from './latex-state-command';
 
+const cache = new WeakMap<Node, { initial: number; spacing: ReadonlyMap<number, number> }>();
+
 /** The baseline stretch active at each source-backed block. Linked files share the caller's state. */
 export function latexBodySpacing(document: Node) {
+  const saved = cache.get(document);
+  if (saved) return saved;
   const prefix = latexEffectivePrefix(document);
   const { options } = readLatexClass(prefix);
   const points = options.includes('12pt') ? 12 : options.includes('11pt') ? 11 : 10;
@@ -40,5 +44,7 @@ export function latexBodySpacing(document: Node) {
     return state;
   }
   visit(document, 0, { source: prefix, stretch: initial });
-  return { initial, spacing };
+  const result = { initial, spacing };
+  cache.set(document, result);
+  return result;
 }
