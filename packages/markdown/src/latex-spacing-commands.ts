@@ -92,7 +92,7 @@ export function latexSelectedList(state: EditorState) {
 function gapLength(value: string) {
   const length = value.trim();
   if (latexLength(length, 1, 1) === undefined)
-    throw new Error('Enter a length such as 3mm or 6pt.');
+    throw new Error('Enter a measurement such as 3mm or 6pt.');
   return length;
 }
 
