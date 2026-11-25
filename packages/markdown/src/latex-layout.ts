@@ -1,3 +1,4 @@
+import { latexLineSpacing } from './latex-format';
 import { readLatexClass, type LatexBlockFlow, type LatexBreak } from './latex-flow';
 import { latexTypography, texPoint, type LatexTypography } from './latex-typography';
 import { latexLength } from './latex-lengths';
@@ -202,7 +203,8 @@ export function latexPageLayout(
   const sides = (geometry ? [...classOptions, ...geometryOptions] : classOptions)
     .findLast((option) => option === 'twoside' || option === 'oneside');
   const twoSided = !slide && (sides ? sides === 'twoside' : documentClass === 'book');
-  const typography = latexTypography(slide && !classOptions.includes('10pt') && !classOptions.includes('12pt') ? 11 : fontSize, source, twoColumns);
+  const textPoints = slide && !classOptions.includes('10pt') && !classOptions.includes('12pt') ? 11 : fontSize;
+  const typography = latexTypography(textPoints, source, twoColumns);
   const { size: font, leading } = typography.text;
   // Standard Computer Modern classes set lengths using the font's quad.
   const quad = (fontSize === 12 ? 11.74988 : fontSize === 11 ? 10.95003 : 10) * texPoint;
@@ -226,9 +228,10 @@ export function latexPageLayout(
   if (paperHeight && paperHeight > 0) height = paperHeight;
 
   const classWidth = (fontSize === 12 ? 390 : fontSize === 11 ? 360 : 345) * texPoint * (twoColumns ? 2 : 1);
+  const classLeading = leading / latexLineSpacing(source, textPoints).stretch;
   const body = Math.max(
-    leading,
-    Math.floor((height - 3.5 * inch) / leading) * leading + fontSize * texPoint,
+    classLeading,
+    Math.floor((height - 3.5 * inch) / classLeading) * classLeading + fontSize * texPoint,
   );
   const wholePoints = (length: number) => Math.trunc(length / texPoint) * texPoint;
   const classTop = letter

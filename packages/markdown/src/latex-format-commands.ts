@@ -155,7 +155,7 @@ export function addLatexFormattingPackages(
   const effective = latexEffectivePrefix(transaction.doc);
   let prefix: string = transaction.doc.attrs.prefix;
   for (const name of required)
-    if ((!existing.has(name) || options.rebased) && withLatexPackage(effective, name) !== effective)
-      prefix = withLatexPackage(prefix, name);
+    if (!existing.has(name) || options.rebased)
+      prefix = withLatexPackage(prefix, name, effective);
   updateLatexBoundary(transaction, 'prefix', prefix);
 }

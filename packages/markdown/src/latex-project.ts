@@ -71,13 +71,13 @@ export function resolveLatexProjectPrefix(
   files: ReadonlyMap<string, string>,
 ) {
   const active = new Set<string>([entry]);
-  function expand(source: string, from: string) {
+  function expand(source: string, from: string, inheritedOptions?: string) {
     let output = '';
     let cursor = 0;
     for (const { name, start, end } of latexCommands(source)) {
       if (start < cursor) continue;
-      const isClass = name === 'documentclass' || name === 'LoadClass';
-      const isPackage = name === 'usepackage' || name === 'RequirePackage';
+      const isClass = name === 'documentclass' || name === 'LoadClass' || name === 'LoadClassWithOptions';
+      const isPackage = name === 'usepackage' || name === 'RequirePackage' || name === 'RequirePackageWithOptions';
       if (!isClass && !isPackage && name !== 'input' && name !== 'endinput') continue;
       if (name === 'endinput') return output + source.slice(cursor, start);
       const first = whitespaceEnd(source, end);
@@ -85,18 +85,20 @@ export function resolveLatexProjectPrefix(
       const arg = groupAt(source, whitespaceEnd(source, option?.end ?? first));
       if (!arg) continue;
       output += source.slice(cursor, start);
-      const settings = option ? source.slice(option.from, option.to) : '';
+      const settings = option
+        ? source.slice(option.from, option.to)
+        : name.endsWith('WithOptions') ? inheritedOptions : undefined;
       const extension = isClass ? '.cls' : isPackage ? '.sty' : '.tex';
       const argument = source.slice(arg.from, arg.to);
       for (const specifier of isPackage ? argument.split(',') : [argument]) {
         const path = latexProjectFile(files, entry, from, specifier.trim(), extension);
         if (path && !active.has(path)) {
           active.add(path);
-          output += '\n' + expand(files.get(path)!, path) + '\n';
+          output += '\n' + expand(files.get(path)!, path, name === 'input' ? inheritedOptions : settings) + '\n';
           active.delete(path);
         } else if (!path) {
           const command = isClass ? 'documentclass' : isPackage ? 'usepackage' : 'input';
-          output += '\\' + command + (option ? '[' + settings + ']' : '') + '{' + specifier + '}\n';
+          output += '\\' + command + (settings === undefined ? '' : '[' + settings + ']') + '{' + specifier + '}\n';
         }
       }
       cursor = arg.end;

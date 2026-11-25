@@ -1,6 +1,6 @@
 import { groupAt, latexCommands, whitespaceEnd } from './latex-syntax';
 
-type Package = { name: string; options: string[] };
+type Package = { name: string; options: string[]; offset: number };
 
 function options(source: string) {
   return source.replace(/(?<!\\)%[^\r\n]*/g, '').split(',').map(option => option.trim());
@@ -27,7 +27,7 @@ export function readLatexPackages(prefix: string): Package[] {
     const settings = optional ? options(prefix.slice(optional.from, optional.to)) : [];
     for (const name of options(prefix.slice(names.from, names.to))) {
       if (name && !declarations.some(item => item.name === name))
-        declarations.push({ name, options: [...(passed.get(name) ?? []), ...settings] });
+        declarations.push({ name, options: [...(passed.get(name) ?? []), ...settings], offset: command.start });
     }
   }
   return declarations;
@@ -53,7 +53,7 @@ export function latexDriverUsesClassPaper(prefix: string, classOptions: readonly
   const packages = readLatexPackages(prefix);
   for (const { name } of packages) {
     for (const dependency of dependencies.get(name) ?? [])
-      if (!packages.some(item => item.name === dependency)) packages.push({ name: dependency, options: [] });
+      if (!packages.some(item => item.name === dependency)) packages.push({ name: dependency, options: [], offset: 0 });
   }
   return packages.some(({ name, options }) => {
     if (!['graphics','graphicx','color','xcolor','hyperref'].includes(name)) return false;
@@ -69,19 +69,23 @@ export function latexDriverUsesClassPaper(prefix: string, classOptions: readonly
 const defaultOptions = new Map([['ulem', 'normalem'], ['hyperref', 'hidelinks']]);
 
 /** Insert one ordinary package declaration before the document opens. */
-export function withLatexPackage(prefix: string, name: string) {
-  if (!/^[a-z0-9-]+$/i.test(name)) throw new RangeError('Invalid LaTeX package name.');
-  const loaded = new Set(readLatexPackages(prefix).map(item => item.name));
-  for (const command of latexCommands(prefix)) {
-    if (command.name !== 'documentclass') continue;
-    const at = whitespaceEnd(prefix, command.end);
-    const options = groupAt(prefix, at, '[', ']');
-    const group = groupAt(prefix, options ? whitespaceEnd(prefix, options.end) : at);
-    if (group && prefix.slice(group.from, group.to).trim() === 'beamer') {
-      loaded.add('hyperref');
-      loaded.add('xcolor');
+export function withLatexPackage(prefix: string, name: string, effectivePrefix = prefix) {
+  if (!/^[\w./@+-]+$/.test(name)) throw new RangeError('Invalid LaTeX package name.');
+  const sources = effectivePrefix === prefix ? [prefix] : [prefix, effectivePrefix];
+  const loaded = new Set<string>();
+  for (const source of sources) {
+    for (const item of readLatexPackages(source)) loaded.add(item.name);
+    for (const command of latexCommands(source)) {
+      if (command.name !== 'documentclass') continue;
+      const at = whitespaceEnd(source, command.end);
+      const options = groupAt(source, at, '[', ']');
+      const group = groupAt(source, options ? whitespaceEnd(source, options.end) : at);
+      if (group && source.slice(group.from, group.to).trim() === 'beamer') {
+        loaded.add('hyperref');
+        loaded.add('xcolor');
+      }
+      break;
     }
-    break;
   }
   for (const item of loaded)
     for (const dependency of dependencies.get(item) ?? []) loaded.add(dependency);

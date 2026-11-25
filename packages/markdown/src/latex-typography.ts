@@ -1,3 +1,4 @@
+import { latexLineSpacing, latexRomanFamily } from './latex-format';
 import { readLatexPackages } from './latex-preamble';
 import { latexLength } from './latex-lengths';
 import { latexRomanGlue, type LatexRomanFont } from './latex-font-metrics';
@@ -71,7 +72,9 @@ export type LatexTypography = Readonly<{
 
 /** Standard LaTeX size defaults and Computer Modern interword glue, in CSS pixels. */
 export function latexTypography(points: number, prefix: string, twoColumns = false): LatexTypography {
-  const { text, author, title } = classic[points === 12 ? 12 : points === 11 ? 11 : 10];
+  const { text: baseText, author, title } = classic[points === 12 ? 12 : points === 11 ? 11 : 10];
+  const { stretch } = latexLineSpacing(prefix, points);
+  const text = stretch === 1 ? baseText : { ...baseText, leading: baseText.leading * stretch };
   const ex = text.size * (points === 12 ? 0.430554 : 0.430555);
   const section = (font: TextSize, before: number, after: number): SectionSize => ({
     ...font,
@@ -90,13 +93,14 @@ export function latexTypography(points: number, prefix: string, twoColumns = fal
     !/\\(?:hyphenation|setmainlanguage|defaulthyphenchar)\b/.test(prefix) &&
     !/\\usepackage\s*(?:\[[^\]]*\]\s*)?\{[^}]*\bpolyglossia\b/.test(prefix);
   const romanFont = points === 12 ? 'cmr12' : 'cmr10';
-  const usesClassicRoman =
+  const family = latexRomanFamily(prefix);
+  const usesClassicRoman = family === 'cmr' || (family === undefined &&
     !/\\(?:fontfamily|fontencoding|setmainfont|renewcommand\s*\{\\rmdefault\})/.test(prefix) &&
     !/\\usepackage\s*(?:\[[^\]]*\]\s*)?\{[^}]*\b(?:fontenc|fontspec|lmodern|times|palatino|newtxtext|newpxtext)\b/.test(
       prefix,
-    );
+    ));
   const packages = readLatexPackages(prefix);
-  const latinModern = packages.some(({ name }) => name === 'lmodern');
+  const latinModern = family === 'lmr';
   const arrayStretch = Number([...prefix.matchAll(/\\(?:re)?newcommand\s*\{\\arraystretch\}\s*\{([0-9.]+)\}/g)].at(-1)?.[1] ?? 1);
   const columnSeparation = [...prefix.matchAll(/\\setlength\s*\{\\tabcolsep\}\s*\{([^{}]+)\}/g)].at(-1)?.[1];
   const microtype = packages.find(item => item.name === 'microtype');
