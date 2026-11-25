@@ -1,6 +1,7 @@
 import { readLatexPageDirective } from './latex-flow';
 import { latexLength } from './latex-lengths';
 import { commandEnd, groupAt, whitespaceEnd } from './latex-syntax';
+import { latexMeasureFraction } from './latex-text-layout';
 import type { Node } from 'prosemirror-model';
 
 export type LatexInlineFlow = 'no-indent' | 'line-break';
@@ -36,10 +37,13 @@ export function latexInlineRule(source: string, em = 10 * 96 / 72.27) {
   const width = groupAt(source, whitespaceEnd(source, raised?.end ?? at));
   const height = width && groupAt(source, whitespaceEnd(source, width.end));
   if (!width || !height || source.slice(height.end).trim()) return;
-  const w = latexLength(source.slice(width.from, width.to), em);
+  const widthSource = source.slice(width.from, width.to);
+  const fraction = latexMeasureFraction(widthSource);
+  const pixels = latexLength(widthSource, em);
+  const w = fraction !== undefined ? { fraction } : pixels;
   const h = latexLength(source.slice(height.from, height.to), em);
   const raise = raised ? latexLength(source.slice(raised.from, raised.to), em) : 0;
-  if (w !== undefined && h !== undefined && raise !== undefined && w >= 0 && h >= 0)
+  if (w !== undefined && h !== undefined && raise !== undefined && (pixels ?? fraction ?? -1) >= 0 && h >= 0)
     return { width: w, height: h, raise };
 }
 
@@ -59,7 +63,7 @@ export function latexParagraphText(node: Node, resolvedInline?: (source: string)
     if (!supported) return;
     if (child.type.name === 'latex_inline') {
       const source = String(child.attrs.source).trim();
-      if (source === '\\null' || readLatexPageDirective(source)) return;
+      if (source === '\\null' || /^\\label\s*\{[^{}]+\}$/.test(source) || readLatexPageDirective(source)) return;
     }
     const segment = segments.at(-1)!;
     const flow =

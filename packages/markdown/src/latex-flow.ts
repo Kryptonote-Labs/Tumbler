@@ -14,6 +14,7 @@ type FolioStyle = 'roman' | 'arabic';
 type FolioEffect = {
   folio?: { visible: false; restartAfter: boolean };
   numbering?: FolioStyle;
+  pageStyle?: string;
 };
 
 export type LatexBlockFlow =
@@ -26,7 +27,7 @@ export type LatexBlockFlow =
       after?: LatexBreak;
     } & FolioEffect);
 
-export type LatexPageNumber = { number: number; visible: boolean; style?: 'roman' };
+export type LatexPageNumber = { number: number; visible: boolean; style?: 'roman'; pageStyle?: string };
 
 export function latexPageLabel(folio: LatexPageNumber) {
   return folio.style === 'roman' ? latexRomanNumber(folio.number).toLowerCase() : String(folio.number);
@@ -89,6 +90,8 @@ export function readLatexPageDirective(source: string, position = 0) {
   }
   if (name === '\\thispagestyle' && value === 'empty')
     return { kind: 'hide' as const, end: argument.end };
+  if (name === '\\thispagestyle' && /^[\w@-]+$/.test(value))
+    return { kind: 'page-style' as const, value, end: argument.end };
 }
 
 const chapterLists = new Set(['tableofcontents', 'listoffigures', 'listoftables']);
@@ -113,7 +116,7 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
   const included: { node: Node; position: number }[] = [];
   let titlePrinted = false;
   let numbering: FolioStyle | undefined;
-  let hideFolio = false;
+  let pageStyle: string | undefined;
   let pageHasContent = false;
 
   document.descendants((node, position) => {
@@ -144,15 +147,17 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
     const directive = readLatexPageDirective(
       node.type.name === 'latex_inline' ? String(node.attrs.source).trim() : source,
     );
-    if (directive?.kind === 'numbering' || directive?.kind === 'hide' || source.startsWith('%')) {
+    if (directive?.kind === 'numbering' || directive?.kind === 'hide' ||
+        directive?.kind === 'page-style' || source.startsWith('%')) {
       const change: FolioEffect = {};
       if (directive?.kind === 'numbering') {
         if (pageHasContent) change.numbering = directive.value;
         else numbering = directive.value;
       }
-      if (directive?.kind === 'hide') {
-        if (pageHasContent) change.folio = { visible: false, restartAfter: false };
-        else hideFolio = true;
+      if (directive?.kind === 'hide' || directive?.kind === 'page-style') {
+        const value = directive.kind === 'hide' ? 'empty' : directive.value;
+        if (pageHasContent) change.pageStyle = value;
+        else pageStyle = value;
       }
       flow.set(position, { kind: 'omit', ...change });
       return false;
@@ -160,9 +165,9 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
     const explicitTitle = standard && isLatexTitlePage(node);
     if (node.isBlock && (node.isAtom || node.isTextblock || explicitTitle)) {
       if (numbering) effect({ numbering });
-      if (hideFolio) effect({ folio: { visible: false, restartAfter: false } });
+      if (pageStyle) effect({ pageStyle });
       numbering = undefined;
-      hideFolio = false;
+      pageStyle = undefined;
       pageHasContent = true;
     }
     if (explicitTitle) {
@@ -236,11 +241,13 @@ export function latexPageNumbers(
 ): LatexPageNumber[] {
   const overrides = new Map<number, { visible: false; restartAfter: boolean }>();
   const resets = new Map<number, FolioStyle>();
+  const pageStyles = new Map<number, string>();
   for (const [position, effect] of flow) {
     if (effect.kind === 'break') continue;
     const page = pageStarts.findLastIndex(start => start <= position) + 1;
     if (effect.folio) overrides.set(page, effect.folio);
     if (effect.numbering) resets.set(page, effect.numbering);
+    if (effect.pageStyle) pageStyles.set(page, effect.pageStyle);
   }
   let number = 1;
   let style: FolioStyle = 'arabic';
@@ -251,7 +258,13 @@ export function latexPageNumbers(
       style = reset;
       number = 1;
     }
-    const folio: LatexPageNumber = { number, visible: override?.visible ?? true, ...(style === 'roman' ? { style } : {}) };
+    const pageStyle = pageStyles.get(page);
+    const folio: LatexPageNumber = {
+      number,
+      visible: pageStyle !== 'empty' && (override?.visible ?? true),
+      ...(style === 'roman' ? { style } : {}),
+      ...(pageStyle && pageStyle !== 'empty' && { pageStyle }),
+    };
     number = override?.restartAfter ? 1 : number + 1;
     return folio;
   });

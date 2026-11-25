@@ -31,6 +31,7 @@ export type LatexPageLayout = {
   footerBaseline: number;
   paragraphIndent: number;
   paragraphSpacing: number;
+  paragraphShrink: number;
   numbered: boolean;
   columns: 1 | 2;
   columnGap: number;
@@ -126,7 +127,9 @@ function packageOptions(source: string, position: number, name: string) {
 }
 
 function paragraphLengths(source: string, quad: number, defaultIndent: number, leading: number, defaultSkip = 0) {
-  const lengths = { parindent: defaultIndent, parskip: defaultSkip };
+  const lengths = { parindent: defaultIndent, parskip: defaultSkip, shrink: 0 };
+  const shrinkOf = (value: string | undefined) =>
+    length(/\bminus\s+(.+)$/.exec(value?.trim() ?? '')?.[1], quad, leading) ?? 0;
   // Apply literal TeX registers, LaTeX length commands and the parskip package in source order.
   const assignments =
     /\\(?:(setlength|addtolength)\s*(?:\{\s*\\(parindent|parskip)\s*\}|\\(parindent|parskip)\b)\s*\{([^{}]*)\}|(parindent|parskip)\s*(?:=\s*)?([+-]?(?:\d+(?:\.\d*)?|\.\d+)\s*(?:in|cm|mm|pt|bp|pc|sp|dd|cc|em))\b)/y;
@@ -149,6 +152,7 @@ function paragraphLengths(source: string, quad: number, defaultIndent: number, l
         }),
       );
       lengths.parskip = length(options.get('skip'), quad, leading) ?? leading / 2;
+      lengths.shrink = shrinkOf(options.get('skip'));
       lengths.parindent = options.has('indent')
         ? (length(options.get('indent'), quad, leading) ?? quad)
         : 0;
@@ -165,6 +169,10 @@ function paragraphLengths(source: string, quad: number, defaultIndent: number, l
     const value = length(argument ?? literal, quad, leading);
     if (value === undefined) continue;
     lengths[name] = operation === 'addtolength' ? lengths[name] + value : value;
+    if (name === 'parskip') {
+      const shrink = shrinkOf(argument ?? literal);
+      lengths.shrink = operation === 'addtolength' ? lengths.shrink + shrink : shrink;
+    }
   }
   return lengths;
 }
@@ -314,6 +322,7 @@ export function latexPageLayout(
     footerBaseline: height - bottom + (latexLength(sizes.get('footskip')) ?? (letter ? 25 : 30) * texPoint),
     paragraphIndent: paragraphs.parindent,
     paragraphSpacing: paragraphs.parskip,
+    paragraphShrink: Math.max(0, paragraphs.shrink),
     columns: twoColumns ? 2 : 1,
     columnGap: length(/\\setlength\s*\{\\columnsep\}\s*\{([^{}]*)\}/.exec(source)?.[1], quad, leading) ?? 10 * texPoint,
     numbered: !slide && !/\\(?:pagestyle\s*\{empty\}|pagenumbering\s*\{gobble\})/.test(source),
@@ -343,6 +352,8 @@ export type PageBlock = PageLine & {
   split?: () => PageLine[];
   /** A display alignment can break at a row before compressing the whole display onto a page. */
   preferFragments?: boolean;
+  /** Prefer to break before a section and its opening lines over shrinking the previous page. */
+  keepHeadingWithNext?: boolean;
   flow?: LatexBlockFlow;
   /** @deprecated Use a column break in `flow`. */
   force?: boolean;
@@ -500,7 +511,7 @@ export function paginateLatex(
     const before = strongerBreak(pending, flow?.before);
     if (occupied && before) advance(block, before);
     pending = flow?.after;
-    if (fits(block, !block.preferFragments) || (!occupied && !block.split)) {
+    if (fits(block, !block.preferFragments && !block.keepHeadingWithNext) || (!occupied && !block.split)) {
       occupied = true;
       place(block);
       continue;

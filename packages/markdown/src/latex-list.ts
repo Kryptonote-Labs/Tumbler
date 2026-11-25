@@ -1,5 +1,5 @@
 import { latexLength } from './latex-lengths';
-import { commandEnd, groupAt, whitespaceEnd } from "./latex-syntax";
+import { commandEnd, groupAt, latexCommands, whitespaceEnd } from "./latex-syntax";
 
 const counterNames = ["arabic", "alph", "Alph", "roman", "Roman"] as const;
 const counters = new Set<string>(counterNames);
@@ -29,6 +29,7 @@ export function readLatexEnumitem(source: string) {
   let label: Label | undefined;
   let leftMargin: string | undefined;
   let itemSeparation: string | undefined;
+  let topSeparation: string | undefined;
   let tight: "all" | "items" | undefined;
   for (let i = 0; i <= source.length;) {
     let end = i;
@@ -53,6 +54,8 @@ export function readLatexEnumitem(source: string) {
         leftMargin = value;
       } else if (name === 'itemsep' && latexLength(value, 1) !== undefined) {
         itemSeparation = value;
+      } else if (name === 'topsep' && latexLength(value, 1) !== undefined) {
+        topSeparation = value;
       } else return;
     }
     i = end + 1;
@@ -61,14 +64,39 @@ export function readLatexEnumitem(source: string) {
     start, label, tight,
     ...(leftMargin !== undefined && { leftMargin }),
     ...(itemSeparation !== undefined && { itemSeparation }),
+    ...(topSeparation !== undefined && { topSeparation }),
   };
 }
 
-export function latexListOptions(open: string) {
+/** Resolve literal enumitem defaults for this environment, then apply its local options. */
+export function latexListOptions(open: string, prefix = '') {
   const end = commandEnd(open, 0);
   const environment = groupAt(open, whitespaceEnd(open, end));
   const options = environment && groupAt(open, whitespaceEnd(open, environment.end), "[", "]");
-  return options && readLatexEnumitem(open.slice(options.from, options.to));
+  if (!environment) return;
+  const kind = open.slice(environment.from, environment.to);
+  type ItemOptions = NonNullable<ReturnType<typeof readLatexEnumitem>>;
+  let settings: ItemOptions | undefined;
+  const apply = (source: string) => {
+    const next = readLatexEnumitem(source);
+    if (!next) return;
+    settings = {
+      ...settings, ...next,
+      start: next.start ?? settings?.start,
+      label: next.label ?? settings?.label,
+      tight: next.tight ?? settings?.tight,
+    };
+  };
+  for (const command of latexCommands(prefix)) {
+    if (command.name !== 'setlist') continue;
+    const at = whitespaceEnd(prefix, command.end);
+    const scope = groupAt(prefix, at, '[', ']');
+    if (scope && prefix.slice(scope.from, scope.to).trim() !== kind) continue;
+    const body = groupAt(prefix, whitespaceEnd(prefix, scope?.end ?? at));
+    if (body) apply(prefix.slice(body.from, body.to));
+  }
+  if (options) apply(open.slice(options.from, options.to));
+  return settings;
 }
 
 export function latexItemLabel(open: string) {

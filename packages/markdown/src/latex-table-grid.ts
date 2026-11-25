@@ -39,7 +39,7 @@ type CellPlacement = {
 };
 
 type TextWidths = { line: number; text: number };
-function paragraphColumnLength(value: string | undefined, quad: number, available?: TextWidths) {
+export function latexColumnLength(value: string | undefined, quad: number, available?: TextWidths) {
   const relative = /^\s*([+-]?(?:\d+(?:\.\d*)?|\.\d+)?)\s*\\(line|column|text)width\s*$/.exec(value ?? '');
   if (relative && available) {
     const factor = relative[1] ? Number(relative[1]) : 1;
@@ -77,7 +77,7 @@ export function latexTableGrid(table: LatexTabular, quad: number, available?: Te
       const declaration = /^\s*>\s*\{\s*\\(raggedright|raggedleft|centering)\s*(?:\\arraybackslash\s*)?\}/.exec(authored);
       const spec = declaration ? authored.slice(declaration[0].length) : authored;
       const format = /^\s*(\|*)\s*([lcrpmb])(?:\s*\{([^{}]*)\})?\s*(\|*)\s*$/.exec(spec);
-      const width = paragraphColumnLength(format?.[3], quad, available);
+      const width = latexColumnLength(format?.[3], quad, available);
       const alignment = format?.[2];
       const align = declaration
         ? declaration[1] === 'raggedright' ? 'left' : declaration[1] === 'raggedleft' ? 'right' : 'center'

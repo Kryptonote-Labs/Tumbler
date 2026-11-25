@@ -288,3 +288,12 @@ test('fancy running fields ignore comments and apply resets in source order', ()
     fields: [{ area: 'foot', slot: 'R', source: 'New footer' }],
   });
 });
+
+test('an authored fancy style can replace its default fields', () => {
+  expect(latexRunningFields(String.raw`\pagestyle{fancy}
+\fancyhead[L]{Old header}
+\fancypagestyle{fancy}{\fancyhf{}\fancyhead[L]{New header}}`)).toMatchObject({
+    clearDefault: true,
+    fields: [{ area: 'head', slot: 'L', source: 'New header' }],
+  });
+});

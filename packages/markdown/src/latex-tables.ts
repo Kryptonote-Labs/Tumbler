@@ -30,7 +30,7 @@ export type LatexTabular = {
   /** Where the body between `\begin{tabular}{…}` and `\end{tabular}` is in the source. */
   start: number;
   end: number;
-  spec: { start: number; end: number; columns: string[]; width?: string; columnSeparation?: string };
+  spec: { start: number; end: number; columns: string[]; width?: string; columnSeparation?: string; rowStretch?: number };
   rows: Row[];
   layout: TableLayout;
   rowStarts: number[];
@@ -195,12 +195,21 @@ function captionRow(source: string) {
 export function readLatexTabular(source: string): LatexTabular | undefined {
   let environment: ReturnType<typeof environmentAt>;
   let columnSeparation: string | undefined;
+  let rowStretch: number | undefined;
   for (const { name, start, end } of latexCommands(source)) {
     if (name === 'setlength') {
       const register = groupAt(source, whitespaceEnd(source, end));
       if (register && source.slice(register.from, register.to).trim() === '\\tabcolsep') {
         const length = groupAt(source, whitespaceEnd(source, register.end));
         if (length) columnSeparation = source.slice(length.from, length.to);
+      }
+    }
+    if (name === 'renewcommand') {
+      const register = groupAt(source, whitespaceEnd(source, end));
+      if (register && source.slice(register.from, register.to).trim() === '\\arraystretch') {
+        const factor = groupAt(source, whitespaceEnd(source, register.end));
+        const value = factor && Number(source.slice(factor.from, factor.to).trim());
+        if (value && Number.isFinite(value) && value > 0) rowStretch = value;
       }
     }
     if (name !== 'begin') continue;
@@ -277,6 +286,7 @@ export function readLatexTabular(source: string): LatexTabular | undefined {
       start: spec.from, end: spec.to, columns: columns ?? [],
       ...(tableWidth !== undefined && { width: tableWidth }),
       ...(columnSeparation !== undefined && { columnSeparation }),
+      ...(rowStretch !== undefined && { rowStretch }),
     },
     rows,
     layout: continuing ? { kind: 'continuing', sections } : { kind: 'fixed', caption },
