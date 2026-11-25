@@ -64,6 +64,12 @@ breaks and discretionary hyphens at those offsets. The host can use `measureLate
 standard Computer Modern Roman text and `hyphenateLatexEnglish` for US English. The browser
 can paint the returned breaks without changing the editable document or running TeX.
 
+`latexMarginSettings(prefix)` reads the effective margins and binding offset. Left and right
+are the odd-page margins in a two-sided document. Use `setLatexGeometry(prefix, { margins,
+twoSided, bindingOffset })` to edit those settings. `latexPageLayout` includes the gutter and
+the space reserved for headers and footers in its text-block geometry. Pass the page number
+minus one to `latexSheetLayout` to resolve the horizontal margins for that page.
+
 `paginateLatexRegions` applies the regular page planner to sections with different physical
 sheet dimensions. Landscape environments keep their source delimiters and contain normal
 editable blocks. `readLatexBeamerFrame` projects numeric overlays from one authored frame, and

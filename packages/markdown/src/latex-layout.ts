@@ -32,7 +32,7 @@ export type LatexPageLayout = {
   rotated?: true;
 };
 
-/** Resolve the binding margin for a physical sheet, preserving its text width. */
+/** Resolve the horizontal margins for a zero-based TeX page number, preserving text width. */
 export function latexSheetLayout(layout: LatexPageLayout, index: number): LatexPageLayout {
   if (index % 2 === 0 || layout.evenLeft === undefined) return layout;
   return { ...layout, left: layout.evenLeft, right: layout.left + layout.right - layout.evenLeft };
