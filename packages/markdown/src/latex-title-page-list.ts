@@ -21,6 +21,9 @@ export type LatexTitleRun = {
   source?: { from: number; to: number };
 };
 
+type ListItem = { gap: number; marker?: string };
+type TitleLine = { align: LatexTitleAlign; leading: number; runs: LatexTitleRun[]; indent?: number; item?: ListItem };
+
 export type LatexTitleAlign = 'justify' | 'center' | 'left' | 'right';
 
 /**
@@ -29,21 +32,14 @@ export type LatexTitleAlign = 'justify' | 'center' | 'left' | 'right';
  * its end and a box's is its top. A box's first item is measured from the box's top.
  */
 export type LatexTitleItem =
-  | {
-      kind: 'line';
-      before: number;
-      align: LatexTitleAlign;
-      /** Baselineskip for text that wraps onto further lines while it is edited. */
-      leading: number;
-      runs: LatexTitleRun[];
-    }
+  | ({ kind: 'line'; before: number } & TitleLine)
   /** Infinite glue of `order` 1 (fil) to 3 (filll). Only the highest order in a box stretches. */
   | { kind: 'fill'; before: number; order: 1 | 2 | 3; weight: number }
   | { kind: 'box'; before: number; height?: number; items: LatexTitleItem[]; after: number };
 
 /** Material as TeX appends it, before interline glue is computed. */
 export type LatexTitleMaterial =
-  | { kind: 'line'; align: LatexTitleAlign; leading: number; runs: LatexTitleRun[] }
+  | ({ kind: 'line' } & TitleLine)
   | { kind: 'glue'; size: number; order: 0 | 1 | 2 | 3; shrink?: number; vss?: true; weight?: number }
   | { kind: 'box'; leading: number; height?: number; material: LatexTitleMaterial[] };
 
@@ -126,8 +122,7 @@ function setList(material: readonly LatexTitleMaterial[], ratio: number, topSkip
       previousDepth = 0;
     } else {
       const { height: top, depth } = extent(entry.runs);
-      const { align, leading, runs } = entry;
-      place({ kind: 'line', before: pending + interline(leading, top) + top, align, leading, runs });
+      place({ ...entry, before: pending + interline(entry.leading, top) + top });
       pending = depth;
       previousDepth = depth;
     }

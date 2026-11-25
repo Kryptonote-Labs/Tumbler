@@ -3,7 +3,7 @@ import { Transform } from 'prosemirror-transform';
 import {
   editLatexPageComposition, interpretLatexComposedPage, latexComposedPageSource,
   latexFlow, latexPageLayout, materializeLatexStructures, parseLatex, readLatexPageComposition,
-  serializeLatex,
+  serializeLatex, splitLatexComposedText,
 } from '../src/latex';
 
 const prefix = String.raw`\documentclass[a4paper,12pt,twoside]{report}
@@ -30,7 +30,9 @@ function baselines(source: string, preamble = prefix) {
 }
 
 test('a title page built with line and spacing edits matches pdfTeX baselines', () => {
-  let source = latexComposedPageSource('title');
+  let source = editLatexPageComposition(latexComposedPageSource('title'), 0, {
+    kind: 'page-spacing', stretch: '', paragraphGap: '',
+  });
   const text = [
     'School of Design', 'Division of Paper', 'Research Programme', 'A Study of Paper Folding',
     'Ada Sample', 'Submitted for the degree of', 'Master of Design', 'March 2031',
@@ -86,7 +88,10 @@ test('imported title pages preserve editable text and their original structure',
 });
 
 test('an ordinary centred dedication matches pdfTeX and preserves the running folio', () => {
-  let source = fillLine(latexComposedPageSource('page'), 0, 'For everyone who taught me');
+  const legacy = editLatexPageComposition(latexComposedPageSource('page'), 0, {
+    kind: 'page-spacing', stretch: '', paragraphGap: '',
+  });
+  let source = fillLine(legacy, 0, 'For everyone who taught me');
   source = editLatexPageComposition(source, 0, { kind: 'line-style', style: { italic: true, alignment: 'center' } });
   source = editLatexPageComposition(source, 0, { kind: 'page-alignment', alignment: 'center' });
   expect(readLatexPageComposition(source)?.alignment).toBe('center');
@@ -111,4 +116,73 @@ test('distribute is reversible and changing a fixed gap preserves literal editab
   expect(baselines(source)[0]?.runs.map((run) => run.text)).toEqual(['A & B {again}']);
   expect(baselines(source)[1]?.y).toBeCloseTo(layout.height - layout.top - layout.bottom);
   expect(editLatexPageComposition(source, 0, { kind: 'page-alignment', alignment: 'top' })).toBe(top);
+});
+
+test('local spacing overrides the preamble and can be changed independently', () => {
+  const preamble = prefix + '\n\\setlength{\\parskip}{8pt}';
+  let source = fillLine(latexComposedPageSource('title'), 0, 'First');
+  source = fillLine(editLatexPageComposition(source, 0, { kind: 'add-line' }), 1, 'Second');
+  const gap = (value: string) => {
+    const [first, second] = baselines(value, preamble);
+    return second!.y - first!.y;
+  };
+  expect(readLatexPageComposition(source)?.spacing).toEqual({ stretch: '1', paragraphGap: '0pt' });
+  expect(gap(source)).toBeCloseTo(19.261, 2);
+  const spaced = editLatexPageComposition(source, 0, { kind: 'page-spacing', paragraphGap: '8pt' });
+  expect(gap(spaced) - gap(source)).toBeCloseTo(10.627, 2);
+  const inherited = editLatexPageComposition(source, 0, { kind: 'page-spacing', stretch: '' });
+  expect(gap(inherited)).toBeCloseTo(gap(source) * 1.5, 2);
+});
+
+test('styled lines, ordinary paragraphs and lists remain on the same editable page', () => {
+  let source = fillLine(latexComposedPageSource('title'), 0, 'Acknowledgements');
+  source = editLatexPageComposition(source, 0, { kind: 'add-block', block: 'paragraph' });
+  const paragraph = readLatexPageComposition(source)?.blocks[1];
+  expect(paragraph?.kind).toBe('paragraph');
+  source = editLatexPageComposition(source, -1, { kind: 'add-block', block: 'itemize', after: paragraph!.end });
+  source = editLatexPageComposition(source, -1, { kind: 'add-block', block: 'enumerate' });
+  source = source.replace('\\mbox{}\\par', 'Many thanks.\\par')
+    .replace('\\item \\mbox{}', '\\item Design\n\\item Typesetting')
+    .replace('\\item \\mbox{}', '\\item Proofreading');
+  expect(readLatexPageComposition(source)?.blocks.map((block) => block.kind))
+    .toEqual(['line', 'paragraph', 'itemize', 'enumerate']);
+  const page = interpretLatexComposedPage(prefix, layout, source);
+  const lines = page?.items.flatMap((item) => item.kind === 'line'
+    ? [[item.item?.marker, item.runs.map((run) => run.text).join('')]] : []);
+  expect(lines).toEqual([
+    [undefined, 'Acknowledgements'], [undefined, 'Many thanks.'],
+    ['•', 'Design'], ['•', 'Typesetting'], ['1.', 'Proofreading'],
+  ]);
+  const tex = prefix + '\n\\begin{document}\n' + source + '\n\\end{document}';
+  const parsed = parseLatex(tex);
+  expect(parsed.childCount).toBe(1);
+  expect(serializeLatex(parsed)).toBe(tex);
+});
+
+
+test('splitting a list item preserves the text on either side and numbers the new item', () => {
+  let source = fillLine(latexComposedPageSource('page'), 0, 'Notes');
+  source = editLatexPageComposition(source, 0, { kind: 'add-block', block: 'enumerate' })
+    .replace('\\item \\mbox{}', '\\item First second');
+  const from = source.indexOf('First second');
+  const result = splitLatexComposedText(source, { from, to: from + 12 }, 'First ', 'second');
+  expect(result?.source).toContain('\\item First\n\\item second');
+  expect(result?.source.slice(result.target, result.target + 6)).toBe('second');
+  expect(interpretLatexComposedPage(prefix, layout, result!.source)?.items
+    .flatMap((line) => line.kind === 'line' && line.item?.marker ? [line.item.marker] : []))
+    .toEqual(['1.', '2.']);
+});
+
+test('a contents entry stays ahead of page spacing and content through ribbon edits', () => {
+  const source = latexComposedPageSource('page').replace(
+    '\\begingroup\n', '\\begingroup\n\\addcontentsline{toc}{chapter}{Notes}\n');
+  let edited = editLatexPageComposition(source, 0, { kind: 'page-spacing', stretch: '1.5' });
+  edited = editLatexPageComposition(edited, 0, { kind: 'page-alignment', alignment: 'center' });
+  edited = editLatexPageComposition(edited, 0, { kind: 'add-block', block: 'itemize' });
+  expect(edited).toStartWith('\\clearpage\n\\begingroup\n\\addcontentsline{toc}{chapter}{Notes}\n'
+    + '\\linespread{1.5}\\selectfont\n\\setlength{\\parskip}{0pt}\n\\vspace*{\\fill}\n');
+  const page = readLatexPageComposition(edited)!;
+  expect(page.spacing).toEqual({ stretch: '1.5', paragraphGap: '0pt' });
+  expect(page.alignment).toBe('center');
+  expect(page.blocks.map(({ kind }) => kind)).toEqual(['line', 'itemize']);
 });
