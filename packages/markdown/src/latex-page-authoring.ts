@@ -8,6 +8,13 @@ import type { Transform } from 'prosemirror-transform';
 export type LatexBookMatter = NonNullable<ReturnType<typeof readLatexBookMatter>>;
 export type LatexPageNumberSection = { format: LatexPageNumberFormat; startAt: number };
 
+/** Create the appendix switch or a manual page break. */
+export function createLatexStructure(document: Node, command: 'appendix' | 'newpage') {
+  return document.type.schema.nodes.latex_raw!.create({
+    source: '\\' + command + (command === 'newpage' ? '\n' : ''),
+  });
+}
+
 function rawSource(node: Node | null) {
   return node?.type.name === 'latex_raw' ? String(node.attrs.source).trim() : '';
 }

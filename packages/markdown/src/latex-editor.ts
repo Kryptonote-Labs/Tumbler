@@ -35,7 +35,8 @@ import { isLatexHeading, latexHeadingDOMRules } from './latex-spec';
 import { latexClipboard } from './latex-clipboard';
 import { syncLatexIncludes } from './latex-includes';
 import { latexIncludeEditing } from './latex-include-editing';
-import { latexHeadings, parseLatex, refreshRebasedLatexFiles, retainDetachedLatexFiles, serializeLatex } from './latex';
+import { latexHeadingLevel, setLatexHeadingLevel } from './latex-headings';
+import { parseLatex, refreshRebasedLatexFiles, retainDetachedLatexFiles, serializeLatex } from './latex';
 import { latexNumberingPlugin } from './latex-numbering-view';
 import { latexObjectSelection } from './latex-selection';
 export { latexLetterPartSpec, latexNumberSpec, type LatexNumberSpec } from './latex-numbering-view';
@@ -63,27 +64,7 @@ export function latexHeading(level: number, command?: 'part' | 'chapter'): Comma
     const tr = state.tr;
     state.doc.nodesBetween(from, to, (node, position) => {
       if (!node.isTextblock) return;
-      const type = schema.nodes[level ? 'latex_heading' : 'paragraph']!;
-      const open = command ? '\\' + command + '{' : null;
-      const currentCommand = String(node.attrs.open ?? '').match(/^\\(part|chapter)\b/)?.[1];
-      if (
-        node.type === type &&
-        (!level || (node.attrs.level === level && currentCommand === command))
-      )
-        return false;
-      if (
-        state.doc
-          .resolve(position)
-          .parent.canReplaceWith(
-            state.doc.resolve(position).index(),
-            state.doc.resolve(position).index() + 1,
-            type,
-          )
-      )
-        tr.setNodeMarkup(position, type, {
-          before: node.attrs.before,
-          ...(level ? { level, open } : {}),
-        });
+      setLatexHeadingLevel(tr, position, level, command);
       return false;
     });
     if (!tr.docChanged) return false;
@@ -239,7 +220,7 @@ function latexInputRules() {
           if (end !== block.end() || !block.parent.isTextblock) return null;
           const node = schema.nodes.latex_heading!.create(
             {
-              level: Math.max(1, latexHeadings.indexOf(match[1]!) + 1),
+              level: Math.max(1, latexHeadingLevel(match[1]!)),
               before: block.parent.attrs.before,
               open: '\\' + match[1] + '{',
             },

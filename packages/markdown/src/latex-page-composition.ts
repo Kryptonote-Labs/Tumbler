@@ -1,3 +1,4 @@
+import type { Node } from 'prosemirror-model';
 import { latexLength } from './latex-lengths';
 import { latexFontSizes } from './latex-size-table';
 import { commandEnd, environmentAt, groupAt, latexCommands, whitespaceEnd } from './latex-syntax';
@@ -56,6 +57,11 @@ export function latexComposedPageSource(kind: LatexComposedPageKind) {
   return kind === 'title'
     ? '\\begin{titlepage}\n' + line + '\n\\end{titlepage}'
     : '\\clearpage\n\\begingroup\n' + line + '\n\\clearpage\n\\endgroup';
+}
+
+/** Create the source-backed page block used by the visual editor. */
+export function createLatexComposedPage(document: Node, kind: LatexComposedPageKind) {
+  return document.type.schema.nodes.latex_raw!.create({ source: latexComposedPageSource(kind) });
 }
 
 function editableLine(source: string, start: number) {
@@ -123,6 +129,7 @@ export function latexComposedLineGap(source: string, lineEnd: number) {
 
 export type LatexCompositionEdit =
   | { kind: 'page-alignment'; alignment: LatexVerticalAlignment }
+  | { kind: 'line-text'; text: string }
   | { kind: 'line-style'; style: Partial<LineStyle> }
   | { kind: 'add-line' }
   | { kind: 'remove-line' }
@@ -160,6 +167,7 @@ export function editLatexPageComposition(source: string, index: number, edit: La
   if (!page) return source;
   if (edit.kind === 'page-alignment') return alignPage(source, edit.alignment);
   const line = page.lines[index];
+  if (edit.kind === 'line-text' && line) return replaceLatexComposedText(source, line, edit.text);
   if (edit.kind === 'line-style' && line)
     return replace(source, line.start, line.end,
       lineSource({ ...line.style, ...edit.style }, source.slice(line.from, line.to)));
@@ -192,4 +200,9 @@ export function latexComposedTextSource(text: string) {
     ['\\', '\\textbackslash{}'], ['^', '\\textasciicircum{}'], ['~', '\\textasciitilde{}'],
   ]);
   return text.replace(/[\\^~{}&%$#_]/g, (character) => literal.get(character) ?? '\\' + character) || '\\mbox{}';
+}
+
+/** Replace an editable text range in a composed page with literal text. */
+export function replaceLatexComposedText(source: string, range: { from: number; to: number }, text: string) {
+  return replace(source, range.from, range.to, latexComposedTextSource(text));
 }

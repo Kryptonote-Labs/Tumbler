@@ -1,3 +1,6 @@
+import { latexHeadingLevel, latexHeadings } from './latex-headings';
+export { createLatexHeading, latexHeadings, setLatexHeadingLevel, type LatexHeadingCommand } from './latex-headings';
+export { isEditableLatexAbstract, latexFrontMatterBlocks, setLatexFrontMatter, type LatexFrontMatter } from './latex-front-matter';
 import { latexSpacingRegion } from './latex-spacing';
 import { readLatexSpacingCommand } from './latex-spacing-syntax';
 import { latexBaseClass } from './latex-class';
@@ -9,7 +12,7 @@ export { latexBodySpacing, latexSpacingRegionLayout } from './latex-body-spacing
 import { latexComposedPageAt, readLatexPageComposition } from './latex-page-composition';
 import { latexPageLayout } from './latex-layout';
 import { interpretLatexComposedPage } from './latex-title-page';
-export { latexComposedLineGap, latexComposedPageKind, latexComposedPageSource, readLatexPageComposition, editLatexPageComposition, latexComposedTextSource, type LatexCompositionEdit, type LatexComposedPageKind, type LatexVerticalAlignment } from './latex-page-composition';
+export { createLatexComposedPage, replaceLatexComposedText, latexComposedLineGap, latexComposedPageKind, latexComposedPageSource, readLatexPageComposition, editLatexPageComposition, latexComposedTextSource, type LatexCompositionEdit, type LatexComposedPageKind, type LatexVerticalAlignment } from './latex-page-composition';
 import { latexAlignedParagraph } from './latex-alignment';
 import { authoredLatexStyleOrder, isLatexStyleMark, latexInlineFormat, latexInlineSize } from './latex-inline-format';
 export { latexFontSizes, latexFontSizePointSizes, latexFontSizeProperties, latexLinkUrl, type LatexFontSize } from './latex-inline-format';
@@ -92,7 +95,7 @@ export type { LatexPageLayout, PageBlock, PageBreak, PageLine } from './latex-la
 export { latexBreakCommand, latexFlow, latexPageLabel, latexPageNumbers, readLatexPageDirective, readLatexBookMatter, readLatexClass } from './latex-flow';
 export { decodeLatexRunningText, latexPageFurniture, readLatexPageStyle, setLatexPageStyle, type LatexPageStyle, type LatexPageNumberPosition } from './latex-page-style';
 export { latexPageNumberFormats } from './latex-flow';
-export { readLatexPageNumberSection, setLatexPageNumberSection, setLatexBookMatter, type LatexBookMatter, type LatexPageNumberSection } from './latex-page-authoring';
+export { createLatexStructure, readLatexPageNumberSection, setLatexPageNumberSection, setLatexBookMatter, type LatexBookMatter, type LatexPageNumberSection } from './latex-page-authoring';
 export { latexContentsEntries, readLatexHeadingMode, setLatexHeadingMode, readLatexBibliographyContents, setLatexBibliographyContents, type LatexHeadingMode } from './latex-contents';
 export type { LatexBlockFlow, LatexBreak, LatexPageNumber, LatexPageNumberFormat } from './latex-flow';
 export {
@@ -108,6 +111,7 @@ export {
 export type { LatexCommandArgument } from './latex-metadata';
 export { latexEquationRows, latexNumbering } from './latex-numbering';
 export {
+  addLatexBibliographyDatabase,
   bibEntryName,
   latexBibliographyDatabases,
   latexBibliographyFiles,
@@ -147,13 +151,6 @@ export type { LatexTabular } from './latex-tables';
 
 export const blankLatex =
   '\\documentclass{article}\n\\usepackage{amsmath}\n\\usepackage[a4paper,margin=1in]{geometry}\n\n\\setlength{\\parindent}{0pt}\n\\setlength{\\parskip}{0.5\\baselineskip plus 2pt}\n\n\\begin{document}\n\n\\end{document}\n';
-export const latexHeadings = [
-  'section',
-  'subsection',
-  'subsubsection',
-  'paragraph',
-  'subparagraph',
-];
 const displayEnvironments = new Set([
   'equation',
   'equation*',
@@ -335,13 +332,9 @@ function bibliographyAt(source: string, position: number) {
   return end > position ? end : undefined;
 }
 
-function headingLevel(command: string) {
-  return command === 'part' || command === 'chapter' ? 1 : latexHeadings.indexOf(command) + 1;
-}
-
 function headingAt(source: string, position: number) {
   const end = commandEnd(source, position);
-  const level = headingLevel(source.slice(position + 1, end));
+  const level = latexHeadingLevel(source.slice(position + 1, end));
   if (!level) return;
   const group = argumentAt(source, end + Number(source[end] === '*'));
   if (group) return { ...group, level };
@@ -386,7 +379,7 @@ function blockStart(source: string, position: number, context: SourceContext) {
     blockCommands.has(command) ||
     !!readLatexSpacingCommand(source, position) ||
     bibliographyCommands.has(command) ||
-    headingLevel(command.slice(1)) > 0 ||
+    latexHeadingLevel(command.slice(1)) > 0 ||
     (context.letter && !!latexLetterCommandAt(source, position)) ||
     (command === '\\definecolor' && !!latexColourDefinition(source, position))
   );

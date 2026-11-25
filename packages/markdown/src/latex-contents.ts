@@ -1,4 +1,5 @@
-import { latexHeadings, serializeLatexSelection } from './latex';
+import { serializeLatexSelection } from './latex';
+import { latexHeadings } from './latex-headings';
 import { isLatexBibliographyBlock } from './latex-bibliography';
 import { updateLatexBoundary, updateLatexNodeSource } from './latex-boundary-step';
 import { readLatexClass } from './latex-flow';
