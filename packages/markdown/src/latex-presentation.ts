@@ -1,7 +1,7 @@
 import { latexLength } from './latex-lengths';
 import { texPoint } from './latex-typography';
 import { resolveLatexColour } from './latex-colour';
-import { commandEnd, environmentAt, groupAt, latexCommands, whitespaceEnd } from './latex-syntax';
+import { commandEnd, environmentAt, groupAt, latexCommands, latexDocumentStartCommands, whitespaceEnd } from './latex-syntax';
 
 export const latexFontSizePoints = new Map<string, readonly [number, number, number]>([
   ['tiny', [5, 6, 6]], ['scriptsize', [7, 8, 8]], ['footnotesize', [8, 9, 10]],
@@ -177,7 +177,7 @@ function fancyRunningStyle(source: string, base?: RunningStyle) {
 export function latexRunningStyles(prefix: string) {
   let defaultStyle: string | undefined;
   const styles = new Map<string, ReturnType<typeof fancyRunningStyle>>();
-  for (const { name, end } of latexCommands(prefix)) {
+  for (const { name, end } of latexDocumentStartCommands(prefix)) {
     if (name !== 'pagestyle' && name !== 'fancypagestyle') continue;
     const group = groupAt(prefix, whitespaceEnd(prefix, end));
     if (!group) continue;

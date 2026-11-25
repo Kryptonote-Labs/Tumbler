@@ -2,7 +2,7 @@ import { escapedLatexText } from './latex';
 import { readLatexClass, type LatexPageNumber } from './latex-flow';
 import { withLatexPackage } from './latex-preamble';
 import { latexRunningStyles, type LatexRunningField, type LatexRunningSlot } from './latex-presentation';
-import { groupAt, latexCommands, whitespaceEnd } from './latex-syntax';
+import { groupAt, latexDocumentStartCommands, whitespaceEnd } from './latex-syntax';
 
 export type LatexPageNumberPosition = 'none' | 'head-L' | 'head-C' | 'head-R' | 'foot-L' | 'foot-C' | 'foot-R';
 export type LatexPageStyle =
@@ -51,7 +51,7 @@ export function latexPageFurniture(prefix: string) {
 
 function pageStyleCommands(prefix: string) {
   const styles = [];
-  for (const { name, start, end } of latexCommands(prefix)) {
+  for (const { name, start, end } of latexDocumentStartCommands(prefix)) {
     if (name !== 'pagestyle' && name !== 'fancypagestyle') continue;
     const style = groupAt(prefix, whitespaceEnd(prefix, end));
     if (!style) continue;
@@ -120,7 +120,7 @@ export function setLatexPageStyle(prefix: string, style: LatexPageStyle, effecti
     declarations.push('  \\renewcommand{\\headrulewidth}{0pt}', '}');
     if (!externalPlain) declarations.push('\\fancypagestyle{plain}[' + customStyle + ']{}');
   }
-  for (const command of commands.reverse()) {
+  for (const command of commands.sort((a, b) => b.start - a.start)) {
     if (!owned(command) && command !== last) continue;
     if (command === last && !isCustom) {
       next = next.slice(0, command.start) + selection + next.slice(command.end);

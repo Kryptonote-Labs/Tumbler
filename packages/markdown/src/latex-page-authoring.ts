@@ -1,7 +1,7 @@
 import { latexBreakCommand, readLatexBookMatter, readLatexClass, readLatexPageDirective, type LatexPageNumberFormat } from './latex-flow';
 import { updateLatexBoundary } from './latex-boundary-step';
 import { latexEffectivePrefix } from './latex-project';
-import { latexCommands } from './latex-syntax';
+import { latexDocumentStartCommands } from './latex-syntax';
 import type { Node } from 'prosemirror-model';
 import type { Transform } from 'prosemirror-transform';
 
@@ -40,7 +40,7 @@ export function readLatexPageNumberSection(document: Node, position: number): La
     }
     if (local && directive?.kind === 'counter') startAt = directive.value;
   }
-  for (const command of latexCommands(prefix)) read(prefix, command.start);
+  for (const command of latexDocumentStartCommands(prefix)) read(prefix, command.start);
   document.descendants((node, at) => {
     if (at >= position) return false;
     const source = rawSource(node);

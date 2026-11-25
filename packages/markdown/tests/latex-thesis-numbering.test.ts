@@ -160,3 +160,26 @@ test('an even restart before an open-right chapter ships the even folio first', 
     contents: [['First', '1', '1'], ['Second', '2', 'v']],
   });
 });
+
+test('document startup hooks can hide folios until a body style or format restores them', () => {
+  const prefix = String.raw`\documentclass{article}
+\AtBeginDocument{\pagestyle{empty}}
+\pagestyle{headings}
+\begin{document}`;
+  expect(latexPageFurniture(prefix).defaultStyle).toBe('empty');
+  const restyled = setLatexPageStyle(prefix, { kind: 'plain' });
+  expect(latexPageFurniture(restyled).defaultStyle).toBe('plain');
+  expect(latexPageFurniture(setLatexPageStyle(prefix, {
+    kind: 'custom', number: 'head-C', header: '', footer: '',
+  })).defaultStyle).toBe('tumblerpages');
+
+  const document = parseLatex(String.raw`\documentclass{article}
+\AddToHook{begindocument/end}{\pagenumbering{gobble}}
+\begin{document}
+First sheet.
+\clearpage
+\pagenumbering{arabic}
+Second sheet.
+\end{document}`);
+  expect(measuredPages(document).labels).toEqual(['', '1']);
+});

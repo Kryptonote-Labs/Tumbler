@@ -10,7 +10,7 @@ import { latexCustomTitlePage, readLatexContentsEntry, readLatexListSequence, re
 import { readLatexTitledEnvironments } from './latex-titled-environments';
 import { readLatexTitleSetter } from './latex-metadata';
 import type { Node } from 'prosemirror-model';
-import { commandEnd, groupAt, latexCommands, whitespaceEnd } from './latex-syntax';
+import { commandEnd, groupAt, latexCommands, latexDocumentStartCommands, whitespaceEnd } from './latex-syntax';
 
 export type LatexBreak = 'column' | 'page' | 'recto';
 export const latexPageNumberFormats = ['arabic', 'roman', 'Roman', 'alph', 'Alph', 'gobble'] as const;
@@ -178,9 +178,11 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
   function setDocumentStyle(value: string) {
     activeDocumentStyle = documentStyle = value;
   }
-  for (const command of latexCommands(prefix)) {
+  for (const command of latexDocumentStartCommands(prefix)) {
     const directive = readLatexPageDirective(prefix, command.start);
     if (directive?.kind === 'document-style') activeDocumentStyle = directive.value;
+    if (directive?.kind === 'page-style') pageStyle = directive.value;
+    if (directive?.kind === 'hide') pageStyle = 'empty';
     if (directive?.kind === 'numbering') {
       numbering = directive.value;
       startAt = 1;
