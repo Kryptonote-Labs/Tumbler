@@ -15,6 +15,10 @@ bun run check
 bun test
 ```
 
+The LaTeX spacing test compares layout against a PDF from pdfLaTeX. It skips locally
+without pdfLaTeX, Poppler's `pdftotext`, or the `enumitem`, `geometry`, and
+`setspace` packages. Set `REQUIRE_LATEX_PDF=1` to require the compile, as CI does.
+
 The Phase 1 suite currently covers bounded ZIP inventory and inflation, hostile
 archive mutations, OPC part-name and content-type rules, UTF-8/UTF-16
 infrastructure XML, relationship resolution, main-part discovery for DOCX/XLSX/

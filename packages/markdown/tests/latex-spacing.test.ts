@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -107,9 +108,14 @@ test('authors paragraph and fixed gaps and preserves unrelated list options', ()
   expect(parseLatex(authored.replace('itemsep=3mm', 'itemsep=2ex')).lastChild?.type.name).toBe('bullet_list');
 });
 
-test.skipIf(!Bun.which('pdflatex') || !Bun.which('pdftotext') ||
-  !Bun.which('kpsewhich') ||
-  Bun.spawnSync(['kpsewhich', 'enumitem.sty']).exitCode !== 0)('matches pdfTeX reference skips and baseline deltas', () => {
+const hasTex = ['pdflatex', 'pdftotext', 'kpsewhich'].every((tool) => Bun.which(tool)) &&
+  spawnSync('kpsewhich', ['geometry.sty', 'setspace.sty', 'enumitem.sty'], {
+    timeout: 400,
+    stdio: 'ignore',
+  }).status === 0;
+
+test.skipIf(!hasTex && process.env.REQUIRE_LATEX_PDF !== '1')('matches pdfTeX reference skips and baseline deltas', () => {
+  if (!hasTex) throw new Error('The LaTeX spacing test requires TeX Live and Poppler.');
   const source = report + String.raw`Globalone\\
 Globaltwo
 
@@ -135,14 +141,23 @@ Quotetwo
   const directory = mkdtempSync(join(tmpdir(), 'tumbler-spacing-'));
   try {
     writeFileSync(join(directory, 'spacing.tex'), source);
-    const compiled = Bun.spawnSync(
-      ['pdflatex', '-interaction=nonstopmode', '-halt-on-error', 'spacing.tex'],
-      { cwd: directory },
-    );
-    if (compiled.exitCode !== 0) throw new Error(compiled.stdout.toString());
-    const pdf = Bun.spawnSync(['pdftotext', '-bbox', 'spacing.pdf', '-'], { cwd: directory });
-    if (pdf.exitCode !== 0) throw new Error(pdf.stderr.toString());
-    const ys = new Map([...pdf.stdout.toString().matchAll(/yMin="([\d.]+)"[^>]+>(\w+)<\/word>/g)]
+    const deadline = performance.now() + 1500;
+    function run(tool: string, args: string[]) {
+      const timeout = Math.floor(deadline - performance.now());
+      if (timeout < 1) throw new Error('The TeX commands exceeded their compile budget.');
+      const result = spawnSync(tool, args, {
+        cwd: directory,
+        timeout,
+        killSignal: 'SIGKILL',
+        encoding: 'utf8',
+      });
+      if (result.error) throw result.error;
+      if (result.status !== 0) throw new Error(result.stdout + result.stderr);
+      return result.stdout;
+    }
+    run('pdflatex', ['-no-shell-escape', '-interaction=nonstopmode', '-halt-on-error', 'spacing.tex']);
+    const text = run('pdftotext', ['-bbox', 'spacing.pdf', '-']);
+    const ys = new Map([...text.matchAll(/yMin="([\d.]+)"[^>]+>(\w+)<\/word>/g)]
       .map(([, y, word]) => [word, Number(y) * 96 / 72]));
     const delta = (first: string, next: string) => ys.get(next)! - ys.get(first)!;
     const doc = parseLatex(source);
