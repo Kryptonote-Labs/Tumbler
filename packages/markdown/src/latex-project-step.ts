@@ -4,8 +4,10 @@ import { isLatexProjectPath, type LatexProject } from './latex-project';
 
 const stepType = 'tumblerLatexProjectFile';
 
-function fileSource(project: LatexProject, path: string): string | null {
-  return Object.hasOwn(project.files, path) ? project.files[path]! : null;
+const defaultProject: LatexProject = { entry: 'main.tex', files: {} };
+
+function fileSource(project: LatexProject | null, path: string): string | null {
+  return project && Object.hasOwn(project.files, path) ? project.files[path]! : null;
 }
 
 /** Keep edits to distinct detached files independent when collaborative steps are rebased. */
@@ -20,8 +22,8 @@ export class LatexProjectFileStep extends Step {
   }
 
   apply(document: Node) {
-    const project: LatexProject | null = document.attrs.latexProject;
-    if (!project || this.path === project.entry) return StepResult.fail('Expected a LaTeX project file.');
+    const project: LatexProject = document.attrs.latexProject ?? defaultProject;
+    if (document.attrs.format !== 'latex' || this.path === project.entry) return StepResult.fail('Expected a LaTeX project file.');
     const current = fileSource(project, this.path);
     if (current === this.after) return StepResult.ok(document);
     if (current !== this.before) return StepResult.fail('The same LaTeX project file changed concurrently.');
@@ -67,7 +69,7 @@ else {
 
 export function updateLatexProjectFile(transform: Transform, path: string, source: string | null, retaining = false) {
   const project: LatexProject | null = transform.doc.attrs.latexProject;
-  if (!project) return;
+  if (!isLatexProjectPath(path)) throw new RangeError('Invalid LaTeX project path.');
   const before = fileSource(project, path);
   if (before !== source) transform.step(new LatexProjectFileStep(path, before, source, retaining));
 }

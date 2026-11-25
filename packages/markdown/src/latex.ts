@@ -30,6 +30,7 @@ import { noteSchema as schema } from './index';
 import {
   latexEffectivePrefix, latexProjectFile, readLatexInclude, resolveLatexProjectPrefix, type LatexProject,
 } from './latex-project';
+export { updateLatexProjectFile } from './latex-project-step';
 export { isLatexProjectPath, latexEffectivePrefix, latexProjectEntry, resolveLatexProjectPath } from './latex-project';
 import {
   argumentAt,
@@ -45,7 +46,7 @@ import {
 } from './latex-syntax';
 
 export { readLatexPackages } from './latex-preamble';
-export { latexLineSpacing, setLatexLineSpacing, latexRomanFamily, setLatexRomanFamily, addLatexPackage } from './latex-format';
+export { latexDocumentClassName, setLatexDocumentClass, latexLineSpacing, setLatexLineSpacing, latexRomanFamily, setLatexRomanFamily, addLatexPackage } from './latex-format';
 export { isLatexHeading } from './latex-spec';
 export { latexEnvironmentName, latexEnvironmentOption } from './latex-environments';
 export { latexItemLabel, latexListOptions, withLatexItemLabel } from './latex-list';
@@ -914,6 +915,42 @@ function childrenSource(parent: Node) {
 
 export function serializeLatex(document: Node) {
   return document.attrs.prefix + childrenSource(document) + document.attrs.suffix;
+}
+
+function flattenSelectedIncludes(content: Fragment): Fragment {
+  const nodes: Node[] = [];
+  content.forEach((node) => {
+    if (node.isLeaf || node.isTextblock) nodes.push(node);
+    else {
+      const children = flattenSelectedIncludes(node.content);
+      if (node.type.name !== 'latex_include') nodes.push(node.copy(children));
+      else children.forEach((child, _offset, index) => {
+        nodes.push(index === 0
+          ? child.type.create({ ...child.attrs, before: (node.attrs.before ?? '') + (child.attrs.before ?? '') }, child.content, child.marks)
+          : child);
+      });
+    }
+  });
+  return Fragment.fromArray(nodes);
+}
+
+/** Serialize a selection using the same spelling and marks as the authored document. */
+export function serializeLatexSelection(document: Node, from: number, to: number) {
+  const { content } = document.slice(from, to);
+  if (content.firstChild?.isInline)
+    return inlineSource(schema.nodes.paragraph!.create(null, content));
+  const container = document.copy(flattenSelectedIncludes(content));
+  const first = container.firstChild;
+  const source = childrenSource(container);
+  return first ? source.slice((first.attrs.before ?? '').length) : '';
+}
+
+/** Interpret a reusable body fragment in the destination document's preamble. */
+export function parseLatexFragment(document: Node, source: string) {
+  const { nodes } = blocks(source, sourceContext(latexEffectivePrefix(document)));
+  return Fragment.fromArray(nodes.map((node, index) => index === 0
+    ? node.type.create({ ...node.attrs, before: null }, node.content, node.marks)
+    : node));
 }
 
 /** Promote supported structures stored as opaque blocks by an older editor. */

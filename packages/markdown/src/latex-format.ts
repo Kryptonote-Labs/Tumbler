@@ -85,6 +85,35 @@ export function addLatexPackage(prefix: string, name: string, effectivePrefix = 
   return insertPreambleLine(prefix, '\\usepackage{' + name + '}');
 }
 
+function classArgument(prefix: string) {
+  for (const { name, end } of latexCommands(prefix)) {
+    if (name !== 'documentclass') continue;
+    const start = whitespaceEnd(prefix, end);
+    const options = groupAt(prefix, start, '[', ']');
+    const group = groupAt(prefix, whitespaceEnd(prefix, options?.end ?? start));
+    if (group) return group;
+  }
+}
+
+/** The authored class name, without resolving a local class to its base class. */
+export function latexDocumentClassName(prefix: string) {
+  const group = classArgument(prefix);
+  return group && prefix.slice(group.from, group.to).trim();
+}
+
+export function setLatexDocumentClass(prefix: string, name: string, effectivePrefix = prefix) {
+  if (!/^[\w./@+-]+$/.test(name)) throw new Error('Enter a LaTeX class name.');
+  const group = classArgument(prefix);
+  if (group) {
+    const authored = prefix.slice(group.from, group.to);
+    return prefix.slice(0, group.from) + (authored.trim() ? authored.replace(authored.trim(), () => name) : name) + prefix.slice(group.to);
+  }
+  if (classArgument(effectivePrefix))
+    throw new Error('Change the class in the project file that declares it.');
+  const newline = /\r\n|\n/.exec(prefix)?.[0] ?? '\n';
+  return '\\documentclass{' + name + '}' + newline + prefix;
+}
+
 export function setLatexLineSpacing(prefix: string, spacing: Spacing, effectivePrefix = prefix) {
   const next = addLatexPackage(prefix, 'setspace', effectivePrefix);
   // Using setstretch for Single avoids singlespacing's additional vertical skip.
