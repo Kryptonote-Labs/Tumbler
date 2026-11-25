@@ -172,3 +172,17 @@ test('splitting a list item preserves the text on either side and numbers the ne
     .flatMap((line) => line.kind === 'line' && line.item?.marker ? [line.item.marker] : []))
     .toEqual(['1.', '2.']);
 });
+
+test('a contents entry stays ahead of page spacing and content through ribbon edits', () => {
+  const source = latexComposedPageSource('page').replace(
+    '\\begingroup\n', '\\begingroup\n\\addcontentsline{toc}{chapter}{Notes}\n');
+  let edited = editLatexPageComposition(source, 0, { kind: 'page-spacing', stretch: '1.5' });
+  edited = editLatexPageComposition(edited, 0, { kind: 'page-alignment', alignment: 'center' });
+  edited = editLatexPageComposition(edited, 0, { kind: 'add-block', block: 'itemize' });
+  expect(edited).toStartWith('\\clearpage\n\\begingroup\n\\addcontentsline{toc}{chapter}{Notes}\n'
+    + '\\linespread{1.5}\\selectfont\n\\setlength{\\parskip}{0pt}\n\\vspace*{\\fill}\n');
+  const page = readLatexPageComposition(edited)!;
+  expect(page.spacing).toEqual({ stretch: '1.5', paragraphGap: '0pt' });
+  expect(page.alignment).toBe('center');
+  expect(page.blocks.map(({ kind }) => kind)).toEqual(['line', 'itemize']);
+});
