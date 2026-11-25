@@ -1148,7 +1148,7 @@ export function latexProjectFileUsage(document: Node) {
   const referenced = new Map<string, number>();
   for (const [from, source] of files) {
     if (!/\.(?:tex|sty|cls)$/i.test(from)) continue;
-    for (const command of latexCommands(source)) {
+    for (const command of latexCommands(source, { nested: true })) {
       if (command.name !== 'input' && command.name !== 'include') continue;
       const include = readLatexInclude(source, command.start);
       const path = include && latexProjectFile(files, entry, from, include.name, '.tex');

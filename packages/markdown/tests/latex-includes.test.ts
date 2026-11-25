@@ -94,3 +94,16 @@ test('repeated parent files mirror nested edits and keep the nested file separat
   expect(serializeLatexProject(edited.doc)?.files.get(component)).toBe(intro);
   expect(serializeLatexProject(edited.doc)?.files.get(detail)).toBe('New.');
 });
+
+test('usage includes literal references in TeX groups outside the editor body', () => {
+  const document = parseLatexProject(entry, new Map([
+    [entry, String.raw`\newcommand{\summary}{\input{components/intro}}
+% \input{components/intro}
+\begin{document}
+\summary
+\end{document}`],
+    [component, 'Original text.\n'],
+  ]));
+  expect(document.firstChild?.type.name).not.toBe('latex_include');
+  expect(latexProjectFileUsage(document).get(component)).toBe(1);
+});
