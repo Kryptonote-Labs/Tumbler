@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 import { Transform } from 'prosemirror-transform';
 import {
-  latexEffectivePrefix, parseLatex, parseLatexFragment, serializeLatexProject,
+  latexEffectivePrefix, readLatexClass, parseLatex, parseLatexFragment, serializeLatex, serializeLatexProject,
   serializeLatexSelection, updateLatexProjectFile,
 } from '../src/latex';
 import { latexDocumentClassName, setLatexDocumentClass, addLatexPackage, latexLineSpacing, latexRomanFamily, setLatexLineSpacing, setLatexRomanFamily } from '../src/latex-format';
@@ -79,4 +79,34 @@ Hello \lab{Ada} and \unknown{Math}.
   const fragment = parseLatexFragment(document, source);
   expect(fragment.firstChild?.child(1).marks[0]?.attrs.style).toBe('strong');
   expect(fragment.firstChild?.child(3).attrs.source).toBe('\\unknown{Math}');
+});
+
+test('keeps the list environment when a component spans items', () => {
+  const document = parseLatex(String.raw`\begin{itemize}
+\item First item
+\item Second item
+\end{itemize}`);
+  const source = serializeLatexSelection(document, 3, 26);
+  expect(source).toStartWith('\\begin{itemize}');
+  expect(source).toEndWith('\\end{itemize}');
+  const list = parseLatexFragment(document, source).firstChild;
+  expect(list?.type.name).toBe('bullet_list');
+  expect(list?.children.map((item) => item.textContent)).toEqual(['First item', 'Second it']);
+});
+
+test('a custom class can forward its options to the base class for Visual layout', () => {
+  const document = parseLatex(String.raw`\documentclass[12pt]{thesis}
+\begin{document}
+Text
+\end{document}`);
+  const tr = new Transform(document);
+  updateLatexProjectFile(tr, 'thesis.cls', String.raw`\LoadClassWithOptions{report}`);
+  expect(readLatexClass(latexEffectivePrefix(tr.doc))).toEqual({ name: 'report', options: ['12pt'] });
+});
+
+test('a fragment ending in a comment leaves a following document delimiter on its own line', () => {
+  const document = parseLatex('\\begin{document}\nText\\end{document}');
+  const fragment = parseLatexFragment(document, '% a note');
+  const tr = new Transform(document).insert(document.content.size, fragment);
+  expect(serializeLatex(tr.doc)).toEndWith('% a note\n\\end{document}');
 });

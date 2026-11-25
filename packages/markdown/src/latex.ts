@@ -939,7 +939,11 @@ export function serializeLatexSelection(document: Node, from: number, to: number
   const { content } = document.slice(from, to);
   if (content.firstChild?.isInline)
     return inlineSource(schema.nodes.paragraph!.create(null, content));
-  const container = document.copy(flattenSelectedIncludes(content));
+  // A slice across list items needs its surrounding environment to compile on its own.
+  const blocks = content.firstChild?.type.name === 'list_item'
+    ? document.slice(from, to, true).content
+    : content;
+  const container = document.copy(flattenSelectedIncludes(blocks));
   const first = container.firstChild;
   const source = childrenSource(container);
   return first ? source.slice((first.attrs.before ?? '').length) : '';
@@ -948,9 +952,17 @@ export function serializeLatexSelection(document: Node, from: number, to: number
 /** Interpret a reusable body fragment in the destination document's preamble. */
 export function parseLatexFragment(document: Node, source: string) {
   const { nodes } = blocks(source, sourceContext(latexEffectivePrefix(document)));
-  return Fragment.fromArray(nodes.map((node, index) => index === 0
-    ? node.type.create({ ...node.attrs, before: null }, node.content, node.marks)
-    : node));
+  return Fragment.fromArray(nodes.map((node, index) => {
+    const terminalComment = index === nodes.length - 1 &&
+      node.type.name === 'latex_raw' && String(node.attrs.source).startsWith('%');
+    if (index > 0 && !terminalComment) return node;
+    return node.type.create({
+      ...node.attrs,
+      ...(index === 0 ? { before: null } : {}),
+      // A following document delimiter may start on the same line.
+      ...(terminalComment ? { source: node.attrs.source + '\n' } : {}),
+    }, node.content, node.marks);
+  }));
 }
 
 /** Promote supported structures stored as opaque blocks by an older editor. */
