@@ -52,7 +52,7 @@ jobs:
           TEXMFLOCAL $texdir/texmf-local
           EOF
           perl install-tl --repository "$repository" --profile texlive.profile --no-doc-install --no-src-install --no-continue
-          "$texdir/bin/x86_64-linux/tlmgr" install latex-bin enumitem geometry setspace amsfonts
+          "$texdir/bin/x86_64-linux/tlmgr" install latex-bin enumitem geometry setspace amsfonts emptypage fancyhdr
       - name: Set up PDF compile tools
         run: |
           if ! command -v pdftotext >/dev/null; then
