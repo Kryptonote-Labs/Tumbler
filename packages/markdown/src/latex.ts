@@ -1,6 +1,5 @@
 import { latexHeadingLevel, latexHeadings } from './latex-headings';
 export { createLatexHeading, latexHeadings, setLatexHeadingLevel, type LatexHeadingCommand } from './latex-headings';
-export { isEditableLatexAbstract, latexFrontMatterBlocks, setLatexFrontMatter, type LatexFrontMatter } from './latex-front-matter';
 import { latexSpacingRegion } from './latex-spacing';
 import { readLatexSpacingCommand } from './latex-spacing-syntax';
 import { latexBaseClass } from './latex-class';
@@ -10,6 +9,9 @@ export { readLatexSpacingCommand } from './latex-spacing-syntax';
 export { applyLatexRegionSpacing, insertLatexVerticalGap, latexParagraphGap, latexSelectedList, latexSelectedSpacingRegion, setLatexListItemGap, setLatexParagraphGap } from './latex-spacing-commands';
 export { latexBodySpacing, latexSpacingRegionLayout } from './latex-body-spacing';
 import { latexComposedPageAt, readLatexPageComposition } from './latex-page-composition';
+import { latexAbstractAt, latexGeneratedListAt } from './latex-front-matter';
+export { isEditableLatexAbstract, latexFrontMatterBlocks, latexFrontMatterOrder, latexFrontMatterStartsRight, latexGeneratedListKind, moveLatexGeneratedList, setLatexFrontMatter, setLatexFrontMatterPageStart, type LatexFrontMatter } from './latex-front-matter';
+export { latexPageOpening, latexRightPageBreak, latexRightPagePrefix } from './latex-page-start';
 import { latexPageLayout } from './latex-layout';
 import { interpretLatexComposedPage } from './latex-title-page';
 export { createLatexComposedPage, replaceLatexComposedText, latexComposedLineGap, latexComposedPageKind, latexComposedPageSource, readLatexPageComposition, editLatexPageComposition, latexComposedTextSource, type LatexCompositionEdit, type LatexComposedPageKind, type LatexVerticalAlignment } from './latex-page-composition';
@@ -96,7 +98,7 @@ export { latexBreakCommand, latexFlow, latexPageLabel, latexPageNumbers, readLat
 export { decodeLatexRunningText, latexPageFurniture, readLatexPageStyle, setLatexPageStyle, type LatexPageStyle, type LatexPageNumberPosition } from './latex-page-style';
 export { latexPageNumberFormats } from './latex-flow';
 export { createLatexStructure, readLatexPageNumberSection, setLatexPageNumberSection, setLatexBookMatter, type LatexBookMatter, type LatexPageNumberSection } from './latex-page-authoring';
-export { latexContentsEntries, readLatexHeadingMode, setLatexHeadingMode, readLatexBibliographyContents, setLatexBibliographyContents, type LatexHeadingMode } from './latex-contents';
+export { latexContentsEntries, readLatexHeadingMode, setLatexHeadingMode, readLatexBibliographyContents, setLatexBibliographyContents, readLatexPageContents, setLatexPageContents, type LatexHeadingMode } from './latex-contents';
 export type { LatexBlockFlow, LatexBreak, LatexPageNumber, LatexPageNumberFormat } from './latex-flow';
 export {
   latexAuthorGroups,
@@ -110,12 +112,15 @@ export {
 } from './latex-metadata';
 export type { LatexCommandArgument } from './latex-metadata';
 export { latexEquationRows, latexNumbering } from './latex-numbering';
+import { latexBibliographyFallbackEnd } from './latex-bibliography';
 export {
   addLatexBibliographyDatabase,
   bibEntryName,
   latexBibliographyDatabases,
   latexBibliographyFiles,
   readLatexBibliography,
+  insertEmptyLatexBibliography,
+  isEmptyLatexBibliography,
   latexCitationKeys,
   latexCitationNumbers,
   parseBibtex,
@@ -317,6 +322,7 @@ const bibliographyCommands = new Set(['\\bibliographystyle', '\\bibliography', '
 
 function bibliographyAt(source: string, position: number) {
   let end = position;
+  let bibtex = false;
   for (let count = 0; count < 2; count++) {
     const start = count ? whitespaceEnd(source, end) : end;
     if (count && /\n[^\S\n]*\n/.test(source.slice(end, start))) break;
@@ -327,8 +333,10 @@ function bibliographyAt(source: string, position: number) {
       ? groupAt(source, argument, '[', ']')
       : groupAt(source, argument);
     if (!group && name !== '\\printbibliography') break;
+    if (name === '\\bibliography') bibtex = true;
     end = group?.end ?? start + name.length;
   }
+  if (bibtex) return latexBibliographyFallbackEnd(source, end);
   return end > position ? end : undefined;
 }
 
@@ -369,6 +377,7 @@ function blockStart(source: string, position: number, context: SourceContext) {
   if (space && /^(?:\s*$|[^\S\r\n]*\r?\n[^\S\r\n]*\r?\n)/.test(source.slice(space.end))) return true;
   return (
     command === '\\begin' ||
+    (command === '\\begingroup' && !!latexGeneratedListAt(source, position)) ||
     !!readLatexTitleSetter(source, position) ||
     !!readLatexContentsEntry(source, position) ||
     !!readLatexStateMacro(source, context.macros, position) ||
@@ -565,13 +574,15 @@ function environmentBlock(source: string, position: number, before: string, cont
   // Text environments edit as native blocks. The open and close source keep the environment, and
   // an empty one, such as a new abstract, gets an empty paragraph to type into.
   if ((textEnvironments.has(name) || context.titled.has(name)) && depth < 64) {
-    const quote = blocks(content, { ...context, colours: new Map(context.colours) }, depth + 1);
+    const entry = name === 'abstract' ? readLatexContentsEntry(source, whitespaceEnd(source, from)) : undefined;
+    const bodyStart = entry?.list === 'toc' && entry.end <= to ? entry.end : from;
+    const quote = blocks(source.slice(bodyStart, to), { ...context, colours: new Map(context.colours) }, depth + 1);
     if (!quote.nodes.length) quote.nodes.push(schema.nodes.paragraph!.create({ before: '' }));
     return {
       node: schema.nodes[name === 'landscape' ? 'latex_landscape' : 'blockquote']!.create(
         {
           before,
-          open,
+          open: source.slice(position, bodyStart),
           close: quote.tail + close,
         },
         quote.nodes,
@@ -592,8 +603,18 @@ function blocks(source: string, context: SourceContext, depth = 0): { nodes: Nod
     const start = whitespaceEnd(source, position);
     const before = source.slice(position, start);
     if (start === source.length) return { nodes, tail: before };
+    const abstract = latexAbstractAt(source, start);
+    if (abstract?.right && depth < 64 && environmentAt(source, abstract.start)) {
+      const parsed = environmentBlock(source, abstract.start, before, context, depth);
+      if (parsed?.node.type.name === 'blockquote') {
+        const { node, end } = parsed;
+        nodes.push(node.type.create({ ...node.attrs, open: source.slice(start, abstract.start) + node.attrs.open }, node.content));
+        position = end;
+        continue;
+      }
+    }
     const composition = source[start] === '\\' && latexComposedPageAt(source, start);
-    if (composition && ['article', 'report', 'book'].includes(readLatexClass(context.prefix).name)) {
+    if (composition && ['article', 'report', 'book'].includes(latexBaseClass(readLatexClass(context.prefix).name))) {
       const page = source.slice(start, composition.end);
       if ((composition.kind === 'page' || readLatexPageComposition(page)) &&
           interpretLatexComposedPage(context.prefix, latexPageLayout(context.prefix), page)) {
@@ -616,7 +637,7 @@ function blocks(source: string, context: SourceContext, depth = 0): { nodes: Nod
     }
     const directive = readLatexPageDirective(source, start);
     const titleSetter = readLatexTitleSetter(source, start);
-    const state = readLatexSpacingCommand(source, start) ?? readLatexContentsEntry(source, start) ?? readLatexStateMacro(source, context.macros, start) ?? readLatexListSequence(source, context.macros, start);
+    const state = latexGeneratedListAt(source, start) ?? readLatexSpacingCommand(source, start) ?? readLatexContentsEntry(source, start) ?? readLatexStateMacro(source, context.macros, start) ?? readLatexListSequence(source, context.macros, start);
     if (directive || titleSetter || state || source[start] === '%') {
       const end = directive?.end ?? titleSetter?.argument.end ?? state?.end ?? lineEnd(source, start);
       nodes.push(schema.nodes.latex_raw!.create({ before, source: source.slice(start, end) }));

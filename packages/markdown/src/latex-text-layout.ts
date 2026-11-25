@@ -1,5 +1,6 @@
 import type { Node } from 'prosemirror-model';
 import { latexLength } from './latex-lengths';
+import { latexRightPagePrefix } from './latex-page-start';
 import { commandEnd, groupAt, whitespaceEnd } from './latex-syntax';
 
 export const latexTextEnvironments = new Set(['titlepage', 'center', 'flushleft', 'flushright', 'minipage']);
@@ -20,7 +21,9 @@ export function latexBlockDeclaration(source: string, position = 0) {
 export function isLatexTitlePage(node: Node | null | undefined) {
   const source = node?.type.name === 'latex_container' ? node.attrs.open :
     node?.type.name === 'latex_raw' ? node.attrs.source : '';
-  return typeof source === 'string' && /^\s*\\begin\s*\{titlepage\}/.test(source);
+  if (typeof source !== 'string') return false;
+  const open = source.trimStart();
+  return /^\\begin\s*\{titlepage\}/.test(open.slice(latexRightPagePrefix(open).length));
 }
 
 /** A coefficient of the surrounding horizontal measure. */

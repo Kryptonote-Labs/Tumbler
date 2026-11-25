@@ -41,7 +41,7 @@ const ignored = new Set([
   'relax', 'newpage', 'clearpage', 'cleardoublepage', 'noindent', 'indent', 'null', 'nobreak',
   'makeatletter', 'makeatother', 'protect', 'leavevmode',
 ]);
-const ignoredWithArgument = new Map([['thispagestyle', 1], ['pagestyle', 1], ['setcounter', 2]]);
+const ignoredWithArgument = new Map([['thispagestyle', 1], ['pagestyle', 1], ['setcounter', 2], ['addcontentsline', 3]]);
 const families = new Map<string, LatexTitleStyle['family']>([
   ['rmfamily', 'roman'], ['sffamily', 'sans'], ['ttfamily', 'mono'],
 ]);

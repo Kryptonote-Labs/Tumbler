@@ -9,9 +9,9 @@ export type LatexBookMatter = NonNullable<ReturnType<typeof readLatexBookMatter>
 export type LatexPageNumberSection = { format: LatexPageNumberFormat; startAt: number };
 
 /** Create the appendix switch or a manual page break. */
-export function createLatexStructure(document: Node, command: 'appendix' | 'newpage') {
+export function createLatexStructure(document: Node, command: 'appendix' | 'newpage' | 'cleardoublepage') {
   return document.type.schema.nodes.latex_raw!.create({
-    source: '\\' + command + (command === 'newpage' ? '\n' : ''),
+    source: '\\' + command + (command === 'appendix' ? '' : '\n'),
   });
 }
 

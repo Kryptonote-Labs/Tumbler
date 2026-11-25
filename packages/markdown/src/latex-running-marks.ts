@@ -1,6 +1,7 @@
 import { latexBaseClass } from './latex-class';
 import type { Node } from 'prosemirror-model';
 import { isLatexBibliographyBlock } from './latex-bibliography';
+import { latexGeneratedListKind } from './latex-front-matter';
 import { readLatexClass } from './latex-flow';
 import { latexRunningStyles } from './latex-presentation';
 import { latexNumbering } from './latex-numbering';
@@ -54,9 +55,10 @@ export function latexPageMarks(document: Node, starts: readonly number[]) {
     }
     if (node.type.name === 'latex_raw') {
       const source = String(node.attrs.source).trim();
-      const title = source === '\\tableofcontents' ? 'Contents'
-        : source === '\\listoffigures' ? 'List of Figures'
-        : source === '\\listoftables' ? 'List of Tables'
+      const list = latexGeneratedListKind(source);
+      const title = list === 'tableofcontents' ? 'Contents'
+        : list === 'listoffigures' ? 'List of Figures'
+        : list === 'listoftables' ? 'List of Tables'
         : isLatexBibliographyBlock(source)
           ? chaptered ? 'Bibliography' : 'References'
           : undefined;

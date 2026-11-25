@@ -1,6 +1,9 @@
 import type { Node } from 'prosemirror-model';
 import { latexLength } from './latex-lengths';
+import { latexPageOpening, latexRightPageBreak, latexRightPagePrefix } from './latex-page-start';
+import { latexEffectivePrefix } from './latex-project';
 import { latexFontSizes } from './latex-size-table';
+import { readLatexContentsEntry } from './latex-state-command';
 import { commandEnd, environmentAt, groupAt, latexCommands, whitespaceEnd } from './latex-syntax';
 
 const sizeCommands = new Set<string>(latexFontSizes);
@@ -9,13 +12,13 @@ export type LatexComposedPageKind = 'title' | 'page';
 export type LatexVerticalAlignment = 'top' | 'center' | 'bottom' | 'distribute';
 const alignments = { left: '\\raggedright', center: '\\centering', right: '\\raggedleft' };
 type LineStyle = { alignment: keyof typeof alignments; size: string; bold: boolean; italic: boolean };
-const open = /^\\clearpage\s*\\begingroup(?![A-Za-z@])/;
+const open = /^\\clear(?:double)?page\s*\\begingroup(?![A-Za-z@])/;
 const topFill = '\\vspace*{\\fill}';
 const bottomFill = '\\vspace{\\fill}';
 const betweenFill = '\\vspace{\\stretch{1}}';
 
 export function latexComposedPageKind(source: string): LatexComposedPageKind | undefined {
-  if (/^\\begin\s*\{titlepage\}/.test(source)) return 'title';
+  if (/^\\begin\s*\{titlepage\}/.test(source.slice(latexRightPagePrefix(source).length))) return 'title';
   if (open.test(source)) return 'page';
 }
 
@@ -23,7 +26,7 @@ export function latexComposedPageAt(source: string, start = 0) {
   const rest = source.slice(start);
   const kind = latexComposedPageKind(rest);
   if (kind === 'title') {
-    const environment = environmentAt(source, start);
+    const environment = environmentAt(source, start + latexRightPagePrefix(rest).length);
     if (environment) return { kind, ...environment };
   } else if (kind === 'page') {
     const from = start + open.exec(rest)![0].length;
@@ -52,16 +55,26 @@ function lineSource(style: LineStyle, text = '\\mbox{}') {
 }
 
 /** Start a standard title page or an ordinary page with separate page boundaries. */
-export function latexComposedPageSource(kind: LatexComposedPageKind) {
+export function latexComposedPageSource(kind: LatexComposedPageKind, right = false) {
   const line = lineSource(defaultStyle(kind));
   return kind === 'title'
-    ? '\\begin{titlepage}\n' + line + '\n\\end{titlepage}'
-    : '\\clearpage\n\\begingroup\n' + line + '\n\\clearpage\n\\endgroup';
+    ? (right ? latexRightPageBreak + '\n' : '') + '\\begin{titlepage}\n' + line + '\n\\end{titlepage}'
+    : (right ? latexRightPageBreak : '\\clearpage') + '\n\\begingroup\n' + line + '\n\\clearpage\n\\endgroup';
+}
+
+/** Read a contents entry placed at the start of the page's grouped material. */
+export function latexComposedContents(source: string) {
+  const page = latexComposedPageAt(source);
+  if (!page) return;
+  const start = whitespaceEnd(source, page.from);
+  const entry = readLatexContentsEntry(source, start);
+  if (entry?.list === 'toc' && entry.end <= page.to) return { ...entry, start };
 }
 
 /** Create the source-backed page block used by the visual editor. */
 export function createLatexComposedPage(document: Node, kind: LatexComposedPageKind) {
-  return document.type.schema.nodes.latex_raw!.create({ source: latexComposedPageSource(kind) });
+  const { chapterOnRight } = latexPageOpening(latexEffectivePrefix(document));
+  return document.type.schema.nodes.latex_raw!.create({ source: latexComposedPageSource(kind, chapterOnRight) });
 }
 
 function editableLine(source: string, start: number) {
@@ -86,6 +99,11 @@ export function readLatexPageComposition(source: string) {
   const fills: { from: number; to: number; source: string }[] = [];
   const start = whitespaceEnd(source, page.from);
   for (let at = start; at < page.to;) {
+    const entry = readLatexContentsEntry(source, at);
+    if (entry?.list === 'toc' && at === start) {
+      at = whitespaceEnd(source, entry.end);
+      continue;
+    }
     const line = editableLine(source, at);
     if (line) {
       lines.push(line);
@@ -112,7 +130,8 @@ export function readLatexPageComposition(source: string) {
     at = whitespaceEnd(source, next ?? at + 1);
   }
   if (page.kind === 'title' && !lines.length) return;
-  const top = fills.some((fill) => fill.source === topFill && fill.from === start);
+  const contentStart = whitespaceEnd(source, latexComposedContents(source)?.end ?? page.from);
+  const top = fills.some((fill) => fill.source === topFill && fill.from === contentStart);
   const bottom = fills.some((fill) => fill.source === bottomFill && whitespaceEnd(source, fill.to) === page.to);
   const distributed = fills.some((fill) => fill.source === betweenFill);
   const alignment: LatexVerticalAlignment = top ? bottom ? 'center' : 'bottom'
@@ -130,6 +149,7 @@ export function latexComposedLineGap(source: string, lineEnd: number) {
 export type LatexCompositionEdit =
   | { kind: 'page-alignment'; alignment: LatexVerticalAlignment }
   | { kind: 'line-text'; text: string }
+  | { kind: 'page-start'; right: boolean }
   | { kind: 'line-style'; style: Partial<LineStyle> }
   | { kind: 'add-line' }
   | { kind: 'remove-line' }
@@ -143,7 +163,8 @@ function alignPage(source: string, alignment: LatexVerticalAlignment) {
   let page = readLatexPageComposition(source);
   if (!page) return source;
   for (const fill of page.fills.reverse()) {
-    if (fill.source === betweenFill || (fill.source === topFill && fill.from === whitespaceEnd(source, page.from))
+    if (fill.source === betweenFill || (fill.source === topFill && fill.from ===
+        whitespaceEnd(source, latexComposedContents(source)?.end ?? page.from))
         || (fill.source === bottomFill && whitespaceEnd(source, fill.to) === page.to))
       source = replace(source, fill.from, fill.to + Number(source[fill.to] === '\n'), '');
   }
@@ -151,7 +172,7 @@ function alignPage(source: string, alignment: LatexVerticalAlignment) {
   if (!page) return source;
   if (alignment === 'center') source = replace(source, page.to, page.to, bottomFill + '\n');
   if (alignment === 'center' || alignment === 'bottom') {
-    const at = whitespaceEnd(source, page.from);
+    const at = whitespaceEnd(source, latexComposedContents(source)?.end ?? page.from);
     source = replace(source, at, at, topFill + '\n');
   }
   if (alignment === 'distribute') {
@@ -166,13 +187,20 @@ export function editLatexPageComposition(source: string, index: number, edit: La
   const page = readLatexPageComposition(source);
   if (!page) return source;
   if (edit.kind === 'page-alignment') return alignPage(source, edit.alignment);
+  if (edit.kind === 'page-start') {
+    const right = latexRightPagePrefix(source);
+    if (edit.right === !!right) return source;
+    if (page.kind === 'title') return edit.right ? latexRightPageBreak + '\n' + source : source.slice(right.length);
+    return source.replace(/^\\clear(?:double)?page/, () => edit.right ? latexRightPageBreak : '\\clearpage');
+  }
   const line = page.lines[index];
   if (edit.kind === 'line-text' && line) return replaceLatexComposedText(source, line, edit.text);
   if (edit.kind === 'line-style' && line)
     return replace(source, line.start, line.end,
       lineSource({ ...line.style, ...edit.style }, source.slice(line.from, line.to)));
   if (edit.kind === 'add-line') {
-    const at = line ? latexComposedLineGap(source, line.end)?.to ?? line.end : page.from;
+    const at = line ? latexComposedLineGap(source, line.end)?.to ?? line.end :
+      latexComposedContents(source)?.end ?? page.from;
     const added = replace(source, at, at, '\n' + lineSource(line?.style ?? defaultStyle(page.kind)) + (line ? '' : '\n'));
     return page.alignment === 'distribute' ? alignPage(added, 'distribute') : added;
   }
