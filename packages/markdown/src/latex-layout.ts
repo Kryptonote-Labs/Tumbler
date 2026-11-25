@@ -409,6 +409,8 @@ export function paginateLatex(
   const floatGap = 20 * texPoint;
   let start = 0;
   let pages = 1;
+  let folio = 1;
+  let restartOnNextSheet = false;
   let occupied = false;
   let pending: LatexBreak | undefined;
   // Spacers carry the page's unused body, including the room its footnotes take.
@@ -484,7 +486,13 @@ export function paginateLatex(
     const needed = Math.max(1, Math.floor((distance + notes) / stride) + 1);
     const slot = pages - 1 + needed;
     let next = boundary === 'column' ? slot : Math.ceil(slot / columns) * columns;
-    if (boundary === 'recto' && (next / columns) % 2 !== 0) next += columns;
+    const numberAt = (slot: number) => {
+      const sheets = sheetOf(slot) - sheetOf(pages - 1);
+      return sheets > 0 && restartOnNextSheet ? sheets : folio + sheets;
+    };
+    if (boundary === 'recto' && numberAt(next) % 2 === 0) next += columns;
+    folio = numberAt(next);
+    if (sheetOf(next) !== sheetOf(pages - 1)) restartOnNextSheet = false;
     const advanceBy = next - (pages - 1);
     const previousSpan = columns === 1 ? floatSpans.get(sheetOf(pages - 1)) ?? 0 : 0;
     const reduction = settle();
@@ -514,7 +522,10 @@ export function paginateLatex(
       deferred.push(block);
       continue;
     }
-    if (flow?.kind === 'omit') continue;
+    if (flow?.kind === 'omit') {
+      folio = flow.startAt ?? (flow.numbering ? 1 : folio);
+      continue;
+    }
     if (flow?.kind === 'break') {
       if (occupied) pending = strongerBreak(pending, flow.boundary);
       continue;
@@ -522,6 +533,10 @@ export function paginateLatex(
     const before = strongerBreak(pending, flow?.before);
     if (occupied && before) advance(block, before);
     pending = flow?.after;
+    if (flow) {
+      folio = flow.startAt ?? (flow.numbering ? 1 : folio);
+      if (flow.folio) restartOnNextSheet = flow.folio.restartAfter;
+    }
     const internal = block.forceFragments ? block.split?.() : undefined;
     const forced = internal?.some(line => line.before);
     if (!forced && (fits(block, !block.preferFragments && !block.keepHeadingWithNext) || (!occupied && !block.split))) {

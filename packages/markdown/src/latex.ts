@@ -79,7 +79,11 @@ export { paginateLatexRegions, type LatexRegionBlock } from './latex-page-region
 export { latexMarginSides, type LatexMargins } from './latex-geometry';
 export type { LatexPageLayout, PageBlock, PageBreak, PageLine } from './latex-layout';
 export { latexBreakCommand, latexFlow, latexPageLabel, latexPageNumbers, readLatexPageDirective, readLatexBookMatter, readLatexClass } from './latex-flow';
-export type { LatexBlockFlow, LatexBreak, LatexPageNumber } from './latex-flow';
+export { decodeLatexRunningText, latexPageFurniture, readLatexPageStyle, setLatexPageStyle, type LatexPageStyle, type LatexPageNumberPosition } from './latex-page-style';
+export { latexPageNumberFormats } from './latex-flow';
+export { readLatexPageNumberSection, setLatexPageNumberSection, setLatexBookMatter, type LatexBookMatter, type LatexPageNumberSection } from './latex-page-authoring';
+export { latexContentsEntries, readLatexHeadingMode, setLatexHeadingMode, readLatexBibliographyContents, setLatexBibliographyContents, type LatexHeadingMode } from './latex-contents';
+export type { LatexBlockFlow, LatexBreak, LatexPageNumber, LatexPageNumberFormat } from './latex-flow';
 export {
   latexAuthorGroups,
   latexFieldSource,
@@ -310,7 +314,10 @@ function bibliographyAt(source: string, position: number) {
     if (count && /\n[^\S\n]*\n/.test(source.slice(end, start))) break;
     const name = source.slice(start, commandEnd(source, start));
     if (!bibliographyCommands.has(name)) break;
-    const group = name === '\\printbibliography' ? undefined : groupAt(source, whitespaceEnd(source, start + name.length));
+    const argument = whitespaceEnd(source, start + name.length);
+    const group = name === '\\printbibliography'
+      ? groupAt(source, argument, '[', ']')
+      : groupAt(source, argument);
     if (!group && name !== '\\printbibliography') break;
     end = group?.end ?? start + name.length;
   }
@@ -841,7 +848,7 @@ export function createLatexInclude(document: Node, name: string, position: numbe
   if (project) return projectInclude(document, project, '\\input{' + name + '}', position, null);
 }
 
-function escapedText(text: string) {
+export function escapedLatexText(text: string) {
   return text.replace(/[\\%${}#&_\^~\u00a0]/g, (value) => escapeText.get(value) ?? value);
 }
 
@@ -884,7 +891,7 @@ function inlineSource(node: Node, record?: (position: number, offset: number) =>
         record(position + index + 1, result.length);
       }
     } else {
-      result += text ? escapedText(content) : content;
+      result += text ? escapedLatexText(content) : content;
     }
   }
   node.forEach((child, position) => {
@@ -908,7 +915,7 @@ function inlineSource(node: Node, record?: (position: number, offset: number) =>
       }
       return;
     }
-    if (child.attrs.urlArgument && !next.some(isLatexUrlMark)) write(escapedText(child.attrs.label), next, position);
+    if (child.attrs.urlArgument && !next.some(isLatexUrlMark)) write(escapedLatexText(child.attrs.label), next, position);
     else if (child.type.name === 'latex_math') write(mathSource(child), next, position);
     else if (child.type.name === 'hard_break') write('\\\\\n', next, position);
     else write(child.attrs.source ?? child.textContent, next, position);

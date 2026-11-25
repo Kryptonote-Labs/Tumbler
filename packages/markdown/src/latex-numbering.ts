@@ -28,7 +28,7 @@ export type LatexNumbering = {
 
 // Commands and environments whose effect on counters the editor does not model.
 const opaqueCounters =
-  /\\(?:setcounter(?!\s*\{(?:tocdepth|secnumdepth)\})|addtocounter|stepcounter|refstepcounter|numberwithin|counterwithin|counterwithout|(?:(?:re)?newcommand\*?|(?:g|e|x)?def)\s*\{?\\the(?:part|chapter|section|subsection|subsubsection|paragraph|subparagraph|equation|figure|table|footnote|lstlisting)(?![A-Za-z@]))\b|\\begin\s*\{(?:multline|flalign|alignat|eqnarray|subequations|xalignat)\*?\}/;
+  /\\(?:setcounter(?!\s*\{(?:tocdepth|secnumdepth|page)\})|addtocounter|stepcounter|refstepcounter|numberwithin|counterwithin|counterwithout|(?:(?:re)?newcommand\*?|(?:g|e|x)?def)\s*\{?\\the(?:part|chapter|section|subsection|subsubsection|paragraph|subparagraph|equation|figure|table|footnote|lstlisting)(?![A-Za-z@]))\b|\\begin\s*\{(?:multline|flalign|alignat|eqnarray|subequations|xalignat)\*?\}/;
 const counterAt = new RegExp(opaqueCounters.source, 'y');
 const standardAppendix = /^\s*\\par\s*\\setcounter\s*\{chapter\}\s*\{0\}\s*\\setcounter\s*\{section\}\s*\{0\}(?:\s*\\def\s*\\[A-Za-z@]+[0-9]*\s*\{Appendix\})+\s*\\def\s*\\thechapter\s*\{\s*\\Alph\s*\{chapter\}\s*\}\s*$/;
 const rawCounters =
@@ -303,6 +303,8 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
       if (source.trim() === '\\appendix') {
         appendix = true;
         counters.set(chapters ? 'chapter' : 'section', 0);
+        if (chapters) counters.set('section', 0);
+        else counters.set('subsection', 0);
         return false;
       }
       if (type === 'latex_raw' && /^\\begin\s*\{(?:lstlisting|verbatim\*?)\}/.test(source)) {

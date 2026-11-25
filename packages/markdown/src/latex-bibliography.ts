@@ -272,3 +272,9 @@ export function bibEntryName(entry: BibEntry) {
   const year = entry.fields.year ?? '';
   return [people, year].filter(Boolean).join(' ') || entry.key;
 }
+
+
+/** A body block that prints a bibliography heading and its entries. */
+export function isLatexBibliographyBlock(source: string) {
+  return /^\s*(?:\\bibliographystyle\s*\{[^{}]*\}\s*)?(?:\\bibliography\s*\{|\\printbibliography\b|\\begin\s*\{thebibliography\})/.test(source);
+}

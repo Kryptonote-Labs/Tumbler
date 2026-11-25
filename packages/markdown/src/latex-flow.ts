@@ -2,6 +2,7 @@ import { isLatexHeading } from './latex-spec';
 import { isLatexTitlePage } from './latex-text-layout';
 import { latexEffectivePrefix } from './latex-project';
 import { latexColourDefinition } from './latex-colour';
+import { isLatexBibliographyBlock } from './latex-bibliography';
 import { latexLetterCommandAt } from './latex-letter';
 import { latexRomanNumber } from './latex-number-format';
 import { readLatexTextMacros } from './latex-macros';
@@ -12,12 +13,14 @@ import type { Node } from 'prosemirror-model';
 import { commandEnd, groupAt, latexCommands, whitespaceEnd } from './latex-syntax';
 
 export type LatexBreak = 'column' | 'page' | 'recto';
-type FolioStyle = 'roman' | 'arabic';
+export const latexPageNumberFormats = ['arabic', 'roman', 'Roman', 'alph', 'Alph', 'gobble'] as const;
+export type LatexPageNumberFormat = typeof latexPageNumberFormats[number];
 
 /** A source command can occupy no space, or constrain where visible content flows. */
 type FolioEffect = {
   folio?: { visible: false; restartAfter: boolean };
-  numbering?: FolioStyle;
+  numbering?: LatexPageNumberFormat;
+  startAt?: number;
   pageStyle?: string;
   documentStyle?: string;
 };
@@ -32,10 +35,18 @@ export type LatexBlockFlow =
       after?: LatexBreak;
     } & FolioEffect);
 
-export type LatexPageNumber = { number: number; visible: boolean; style?: 'roman'; pageStyle?: string };
+export type LatexPageNumber = { number: number; visible: boolean; style?: Exclude<LatexPageNumberFormat, 'arabic'>; pageStyle?: string };
 
 export function latexPageLabel(folio: LatexPageNumber) {
-  return folio.style === 'roman' ? latexRomanNumber(folio.number).toLowerCase() : String(folio.number);
+  const { number, style } = folio;
+  switch (style) {
+    case 'roman': return latexRomanNumber(number).toLowerCase();
+    case 'Roman': return latexRomanNumber(number);
+    case 'alph': return number > 0 && number <= 26 ? String.fromCharCode(96 + number) : '';
+    case 'Alph': return number > 0 && number <= 26 ? String.fromCharCode(64 + number) : '';
+    case 'gobble': return '';
+    default: return String(number);
+  }
 }
 
 export function readLatexBookMatter(source: string) {
@@ -85,14 +96,23 @@ export function readLatexPageDirective(source: string, position = 0) {
   const name = source.slice(position, end);
   if (name === '\\null' && /^\s*(?:$|\\(?:newpage|clearpage|cleardoublepage)\b)/.test(source.slice(end)))
     return { kind: 'blank' as const, end };
+  if (name === '\\setcounter') {
+    const counter = groupAt(source, whitespaceEnd(source, end));
+    if (!counter || source.slice(counter.from, counter.to).trim() !== 'page') return;
+    const argument = groupAt(source, whitespaceEnd(source, counter.end));
+    if (!argument) return;
+    const value = source.slice(argument.from, argument.to).trim();
+    if (/^[+-]?\d+$/.test(value) && Number.isSafeInteger(Number(value)))
+      return { kind: 'counter' as const, value: Number(value), end: argument.end };
+    return;
+  }
   if (name !== '\\pagenumbering' && name !== '\\thispagestyle' && name !== '\\pagestyle') return;
   const argument = groupAt(source, whitespaceEnd(source, end));
   if (!argument) return;
   const value = source.slice(argument.from, argument.to).trim();
-  if (name === '\\pagenumbering' && (value === 'roman' || value === 'arabic')) {
-    const style: FolioStyle = value;
+  const style = latexPageNumberFormats.find((format) => format === value);
+  if (name === '\\pagenumbering' && style)
     return { kind: 'numbering' as const, value: style, end: argument.end };
-  }
   if (name === '\\pagestyle' && /^[\w@-]+$/.test(value))
     return { kind: 'document-style' as const, value, end: argument.end };
   if (name === '\\thispagestyle' && value === 'empty')
@@ -124,24 +144,34 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
   );
   const titlePage = standard && (titleOption ? titleOption === 'titlepage' : chapters);
   const flow = new Map<number, LatexBlockFlow>();
-  const bounded: { node: Node; position: number; before?: LatexBreak | undefined; after?: LatexBreak | undefined }[] = [];
+  const bounded: { node: Node; position: number; before?: LatexBreak | undefined; after?: LatexBreak | undefined; title?: true }[] = [];
   let titlePrinted = false;
-  let numbering: FolioStyle | undefined;
+  let numbering: LatexPageNumberFormat | undefined;
+  let startAt: number | undefined;
   let pageStyle: string | undefined;
   let documentStyle: string | undefined;
-  let activeDocumentStyle: string | undefined;
+  let activeDocumentStyle: string | undefined = name === 'book' ? 'headings' : undefined;
   function setDocumentStyle(value: string) {
     activeDocumentStyle = documentStyle = value;
   }
   for (const command of latexCommands(prefix)) {
     const directive = readLatexPageDirective(prefix, command.start);
     if (directive?.kind === 'document-style') activeDocumentStyle = directive.value;
+    if (directive?.kind === 'numbering') {
+      numbering = directive.value;
+      startAt = 1;
+    }
+    if (directive?.kind === 'counter') startAt = directive.value;
   }
   let pageHasContent = false;
   function setDocumentState(source: string) {
     for (const command of latexCommands(source)) {
       const directive = readLatexPageDirective(source, command.start);
-      if (directive?.kind === 'numbering') numbering = directive.value;
+      if (directive?.kind === 'numbering') {
+        numbering = directive.value;
+        startAt = 1;
+      }
+      if (directive?.kind === 'counter') startAt = directive.value;
       if (directive?.kind === 'document-style') setDocumentStyle(directive.value);
     }
   }
@@ -151,12 +181,14 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
   document.descendants((node, position) => {
     if (node.type.name === 'latex_include' && /^\\include\b/.test(node.attrs.open ?? ''))
       bounded.push({ node, position, before: 'page', after: 'page' });
-    if (node.type.name === 'blockquote' && titled.size) {
+    if (node.type.name === 'blockquote') {
       const group = /^\\begin\s*\{([^}]+)\}/.exec(String(node.attrs.open))?.[1];
       const environment = group && titled.get(group);
       if (environment) bounded.push({
         node, position, before: boundary(environment.before), after: boundary(environment.after),
       });
+      else if (titlePage && group === 'abstract' && name !== 'book')
+        bounded.push({ node, position, before: 'page', after: 'page', title: true });
     }
     const source = node.type.name === 'latex_raw' ? String(node.attrs.source).trim() : '';
     const state = source && readLatexStateMacro(source, macros);
@@ -166,7 +198,7 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
       return false;
     }
     const letterCommand = name === 'letter' && latexLetterCommandAt(source, 0);
-    if ((standard && (source === '\\appendix' || readLatexTitleSetter(source))) || readLatexContentsEntry(source) || latexColourDefinition(source) || (letterCommand && ['address', 'signature', 'name', 'date'].includes(letterCommand.command))) {
+    if ((standard && (source === '\\appendix' || readLatexTitleSetter(source))) || /^\\bibliographystyle\s*\{[^{}]+\}$/.test(source) || readLatexContentsEntry(source) || latexColourDefinition(source) || (letterCommand && ['address', 'signature', 'name', 'date'].includes(letterCommand.command))) {
       flow.set(position, { kind: 'omit' });
       return false;
     }
@@ -174,7 +206,10 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
     if (matter) {
       flow.set(position, { kind: 'break', boundary: matter === 'back' ? chapterBoundary : recto ? 'recto' : 'page' });
       pageHasContent = false;
-      if (matter !== 'back') numbering = matter === 'front' ? 'roman' : 'arabic';
+      if (matter !== 'back') {
+        numbering = matter === 'front' ? 'roman' : 'arabic';
+        startAt = 1;
+      }
       return false;
     }
     const explicit = latexBreakCommand(source);
@@ -189,12 +224,19 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
     const directive = readLatexPageDirective(
       node.type.name === 'latex_inline' ? String(node.attrs.source).trim() : source,
     );
-    if (directive?.kind === 'numbering' || directive?.kind === 'hide' ||
+    if (directive?.kind === 'numbering' || directive?.kind === 'counter' || directive?.kind === 'hide' ||
         directive?.kind === 'page-style' || directive?.kind === 'document-style' || source.startsWith('%')) {
       const change: FolioEffect = {};
       if (directive?.kind === 'numbering') {
         if (pageHasContent) change.numbering = directive.value;
-        else numbering = directive.value;
+        else {
+          numbering = directive.value;
+          startAt = 1;
+        }
+      }
+      if (directive?.kind === 'counter') {
+        if (pageHasContent) change.startAt = directive.value;
+        else startAt = directive.value;
       }
       if (directive?.kind === 'document-style') {
         activeDocumentStyle = directive.value;
@@ -210,12 +252,19 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
       return false;
     }
     const explicitTitle = standard && isLatexTitlePage(node);
+    const plainChapter = () => {
+      const rule = flow.get(position);
+      if ((activeDocumentStyle && activeDocumentStyle !== 'plain') ||
+          (rule?.kind === 'content' && rule.pageStyle)) effect({ pageStyle: 'plain' });
+    };
     if (node.isBlock && (node.isAtom || node.isTextblock || explicitTitle)) {
       if (numbering) effect({ numbering });
+      if (startAt !== undefined) effect({ startAt });
       if (pageStyle) effect({ pageStyle });
       if (documentStyle) effect({ documentStyle });
       documentStyle = undefined;
       numbering = undefined;
+      startAt = undefined;
       pageStyle = undefined;
       pageHasContent = true;
     }
@@ -224,12 +273,13 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
       const before = boundary(lists.lists[0]?.before) ?? (chapters ? chapterBoundary : undefined);
       const after = boundary(lists.after);
       effect({ ...(before && { before }), ...(after && { after }) });
+      if (chapters) plainChapter();
       setDocumentState(lists.afterLists);
       if (lists.after) pageHasContent = false;
       return false;
     }
     if (explicitTitle) {
-      effect({ before: 'page', after: 'page', folio: { visible: false, restartAfter: !recto } });
+      effect({ before: name === 'book' && recto ? 'recto' : 'page', after: 'page', startAt: 1, folio: { visible: false, restartAfter: !recto } });
       pageHasContent = false;
       return false;
     }
@@ -242,7 +292,7 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
           : { before: chapterBoundary, after: chapterBoundary });
         if (command === 'part') pageHasContent = false;
         // The standard chapter command selects \thispagestyle{plain}.
-        if (activeDocumentStyle && activeDocumentStyle !== 'plain') effect({ pageStyle: 'plain' });
+        plainChapter();
       }
     } else if (node.type.name === 'latex_raw') {
       if (name === 'letter' && /^\\opening\s*\{/.test(source)) {
@@ -257,6 +307,11 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
         effect({ wideFloat: true });
         return;
       }
+      if (chapters && isLatexBibliographyBlock(source)) {
+        effect({ before: chapterBoundary });
+        plainChapter();
+        return false;
+      }
       const command = source.slice(1, commandEnd(source, 0));
       if (source !== '\\' + command) return;
       if (command === 'maketitle' && (titlePage || customTitle) && !titlePrinted) {
@@ -265,14 +320,19 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
         effect({
           before: name === 'book' && recto ? 'recto' : 'page',
           after: recto ? customTitle?.boundary ?? 'page' : 'page',
+          startAt: 1,
           folio: { visible: false, restartAfter: !recto },
         });
+      } else if (command === 'maketitle' && name === 'article' && !titlePrinted) {
+        titlePrinted = true;
+        plainChapter();
       } else if (chapters && chapterLists.has(command)) {
         effect({ before: chapterBoundary });
+        plainChapter();
       }
     }
   });
-  for (const { node, position, before, after } of bounded) {
+  for (const { node, position, before, after, title } of bounded) {
     let first: number | undefined;
     let last: number | undefined;
     node.descendants((child, relative) => {
@@ -289,6 +349,10 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
     const start = flow.get(first);
     if (before) flow.set(first, { ...start, kind: 'content', before:
       start?.kind === 'content' && start.before === 'recto' ? 'recto' : before });
+    if (title) flow.set(first, {
+      ...flow.get(first), kind: 'content', startAt: 1, pageStyle: 'empty',
+      folio: { visible: false, restartAfter: !recto },
+    });
     const end = flow.get(last);
     if (after) flow.set(last, { ...end, kind: 'content', after:
       end?.kind === 'content' && end.after === 'recto' ? 'recto' : after });
@@ -302,33 +366,35 @@ export function latexPageNumbers(
   pageStarts: readonly number[],
 ): LatexPageNumber[] {
   const overrides = new Map<number, { visible: false; restartAfter: boolean }>();
-  const resets = new Map<number, FolioStyle>();
+  const resets = new Map<number, number>();
+  const formats = new Map<number, LatexPageNumberFormat>();
   const pageStyles = new Map<number, string>();
   const documentStyles = new Map<number, string>();
-  for (const [position, effect] of flow) {
+  for (const [position, effect] of [...flow].sort(([a], [b]) => a - b)) {
     if (effect.kind === 'break') continue;
     const page = pageStarts.findLastIndex(start => start <= position) + 1;
     if (effect.folio) overrides.set(page, effect.folio);
-    if (effect.numbering) resets.set(page, effect.numbering);
+    if (effect.numbering) {
+      formats.set(page, effect.numbering);
+      resets.set(page, 1);
+    }
+    if (effect.startAt !== undefined) resets.set(page, effect.startAt);
     if (effect.pageStyle) pageStyles.set(page, effect.pageStyle);
     if (effect.documentStyle) documentStyles.set(page, effect.documentStyle);
   }
   let number = 1;
-  let style: FolioStyle = 'arabic';
+  let style: LatexPageNumberFormat = 'arabic';
   let currentStyle: string | undefined;
   return Array.from({ length: pageStarts.length + 1 }, (_, page) => {
     const override = overrides.get(page);
-    const reset = resets.get(page);
-    if (reset) {
-      style = reset;
-      number = 1;
-    }
+    style = formats.get(page) ?? style;
+    number = resets.get(page) ?? number;
     currentStyle = documentStyles.get(page) ?? currentStyle;
     const pageStyle = pageStyles.get(page) ?? currentStyle;
     const folio: LatexPageNumber = {
       number,
       visible: pageStyle !== 'empty' && (override?.visible ?? true),
-      ...(style === 'roman' ? { style } : {}),
+      ...(style !== 'arabic' ? { style } : {}),
       ...(pageStyle && pageStyle !== 'empty' && { pageStyle }),
     };
     number = override?.restartAfter ? 1 : number + 1;
