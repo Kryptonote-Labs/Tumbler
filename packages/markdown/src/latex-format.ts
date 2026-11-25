@@ -40,10 +40,10 @@ export function latexLineSpacing(
       if (name === 'onehalfspacing') preset('onehalf');
       if (name === 'doublespacing') preset('double');
     }
-    if (name !== 'setstretch' && name !== 'renewcommand') continue;
+    if (name !== 'setstretch' && name !== 'renewcommand' && name !== 'linespread') continue;
     const first = argument(prefix, end);
     const value =
-      name === 'setstretch' && setspace ? first?.value :
+      name === 'linespread' || (name === 'setstretch' && setspace) ? first?.value :
       name === 'renewcommand' && first?.value === '\\baselinestretch'
         ? argument(prefix, first.end)?.value
         : undefined;

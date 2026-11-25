@@ -1,3 +1,4 @@
+import type { Node } from 'prosemirror-model';
 import { argumentAt, commandEnd, groupAt, latexCommands, lineEnd, verbatimEnd } from './latex-syntax';
 
 /** The argument of a preamble command, with offsets into the preamble source. */
@@ -47,6 +48,43 @@ export function latexPreambleCommand(
     }
   }
   return found;
+}
+
+export type LatexTitleField = 'title' | 'author' | 'date';
+
+/** Standard title setters can execute before or after the document begins. */
+export function readLatexTitleSetter(
+  source: string, start = 0,
+): { field: LatexTitleField; argument: NonNullable<ReturnType<typeof argumentAt>>; source: string } | undefined {
+  const end = commandEnd(source, start);
+  const field = source.slice(start + 1, end);
+  if (field !== 'title' && field !== 'author' && field !== 'date') return;
+  const argument = argumentAt(source, end);
+  if (argument) return { field, argument, source: source.slice(argument.from, argument.to) };
+}
+
+type TitleArgument = { kind: 'preamble'; source: string } |
+  { kind: 'body'; source: string; position: number; from: number; to: number };
+
+/** The last setters executed before a standard title block, in authored order. */
+export function latexTitleArguments(document: Node, before = document.content.size) {
+  const fields = new Map<LatexTitleField, TitleArgument>();
+  for (const field of ['title', 'author', 'date'] as const) {
+    const argument = latexPreambleCommand(String(document.attrs.prefix ?? ''), field);
+    if (argument) fields.set(field, { kind: 'preamble', source: argument.source });
+  }
+  document.descendants((node, position) => {
+    if (position >= before || node.isTextblock) return false;
+    if (node.type.name !== 'latex_raw') return node.type.name === 'latex_include';
+    const setter = readLatexTitleSetter(String(node.attrs.source));
+    if (setter)
+      fields.set(setter.field, {
+        kind: 'body', source: setter.source, position,
+        from: setter.argument.from, to: setter.argument.to,
+      });
+    return false;
+  });
+  return fields;
 }
 
 /** Replace the effective `\name{…}` argument, or add the command before `\begin{document}`. */

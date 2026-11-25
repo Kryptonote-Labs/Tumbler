@@ -96,14 +96,14 @@ export function latexPaperSettings(prefix: string, output?: { defaultPaper: 'a4p
 }
 
 /** A literal TeX length, also accepting multiples of `\\baselineskip`. */
-function length(value: string | undefined, quad: number, leading: number) {
+function length(value: string | undefined, quad: number, leading: number, xHeight?: number) {
   const measure = value
     ?.trim()
     .split(/\s+(?:plus|minus)\s+/)[0]
     ?.trim();
   const skip = /^([+-]?(?:\d+(?:\.\d*)?|\.\d+)?)\s*\\baselineskip$/.exec(measure ?? '');
   if (skip) return (skip[1] === '' || skip[1] === undefined ? 1 : Number(skip[1])) * leading;
-  return latexLength(measure, quad);
+  return latexLength(measure, quad, xHeight);
 }
 
 function packageOptions(source: string, position: number, name: string) {
@@ -114,13 +114,13 @@ function packageOptions(source: string, position: number, name: string) {
   return { options: found[1] ?? '', end: match.lastIndex };
 }
 
-function paragraphLengths(source: string, quad: number, defaultIndent: number, leading: number, defaultSkip = 0) {
+function paragraphLengths(source: string, quad: number, xHeight: number, defaultIndent: number, leading: number, defaultSkip = 0) {
   const lengths = { parindent: defaultIndent, parskip: defaultSkip, shrink: 0 };
   const shrinkOf = (value: string | undefined) =>
-    length(/\bminus\s+(.+)$/.exec(value?.trim() ?? '')?.[1], quad, leading) ?? 0;
+    length(/\bminus\s+(.+)$/.exec(value?.trim() ?? '')?.[1], quad, leading, xHeight) ?? 0;
   // Apply literal TeX registers, LaTeX length commands and the parskip package in source order.
   const assignments =
-    /\\(?:(setlength|addtolength)\s*(?:\{\s*\\(parindent|parskip)\s*\}|\\(parindent|parskip)\b)\s*\{([^{}]*)\}|(parindent|parskip)\s*(?:=\s*)?([+-]?(?:\d+(?:\.\d*)?|\.\d+)\s*(?:in|cm|mm|pt|bp|pc|sp|dd|cc|em))\b)/y;
+    /\\(?:(setlength|addtolength)\s*(?:\{\s*\\(parindent|parskip)\s*\}|\\(parindent|parskip)\b)\s*\{([^{}]*)\}|(parindent|parskip)\s*(?:=\s*)?([+-]?(?:\d+(?:\.\d*)?|\.\d+)\s*(?:in|cm|mm|pt|bp|pc|sp|dd|cc|em|ex))\b)/y;
   for (let position = 0; position < source.length;) {
     if (source[position] === '{') {
       position = groupAt(source, position)?.end ?? source.length;
@@ -139,10 +139,10 @@ function paragraphLengths(source: string, quad: number, defaultIndent: number, l
           return [key.trim(), value?.trim()] as const;
         }),
       );
-      lengths.parskip = length(options.get('skip'), quad, leading) ?? leading / 2;
+      lengths.parskip = length(options.get('skip'), quad, leading, xHeight) ?? leading / 2;
       lengths.shrink = shrinkOf(options.get('skip'));
       lengths.parindent = options.has('indent')
-        ? (length(options.get('indent'), quad, leading) ?? quad)
+        ? (length(options.get('indent'), quad, leading, xHeight) ?? quad)
         : 0;
       position = parskip.end;
       continue;
@@ -154,7 +154,7 @@ function paragraphLengths(source: string, quad: number, defaultIndent: number, l
     const [, operation, grouped, bare, argument, register, literal] = assignment;
     const name = grouped ?? bare ?? register;
     if (name !== 'parindent' && name !== 'parskip') continue;
-    const value = length(argument ?? literal, quad, leading);
+    const value = length(argument ?? literal, quad, leading, xHeight);
     if (value === undefined) continue;
     lengths[name] = operation === 'addtolength' ? lengths[name] + value : value;
     if (name === 'parskip') {
@@ -201,7 +201,10 @@ export function latexPageLayout(
     : fontSize === 12
       ? 1.5 * quad
       : (fontSize === 11 ? 17 : 15) * texPoint;
-  const paragraphs = paragraphLengths(source, quad, letter ? 0 : defaultIndent, leading, letter ? 0.7 * quad : 0);
+  const xHeight = 0.430555 * font;
+  const paragraphs = paragraphLengths(
+    source, quad, xHeight, letter ? 0 : defaultIndent, leading, letter ? 0.7 * quad : 0,
+  );
 
   const sizes = new Map(
     geometryOptions.map((option) => {
@@ -328,6 +331,8 @@ export type PageLine = {
   top: number;
   bottom: number;
   notes?: number[];
+  /** An internal fragment can carry a source-authored boundary. */
+  before?: LatexBreak;
   /** Content repeated at the start of a continuation, and at its preceding boundary. */
   continuation?: { fragment: number; startHeight: number };
   /** Space needed after placing this line if another fragment follows on a new page. */
@@ -342,6 +347,8 @@ export type PageBlock = PageLine & {
   split?: () => PageLine[];
   /** A display alignment can break at a row before compressing the whole display onto a page. */
   preferFragments?: boolean;
+  /** Measure internal fragments even when the entire block fits. */
+  forceFragments?: boolean;
   /** Prefer to break before a section and its opening lines over shrinking the previous page. */
   keepHeadingWithNext?: boolean;
   flow?: LatexBlockFlow;
@@ -501,12 +508,14 @@ export function paginateLatex(
     const before = strongerBreak(pending, flow?.before);
     if (occupied && before) advance(block, before);
     pending = flow?.after;
-    if (fits(block, !block.preferFragments && !block.keepHeadingWithNext) || (!occupied && !block.split)) {
+    const internal = block.forceFragments ? block.split?.() : undefined;
+    const forced = internal?.some(line => line.before);
+    if (!forced && (fits(block, !block.preferFragments && !block.keepHeadingWithNext) || (!occupied && !block.split))) {
       occupied = true;
       place(block);
       continue;
     }
-    const lines = block.split?.() ?? [];
+    const lines = internal ?? block.split?.() ?? [];
     if (lines.length < 2) {
       if (occupied) advance(block);
       occupied = true;
@@ -516,7 +525,8 @@ export function paginateLatex(
     for (const [index, line] of lines.entries()) {
       const next = lines[index + 1];
       const orphans = !block.preferFragments && index === 0 && next && !fits({ ...next, notes: [...(line.notes ?? []), ...(next.notes ?? [])] });
-      if (occupied && (!fits(line, !block.preferFragments || index === 0) || orphans)) advance(line);
+      if (occupied && (line.before || !fits(line, !block.preferFragments || index === 0) || orphans))
+        advance(line, line.before);
       occupied = true;
       place(line);
     }

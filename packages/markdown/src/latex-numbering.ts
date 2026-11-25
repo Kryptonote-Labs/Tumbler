@@ -3,6 +3,7 @@ import { latexEffectivePrefix } from './latex-project';
 import { readLatexSubfigures } from './latex-figures';
 import { readLatexCodeBlock } from './latex-code';
 import { latexBoxTitle, latexEnvironmentName, latexEnvironmentOption, readLatexTheorems, type LatexTheoremStyle } from './latex-environments';
+import { readLatexTextMacros } from './latex-macros';
 import { latexRomanNumber } from './latex-number-format';
 import { readLatexBookMatter, readLatexClass } from './latex-flow';
 import type { Node } from 'prosemirror-model';
@@ -28,6 +29,8 @@ export type LatexNumbering = {
 // Commands and environments whose effect on counters the editor does not model.
 const opaqueCounters =
   /\\(?:setcounter(?!\s*\{(?:tocdepth|secnumdepth)\})|addtocounter|stepcounter|refstepcounter|numberwithin|counterwithin|counterwithout|(?:(?:re)?newcommand\*?|(?:g|e|x)?def)\s*\{?\\the(?:part|chapter|section|subsection|subsubsection|paragraph|subparagraph|equation|figure|table|footnote|lstlisting)(?![A-Za-z@]))\b|\\begin\s*\{(?:multline|flalign|alignat|eqnarray|subequations|xalignat)\*?\}/;
+const counterAt = new RegExp(opaqueCounters.source, 'y');
+const standardAppendix = /^\s*\\par\s*\\setcounter\s*\{chapter\}\s*\{0\}\s*\\setcounter\s*\{section\}\s*\{0\}(?:\s*\\def\s*\\[A-Za-z@]+[0-9]*\s*\{Appendix\})+\s*\\def\s*\\thechapter\s*\{\s*\\Alph\s*\{chapter\}\s*\}\s*$/;
 const rawCounters =
   /\\(?:part|chapter|section|subsection|subsubsection|caption|captionof)\b|\\begin\s*\{(?:equation|align|gather|figure|table)\*?\}/;
 const latexHeadings = ['section', 'subsection', 'subsubsection', 'paragraph', 'subparagraph'];
@@ -103,7 +106,7 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
   const equationParentCommand = /\\(?:numberwithin|counterwithin)\s*\{equation\}\s*\{(chapter|section|subsection|subsubsection)\}/y;
   let equationParent = documentClass === 'article' || !documentClass ? undefined : 'chapter';
   let remainingPrefix = prefix;
-  if (!/\\if[A-Za-z@]*\b/.test(prefix)) {
+  if (![...latexCommands(prefix)].some(({ name }) => /^if[A-Za-z@]*$/.test(name))) {
     let declaredParent: string | undefined;
     for (const command of [...latexCommands(prefix)].reverse()) {
       equationParentCommand.lastIndex = command.start;
@@ -115,7 +118,45 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
       remainingPrefix = remainingPrefix.slice(0, command.start) + remainingPrefix.slice(command.start + relation[0].length);
     }
   }
-  if (opaqueCounters.test(remainingPrefix) || changesTheoremNumber(prefix)) return;
+  const macros = readLatexTextMacros(prefix);
+  function modifiesCounters(source: string): boolean {
+    const pending = [source];
+    const visited = new Set<string>();
+    while (pending.length) {
+      const body = pending.pop()!;
+      if (visited.has(body)) continue;
+      visited.add(body);
+      if (changesTheoremNumber(body)) return true;
+      for (const command of latexCommands(body)) {
+        counterAt.lastIndex = command.start;
+        if (counterAt.test(body)) return true;
+        if (command.name === 'AtBeginDocument') {
+          const hook = groupAt(body, whitespaceEnd(body, command.end));
+          if (hook) pending.push(body.slice(hook.from, hook.to));
+        }
+        const macro = macros.get(command.name);
+        if (macro && !(command.name === 'appendix' && standardAppendix.test(macro.replacement)))
+          pending.push(macro.replacement);
+      }
+    }
+    return false;
+  }
+  // Literal macro definitions are inert until TeX executes their calls.
+  let declarationTarget = -1;
+  for (const command of latexCommands(remainingPrefix)) {
+    if (command.start === declarationTarget) continue;
+    if (/^(?:[gex]?def|(?:re|provide)?newcommand|renewcommand|providecommand|DeclareRobustCommand)$/.test(command.name))
+      declarationTarget = whitespaceEnd(remainingPrefix, command.end + Number(remainingPrefix[command.end] === '*'));
+    counterAt.lastIndex = command.start;
+    if (counterAt.test(remainingPrefix)) return;
+    if (macros.has(command.name) &&
+        modifiesCounters(remainingPrefix.slice(command.start, command.end))) return;
+    if (command.name === 'AtBeginDocument') {
+      const body = groupAt(remainingPrefix, whitespaceEnd(remainingPrefix, command.end));
+      if (body && modifiesCounters(remainingPrefix.slice(body.from, body.to))) return;
+    }
+  }
+  if (changesTheoremNumber(prefix)) return;
   const chapters = documentClass === 'report' || documentClass === 'book';
   let depth = chapters ? 2 : 3;
   for (const literal of sectionDepthAssignments(prefix)) {
@@ -250,7 +291,7 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
         return false;
       }
       if (/\\footnote(?:mark|text)?\b/.test(source)) footnotesKnown = false;
-      if (opaqueCounters.test(source) || changesTheoremNumber(source) || !sectionDepthAssignments(source).next().done) {
+      if (modifiesCounters(source) || !sectionDepthAssignments(source).next().done) {
         opaque = true;
         return false;
       }
