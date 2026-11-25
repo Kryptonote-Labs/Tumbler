@@ -77,15 +77,23 @@ function optionKind(option: string): keyof GeometryChange | undefined {
 /** Update page settings in the geometry package, folding in legacy preamble overrides. */
 export function setLatexGeometry(prefix: string, change: GeometryChange, currentPaperSize?: string) {
   const declarations = geometryDeclarations(prefix);
-  const options = declarations.flatMap(item => item.options).filter(option => {
-    const kind = optionKind(option);
-    return !kind || change[kind] === undefined;
-  });
-  if (change.paperSize) options.push(change.paperSize);
-  else if (change.paperSize === undefined && currentPaperSize && !declarations.length)
+  let options = declarations.flatMap(item => item.options);
+  const changes = [
+    ['paperSize', change.paperSize, change.paperSize],
+    ['orientation', change.orientation, change.orientation],
+    ['margin', change.margin, change.margin && 'margin=' + change.margin],
+  ] as const;
+  for (const [kind, value, replacement] of changes) {
+    if (value === undefined) continue;
+    const last = options.findLastIndex(item => optionKind(item) === kind);
+    const inPlace = last > options.lastIndexOf('reset') && (kind !== 'margin' || last === options.length - 1);
+    options = options.flatMap((item, index) =>
+      optionKind(item) !== kind ? [item] : replacement && inPlace && index === last ? [replacement] : [],
+    );
+    if (replacement && !inPlace) options.push(replacement);
+  }
+  if (change.paperSize === undefined && currentPaperSize && !declarations.length)
     options.unshift(currentPaperSize);
-  if (change.orientation) options.push(change.orientation);
-  if (change.margin) options.push('margin=' + change.margin);
   const newline = /\r\n|\n/.exec(prefix)?.[0] ?? '\n';
   const existing = declarations.find(item => item.name !== 'geometry') ?? declarations[0];
   const declaration = '\\' + (existing?.name === 'RequirePackage' ? 'RequirePackage' : 'usepackage') +

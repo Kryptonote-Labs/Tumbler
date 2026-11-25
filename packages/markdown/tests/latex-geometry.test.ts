@@ -19,7 +19,7 @@ test('geometry edits fold legacy overrides into the package and retain unrelated
   const updated = setLatexGeometry(source, { paperSize: 'a5paper', margin: '25mm' });
   expect(updated).toBe(String.raw`\documentclass{article}
 \usepackage{amsmath}
-\usepackage[hmargin={20mm,25mm},includehead,landscape,a5paper,margin=25mm]{geometry}
+\usepackage[a5paper,hmargin={20mm,25mm},includehead,landscape,margin=25mm]{geometry}
 % \geometry{margin=3in}
 \begin{document}
 \geometry{margin=4in}
