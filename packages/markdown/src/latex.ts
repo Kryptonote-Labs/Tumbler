@@ -98,6 +98,7 @@ export { latexBreakCommand, latexFlow, latexPageLabel, latexPageNumbers, readLat
 export { decodeLatexRunningText, latexPageFurniture, readLatexPageStyle, setLatexPageStyle, type LatexPageStyle, type LatexPageNumberPosition } from './latex-page-style';
 export { latexPageNumberFormats } from './latex-flow';
 export { createLatexStructure, readLatexPageNumberSection, setLatexPageNumberSection, setLatexBookMatter, type LatexBookMatter, type LatexPageNumberSection } from './latex-page-authoring';
+export { enableLatexEmptyVersos, latexEmptyVersos, withLatexEmptyVersos } from './latex-page-start';
 export { latexContentsEntries, readLatexHeadingMode, setLatexHeadingMode, readLatexBibliographyContents, setLatexBibliographyContents, readLatexPageContents, setLatexPageContents, type LatexHeadingMode } from './latex-contents';
 export type { LatexBlockFlow, LatexBreak, LatexPageNumber, LatexPageNumberFormat } from './latex-flow';
 export {

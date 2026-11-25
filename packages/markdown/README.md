@@ -55,6 +55,11 @@ and `createLatexComposedPage`. For a composed page, use `readLatexPageCompositio
 and `editLatexPageComposition` to read or update its lines, then apply the result
 with `updateLatexNodeSource`.
 
+Use `enableLatexEmptyVersos(transform)` when authoring right-hand page starts.
+It adds the standard `emptypage` package once for a two-sided layout, so LaTeX
+keeps automatically inserted verso pages blank while counting them. Enabling
+two-sided geometry and setting a right-hand front matter start apply this default.
+
 Use `setLatexFrontMatter` to show or hide the abstract, contents, or lists of
 figures and tables. Use `setLatexPageNumberSection` at a block boundary to restart
 numbering, and `setLatexHeadingMode` for unnumbered headings with contents
@@ -73,6 +78,9 @@ adding page breaks or repeated rows to the document. This keeps layout and
 source edits on the same model for both native objects and source-backed
 environments. The same constraints can accept measurements from a different
 layout host.
+Pass the paginator's `rectoBlanks` to `latexPageNumbers` as its fourth argument
+when `latexEmptyVersos` is enabled in the preamble to suppress those sheets' folios
+and running heads in the preview.
 
 `latexPageLayout(prefix)` resolves standard type sizes, leading, interword glue, and title
 spacing. `latexParagraphText(node)` projects supported text and inline formulas with editor

@@ -401,6 +401,7 @@ export function latexPageNumbers(
   flow: ReadonlyMap<number, LatexBlockFlow>,
   pageStarts: readonly number[],
   folioLeadIns: ReadonlySet<number> = new Set(),
+  emptyPages?: ReadonlySet<number>,
 ): LatexPageNumber[] {
   const overrides = new Map<number, { visible: false; restartAfter: boolean }>();
   const resets = new Map<number, number>();
@@ -436,7 +437,7 @@ export function latexPageNumbers(
     number = resets.get(page) ?? number;
     extendedLetters = extensions.get(page) ?? extendedLetters;
     currentStyle = documentStyles.get(page) ?? currentStyle;
-    const pageStyle = pageStyles.get(page) ?? currentStyle;
+    const pageStyle = emptyPages?.has(page) ? 'empty' : pageStyles.get(page) ?? currentStyle;
     const folio: LatexPageNumber = {
       number,
       visible: pageStyle !== 'empty' && (override?.visible ?? true),

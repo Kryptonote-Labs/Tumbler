@@ -7,6 +7,7 @@ import { latexDriverUsesClassPaper } from './latex-preamble';
 import { commandEnd, groupAt } from './latex-syntax';
 import { geometryOption, geometrySides, hasExplicitMargins, latexPaperSizes as paperSizes, readGeometry, writeLatexGeometry, type GeometryChange } from './latex-geometry';
 import { geometryValues, marginValue, physicalGeometry } from './latex-geometry-layout';
+import { withLatexEmptyVersos } from './latex-page-start';
 
 const inch = 96;
 const millimeter = inch / 25.4;
@@ -179,7 +180,7 @@ export function setLatexGeometry(prefix: string, change: GeometryChange, current
     change.bindingOffset !== undefined || change.twoSided !== undefined) &&
     !resolvePageLayout(next).hasTextArea)
     throw new Error('The margins leave no room for text.');
-  return next;
+  return change.twoSided === true ? withLatexEmptyVersos(next) : next;
 }
 
 /** Read the standard class and geometry options that determine the editable page. */
@@ -396,6 +397,7 @@ export function paginateLatex(
   const breaks: PageBreak[] = [];
   const breakSlots: number[] = [];
   const folioLeadIns = new Set<number>();
+  const rectoBlanks = new Set<number>();
   const footnotes: number[] = [];
   const footHeights: number[] = [0];
   const wideFloats: LatexWideFloat[] = [];
@@ -491,7 +493,10 @@ export function paginateLatex(
       const sheets = sheetOf(slot) - sheetOf(pages - 1);
       return sheets > 0 && restartOnNextSheet ? sheets : folio + sheets;
     };
-    if (boundary === 'recto' && numberAt(next) % 2 === 0) next += columns;
+    if (boundary === 'recto' && numberAt(next) % 2 === 0) {
+      rectoBlanks.add(sheetOf(next));
+      next += columns;
+    }
     folio = numberAt(next);
     if (sheetOf(next) !== sheetOf(pages - 1)) restartOnNextSheet = false;
     const advanceBy = next - (pages - 1);
@@ -542,6 +547,7 @@ export function paginateLatex(
       folio = reset;
       if (flow?.before === 'recto' && reset % 2 === 0) {
         folioLeadIns.add(block.position);
+        rectoBlanks.add(sheetOf(pages - 1));
         advance(block, 'recto');
       }
     }
@@ -576,5 +582,5 @@ export function paginateLatex(
     pages = sheet * columns + 1;
     while (footHeights.length < pages) footHeights.push(0);
   }
-  return { breaks, breakSlots, folioLeadIns, pages, footnotes, footHeights, wideFloats, floatSpans, shrinkages };
+  return { breaks, breakSlots, folioLeadIns, rectoBlanks, pages, footnotes, footHeights, wideFloats, floatSpans, shrinkages };
 }
