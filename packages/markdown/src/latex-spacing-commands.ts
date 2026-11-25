@@ -4,7 +4,7 @@ import { findWrapping, liftTarget } from 'prosemirror-transform';
 import { updateLatexBoundary, updateLatexNodeSource } from './latex-boundary-step';
 import { latexLength } from './latex-lengths';
 import { withLatexPackage } from './latex-preamble';
-import { latexVerticalSpace } from './latex-presentation';
+import { latexVerticalSpace } from './latex-vertical-space';
 import { latexEffectivePrefix } from './latex-project';
 import { latexSpacingRegion, latexSpacingValue, type LatexLineSpacingChoice } from './latex-spacing';
 import { argument, commandEnd, groupAt, whitespaceEnd } from './latex-syntax';
@@ -142,7 +142,7 @@ function paragraphBoundary(state: EditorState, side: Side) {
   const adjacent = side === 'before' ? at.nodeBefore : at.nodeAfter;
   const source = adjacent?.type === type ? String(adjacent.attrs.source) : '';
   const space = latexVerticalSpace(source);
-  const existing = adjacent && space?.end === source.length && space.starred === (side === 'before')
+  const existing = adjacent && space?.end === source.length && !space.fill && space.starred === (side === 'before')
     ? { position: side === 'before' ? position - adjacent.nodeSize : position, node: adjacent, length: space.length }
     : undefined;
   return { position, type, existing };

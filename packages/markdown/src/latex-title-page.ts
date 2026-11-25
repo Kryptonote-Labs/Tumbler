@@ -24,6 +24,7 @@ import {
 } from './latex-title-page-list';
 import { isTitleList, titleListStyle, type TitleListKind } from './latex-title-page-list-style';
 import { texPoint } from './latex-typography';
+import { latexVerticalLength } from './latex-vertical-space';
 
 export type { LatexTitleItem, LatexTitleRun, LatexTitleStyle } from './latex-title-page-list';
 
@@ -140,6 +141,8 @@ function interpretPage(
 
   const quad = () => state.style.size;
   const leading = () => state.baseline * state.stretch;
+  type Glue = Omit<Extract<LatexTitleMaterial, { kind: 'glue' }>, 'kind'>;
+  const afterLine = new WeakMap<Piece[], Glue[]>();
   /** The field behind printed source, and its source range when the text maps to it exactly. */
   const traced = (from: number, to: number): Pick<LatexTitleRun, 'field' | 'source'> => {
     const first = origin[from] ?? -1;
@@ -167,6 +170,7 @@ function interpretPage(
       list.push({ kind: 'line', align: state.align, leading: leading(), runs: mergeLine(line),
         ...(item && { indent, item }),
       });
+      for (const entry of afterLine.get(line) ?? []) list.push({ kind: 'glue', ...entry });
       itemMarker = undefined;
     }
   };
@@ -178,7 +182,7 @@ function interpretPage(
     }
     lines.at(-1)!.push(piece);
   };
-  const glue = (entry: Omit<Extract<LatexTitleMaterial, { kind: 'glue' }>, 'kind'>) => {
+  const glue = (entry: Glue) => {
     endParagraph();
     if (!explicit || list !== page || topSeen) list.push({ kind: 'glue', ...entry });
   };
@@ -382,24 +386,24 @@ function interpretPage(
       if (command === 'vskip' || !lines) glue({ size: read.height, order: read.stretch, shrink: read.shrink });
       position = read.end;
     } else if (command === 'vspace') {
-      // In a paragraph, \vspace adds space below the current line. That is not modelled yet.
-      if (lines) return;
       const starred = source[after] === '*';
       const group = argument(skipSpaces(source, after + Number(starred)));
       if (!group) return;
-      const value = source.slice(group.from, group.to).trim();
-      const fill = value === '\\fill' || /^\\stretch\s*\{[^{}]*\}$/.test(value);
-      const height = fill ? 0 : dimension(value, quad(), textHeight);
-      if (height === undefined) return;
-      if (explicit && list === page && !topSeen && starred) {
-        topAnchored = topSeen = true;
-        glue({ size: layout.firstBaseline, order: 0 });
-        list.push({ kind: 'line', align: state.align, leading: leading(), runs: [] });
-      }
-      if (!explicit || list !== page || topSeen) {
-        const weight = value === '\\fill' ? 1 : Number(/\{([^{}]*)\}$/.exec(value)?.[1]);
-        if (fill && !Number.isFinite(weight)) return;
-        glue({ size: height, order: fill ? 2 : 0, ...(fill && { weight }) });
+      const space = latexVerticalLength(source.slice(group.from, group.to).trim(), (value) => dimension(value, quad(), textHeight));
+      if (!space) return;
+      const entry = { size: space.height, order: 0 as const, ...space.fill };
+      const line = lines?.at(-1);
+      if (line) {
+        const adjustments = afterLine.get(line) ?? [];
+        adjustments.push(entry);
+        afterLine.set(line, adjustments);
+      } else {
+        if (explicit && list === page && !topSeen && starred) {
+          topAnchored = topSeen = true;
+          glue({ size: layout.firstBaseline, order: 0 });
+          list.push({ kind: 'line', align: state.align, leading: leading(), runs: [] });
+        }
+        glue(entry);
       }
       position = group.end;
     } else if (namedSkips.has(command)) {

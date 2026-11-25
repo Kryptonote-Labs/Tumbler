@@ -14,6 +14,7 @@ import { readLatexTextMacros } from './latex-macros';
 import { latexCustomTitlePage, readLatexContentsEntry, readLatexListSequence, readLatexStateMacro } from './latex-state-command';
 import { readLatexTitledEnvironments } from './latex-titled-environments';
 import { readLatexTitleSetter } from './latex-metadata';
+import { latexVerticalSpace } from './latex-vertical-space';
 import type { Node } from 'prosemirror-model';
 import { commandEnd, groupAt, latexCommands, latexDocumentStartCommands, whitespaceEnd } from './latex-syntax';
 
@@ -276,12 +277,14 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
       return false;
     }
     const explicitTitle = standard && isLatexTitlePage(node);
+    const skip = latexVerticalSpace(source);
     const plainChapter = () => {
       const rule = flow.get(position);
       if ((activeDocumentStyle && activeDocumentStyle !== 'plain') ||
           (rule?.kind === 'content' && rule.pageStyle)) effect({ pageStyle: 'plain' });
     };
-    if (node.isBlock && (node.isAtom || node.isTextblock || explicitTitle)) {
+    if (node.isBlock && (node.isAtom || node.isTextblock || explicitTitle) &&
+        !(skip?.end === source.length && !skip.starred)) {
       if (numbering) effect({ numbering });
       if (startAt !== undefined) effect({ startAt });
       if (extendedLetters) effect({ extendedLetters });

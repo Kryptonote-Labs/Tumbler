@@ -26,6 +26,8 @@ export function paginateLatexRegions(blocks: LatexRegionBlock[], portrait: Latex
   const footHeights: number[] = [];
   const papers: LatexPageLayout[] = [];
   const shrinkages: ReturnType<typeof paginateLatex>['shrinkages'] = new Map();
+  const stretches: ReturnType<typeof paginateLatex>['stretches'] = new Map();
+  const discardedSpaces: ReturnType<typeof paginateLatex>['discardedSpaces'] = new Set();
   let pageTop = 0;
   let inserted = 0;
   const firstTop = blocks[0]?.landscape === undefined ? portrait.top : landscape.top;
@@ -56,6 +58,13 @@ export function paginateLatexRegions(blocks: LatexRegionBlock[], portrait: Latex
     );
     breaks.push(...plan.breaks);
     for (const [position, shrink] of plan.shrinkages) shrinkages.set(position, shrink);
+    for (const [position, size] of plan.stretches) {
+      stretches.set(position, size);
+      inserted += size;
+    }
+    for (const position of plan.discardedSpaces) discardedSpaces.add(position);
+    for (const block of group)
+      if (plan.discardedSpaces.has(block.position)) inserted -= block.discardableSpace ?? 0;
     breakSlots.push(...plan.breakSlots.map((slot) => pageOffset + slot));
     for (const position of plan.folioLeadIns) folioLeadIns.add(position);
     for (const page of plan.rectoBlanks) rectoBlanks.add(pageOffset + page);
@@ -67,6 +76,6 @@ export function paginateLatexRegions(blocks: LatexRegionBlock[], portrait: Latex
   }
   return {
     breaks, breakSlots, folioLeadIns, rectoBlanks, footnotes, footHeights, pages: papers.length, papers,
-    wideFloats: [], shrinkages, floatSpans: new Map<number, number>(),
+    wideFloats: [], shrinkages, stretches, discardedSpaces, floatSpans: new Map<number, number>(),
   };
 }

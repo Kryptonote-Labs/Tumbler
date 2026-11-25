@@ -2,6 +2,7 @@ import { readLatexPageDirective } from './latex-flow';
 import { latexLength } from './latex-lengths';
 import { commandEnd, groupAt, whitespaceEnd } from './latex-syntax';
 import { latexMeasureFraction } from './latex-text-layout';
+import { latexVerticalSpace } from './latex-vertical-space';
 import type { Node } from 'prosemirror-model';
 
 export type LatexInlineFlow = 'no-indent' | 'line-break';
@@ -72,7 +73,8 @@ export function latexParagraphText(node: Node, resolvedInline?: (source: string)
     }
     if (child.type.name === 'latex_inline') {
       const source = String(child.attrs.source).trim();
-      if (source === '\\null' || /^\\label\s*\{[^{}]+\}$/.test(source) || readLatexPageDirective(source)) return;
+      if (source === '\\null' || /^\\label\s*\{[^{}]+\}$/.test(source) || readLatexPageDirective(source) ||
+          latexVerticalSpace(source)?.end === source.length) return;
     }
     const segment = segments.at(-1)!;
     const flow =

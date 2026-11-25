@@ -62,21 +62,6 @@ export function latexDeclarations(source: string, start = 0, normalSize = 10 * t
   return { end, family, bold, italic, size, leading, scale, colour, rows };
 }
 
-export function latexVerticalSpace(source: string, start = 0) {
-  const end = commandEnd(source, start);
-  if (source.slice(start, end) !== '\\vspace') return;
-  const at = whitespaceEnd(source, end);
-  const starred = source[at] === '*';
-  const group = groupAt(source, whitespaceEnd(source, at + Number(starred)));
-  if (!group) return;
-  const length = source.slice(group.from, group.to).trim();
-  const height = latexLength(length, 1, 1);
-  if (height !== undefined) {
-    const unit = length.endsWith('em') ? 'em' : length.endsWith('ex') ? 'ex' : 'px';
-    return { height, unit, starred, length, end: group.end };
-  }
-}
-
 /** Read simple titlesec formatting and leave complex styles to the TeX compiler. */
 export function latexSectionPresentation(prefix: string, normalSize?: number) {
   const formats = new Map<string, { style: ReturnType<typeof latexDeclarations>; unnumbered: boolean }>();
