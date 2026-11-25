@@ -91,11 +91,19 @@ export function readLatexPageComposition(source: string) {
     }
     const fill = [topFill, bottomFill, betweenFill].find((value) => source.startsWith(value, at));
     if (fill) fills.push({ from: at, to: at + fill.length, source: fill });
+    else if (page.kind === 'title') {
+      // A title page environment alone does not identify a ribbon composition.
+      const gap = latexComposedLineGap(source, at);
+      if (!gap || !lines.length) return;
+      at = whitespaceEnd(source, gap.to);
+      continue;
+    }
     const next = fill ? at + fill.length : source[at] === '{'
       ? groupAt(source, at)?.end
       : source[at] === '\\' ? commandEnd(source, at) : undefined;
     at = whitespaceEnd(source, next ?? at + 1);
   }
+  if (page.kind === 'title' && !lines.length) return;
   const top = fills.some((fill) => fill.source === topFill && fill.from === start);
   const bottom = fills.some((fill) => fill.source === bottomFill && whitespaceEnd(source, fill.to) === page.to);
   const distributed = fills.some((fill) => fill.source === betweenFill);
@@ -167,7 +175,7 @@ export function editLatexPageComposition(source: string, index: number, edit: La
   if (edit.kind === 'space') {
     if (!line) return source;
     const length = edit.length?.trim();
-    if (length && latexLength(length) === undefined) throw new Error('Enter a length such as 6 mm or 12 pt.');
+    if (length && latexLength(length) === undefined) throw new Error('Enter a measurement such as 6mm or 12pt.');
     const gap = latexComposedLineGap(source, line.end);
     if (length === undefined) return gap ? replace(source, line.end, gap.to, '') : source;
     const space = length ? '\\vspace*{' + length + '}' : '\\vfill';

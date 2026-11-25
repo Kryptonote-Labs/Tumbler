@@ -6,7 +6,7 @@ export { latexSpacingRegion, type LatexLineSpacingChoice } from './latex-spacing
 export { readLatexSpacingCommand } from './latex-spacing-syntax';
 export { applyLatexRegionSpacing, insertLatexVerticalGap, latexParagraphGap, latexSelectedList, latexSelectedSpacingRegion, setLatexListItemGap, setLatexParagraphGap } from './latex-spacing-commands';
 export { latexBodySpacing, latexSpacingRegionLayout } from './latex-body-spacing';
-import { latexComposedPageAt } from './latex-page-composition';
+import { latexComposedPageAt, readLatexPageComposition } from './latex-page-composition';
 import { latexPageLayout } from './latex-layout';
 import { interpretLatexComposedPage } from './latex-title-page';
 export { latexComposedLineGap, latexComposedPageKind, latexComposedPageSource, readLatexPageComposition, editLatexPageComposition, latexComposedTextSource, type LatexCompositionEdit, type LatexComposedPageKind, type LatexVerticalAlignment } from './latex-page-composition';
@@ -602,7 +602,8 @@ function blocks(source: string, context: SourceContext, depth = 0): { nodes: Nod
     const composition = source[start] === '\\' && latexComposedPageAt(source, start);
     if (composition && ['article', 'report', 'book'].includes(readLatexClass(context.prefix).name)) {
       const page = source.slice(start, composition.end);
-      if (interpretLatexComposedPage(context.prefix, latexPageLayout(context.prefix), page)) {
+      if ((composition.kind === 'page' || readLatexPageComposition(page)) &&
+          interpretLatexComposedPage(context.prefix, latexPageLayout(context.prefix), page)) {
         nodes.push(schema.nodes.latex_raw!.create({ before, source: page }));
         position = composition.end;
         continue;
@@ -1122,7 +1123,6 @@ export function materializeLatexStructures(document: Node): Transform {
       (context.letter && environment === 'letter') || (context.boxes && environment === 'tcolorbox') ||
       (context.proof && environment === 'proof') || context.theorems.has(environment) || latexTextEnvironments.has(environment) || context.titled.has(environment)
     )));
-    const title = node.type.name === 'latex_container' && /^\\begin\s*\{titlepage\}/.test(node.attrs.open);
     const minipage = node.type.name === 'latex_container' &&
       latexEnvironmentName(node.attrs.open) === 'minipage' &&
       node.firstChild?.firstChild?.type.name === 'latex_inline' &&
@@ -1150,7 +1150,7 @@ export function materializeLatexStructures(document: Node): Transform {
         !!readLatexListSequence(child.attrs.source, context.macros) ||
         String(child.attrs.source).startsWith('%') || !!declarationScope(child.attrs.source, 0)
       ));
-    if (!raw && !title && !minipage && !matter && !letter && !styled && !paragraphMacro && !presentation) return;
+    if (!raw && !minipage && !matter && !letter && !styled && !paragraphMacro && !presentation) return;
     const source = blockSource(node);
     const parsed = blocks(source, context);
     if (!parsed.nodes.length || (raw && parsed.nodes.every(block => block.type.name === 'latex_raw'))) return;

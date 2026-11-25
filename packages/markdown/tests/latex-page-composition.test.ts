@@ -1,7 +1,8 @@
 import { expect, test } from 'bun:test';
+import { Transform } from 'prosemirror-transform';
 import {
   editLatexPageComposition, interpretLatexComposedPage, latexComposedPageSource,
-  latexComposedTextSource, latexFlow, latexPageLayout, parseLatex, readLatexPageComposition,
+  latexComposedTextSource, latexFlow, latexPageLayout, materializeLatexStructures, parseLatex, readLatexPageComposition,
   serializeLatex,
 } from '../src/latex';
 
@@ -55,6 +56,34 @@ test('a title page built with line and spacing edits matches pdfTeX baselines', 
   const parsed = parseLatex(document);
   expect(parsed.firstChild?.attrs.source).toBe(source);
   expect(serializeLatex(parsed)).toBe(document);
+});
+
+test('imported title pages preserve editable text and their original structure', () => {
+  const cover = String.raw`\begin{titlepage}
+  \thispagestyle{empty}
+  \centering
+  \vspace*{1.5cm}
+  {\Large Original heading\par}
+  \vfill
+  {\centering\normalsize Final line\par}
+\end{titlepage}`;
+  const source = '\\documentclass[12pt]{report}\n\\begin{document}\n' + cover + '\n\\end{document}';
+  const parsed = parseLatex(source);
+  const raw = parsed.type.schema.nodes.latex_raw!.create({ source: cover, before: '\n' });
+  const legacy = parsed.type.create(parsed.attrs, raw);
+
+  for (const document of [parsed, materializeLatexStructures(legacy).doc]) {
+    const upgraded = materializeLatexStructures(document);
+    expect(upgraded.docChanged).toBe(false);
+    expect(serializeLatex(upgraded.doc)).toBe(source);
+    const edited = new Transform(upgraded.doc);
+    upgraded.doc.descendants((node, position) => {
+      if (node.isText && node.text === 'Original heading') {
+        edited.replaceWith(position, position + node.nodeSize, node.type.schema.text('Edited heading', node.marks));
+      }
+    });
+    expect(serializeLatex(edited.doc)).toBe(source.replace('Original heading', 'Edited heading'));
+  }
 });
 
 test('an ordinary centred dedication matches pdfTeX and preserves the running folio', () => {
