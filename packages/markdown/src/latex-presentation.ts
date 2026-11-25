@@ -3,27 +3,8 @@ import { texPoint } from './latex-typography';
 import { resolveLatexColour } from './latex-colour';
 import { commandEnd, environmentAt, groupAt, latexCommands, latexDocumentStartCommands, whitespaceEnd } from './latex-syntax';
 
-export const latexFontSizePoints = new Map<string, readonly [number, number, number]>([
-  ['tiny', [5, 6, 6]], ['scriptsize', [7, 8, 8]], ['footnotesize', [8, 9, 10]],
-  ['small', [9, 10, 10.95]], ['normalsize', [10, 10.95, 12]], ['large', [12, 12, 14.4]],
-  ['Large', [14.4, 14.4, 17.28]], ['LARGE', [17.28, 17.28, 20.74]],
-  ['huge', [20.74, 20.74, 24.88]], ['Huge', [24.88, 24.88, 24.88]],
-]);
-
-const fontLeading = new Map<string, readonly [number, number, number]>([
-  ['tiny', [6, 7, 7]], ['scriptsize', [8, 9.5, 9.5]], ['footnotesize', [9.5, 11, 12]],
-  ['small', [11, 12, 13.6]], ['normalsize', [12, 13.6, 14.5]], ['large', [14, 14, 18]],
-  ['Large', [18, 18, 22]], ['LARGE', [22, 22, 25]], ['huge', [25, 25, 30]], ['Huge', [30, 30, 30]],
-]);
-
-/** The size and baselineskip a LaTeX size command selects under the class's normal size. */
-export function latexFontSize(command: string, normalSize = 10 * texPoint) {
-  const sizes = latexFontSizePoints.get(command);
-  if (!sizes) return;
-  const points = normalSize / texPoint;
-  const index = points >= 11.5 ? 2 : points >= 10.5 ? 1 : 0;
-  return { size: sizes[index] * texPoint, leading: fontLeading.get(command)![index] * texPoint };
-}
+import { latexFontSize } from './latex-size-table';
+export { latexFontSize } from './latex-size-table';
 
 /** Read scoped declarations without absorbing the text or environment they format. */
 export function latexDeclarations(source: string, start = 0, normalSize = 10 * texPoint) {
@@ -84,11 +65,16 @@ export function latexDeclarations(source: string, start = 0, normalSize = 10 * t
 export function latexVerticalSpace(source: string, start = 0) {
   const end = commandEnd(source, start);
   if (source.slice(start, end) !== '\\vspace') return;
-  const group = groupAt(source, whitespaceEnd(source, end + Number(source[end] === '*')));
+  const at = whitespaceEnd(source, end);
+  const starred = source[at] === '*';
+  const group = groupAt(source, whitespaceEnd(source, at + Number(starred)));
   if (!group) return;
   const length = source.slice(group.from, group.to).trim();
-  const height = latexLength(length, 1);
-  if (height !== undefined) return { height, unit: length.endsWith('em') ? 'em' : 'px', end: group.end };
+  const height = latexLength(length, 1, 1);
+  if (height !== undefined) {
+    const unit = length.endsWith('em') ? 'em' : length.endsWith('ex') ? 'ex' : 'px';
+    return { height, unit, starred, length, end: group.end };
+  }
 }
 
 /** Read simple titlesec formatting and leave complex styles to the TeX compiler. */

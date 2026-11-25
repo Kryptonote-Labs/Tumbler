@@ -1,3 +1,4 @@
+import { readLatexSpacingCommand } from './latex-spacing-syntax';
 import { readLatexTextMacros } from './latex-macros';
 import { commandEnd, groupAt, latexCommands, whitespaceEnd } from './latex-syntax';
 
@@ -23,19 +24,13 @@ export function readLatexContentsEntry(source: string, start = 0) {
     return { end: args.end, list: args.args[0]!, level: args.args[1]!, title: args.args[2]! };
 }
 
-const spacingPresets = new Set(['normalsize', 'singlespacing', 'onehalfspacing', 'doublespacing']);
-const singleArgument = new Set(['pagestyle', 'pagenumbering', 'linespread', 'setstretch']);
-
 function stateCommand(source: string, start: number) {
   const end = commandEnd(source, start);
   const name = source.slice(start + 1, end);
-  if (spacingPresets.has(name)) return { end };
-  if (singleArgument.has(name)) return argumentsAt(source, end, 1);
-  if (name === 'renewcommand') {
-    const targets = argumentsAt(source, end, 2);
-    if (targets?.args[0] === '\\baselinestretch' && /^\s*\d*\.?\d+\s*$/.test(targets.args[1]!))
-      return targets;
-  }
+  if (name === 'normalsize') return { end };
+  if (name === 'pagestyle' || name === 'pagenumbering') return argumentsAt(source, end, 1);
+  const spacing = readLatexSpacingCommand(source, start);
+  if (spacing) return spacing;
   if (name === 'gdef') {
     const start = whitespaceEnd(source, end);
     const next = commandEnd(source, start);
@@ -50,7 +45,11 @@ export function readLatexStateMacro(source: string, macros: Macros, start = 0) {
   if (!macro || macro.optional !== undefined) return;
   const call = argumentsAt(source, end, macro.count);
   if (!call) return;
-  const expansion = macro.replacement.replace(/(?<!\\)%[^\r\n]*/g, '');
+  let expansion = macro.replacement.replace(/(?<!\\)%[^\r\n]*/g, '');
+  // A numeric parameter can stand for a complete stretch value.
+  if (macro.count === 1 && /^\d*\.?\d+$/.test(call.args[0]?.trim() ?? '') &&
+      /^\s*\\(?:renewcommand\s*\{\\baselinestretch\}|linespread|setstretch)\s*\{#1\}/.test(expansion))
+    expansion = expansion.replace('{#1}', () => '{' + call.args[0] + '}');
   let cursor = whitespaceEnd(expansion, 0);
   while (cursor < expansion.length) {
     const state = stateCommand(expansion, cursor);

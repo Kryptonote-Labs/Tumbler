@@ -1,3 +1,4 @@
+import { latexBaseClass } from './latex-class';
 import type { Node } from 'prosemirror-model';
 import { isLatexBibliographyBlock } from './latex-bibliography';
 import { readLatexClass } from './latex-flow';
@@ -14,7 +15,8 @@ const empty = { text: '', uppercase: false };
 /** Resolve TeX's last left mark and first right mark on each physical page. */
 export function latexPageMarks(document: Node, starts: readonly number[]) {
   const prefix = latexEffectivePrefix(document);
-  const { name: documentClass, options } = readLatexClass(prefix);
+  const { name: className, options } = readLatexClass(prefix);
+  const documentClass = latexBaseClass(className);
   const chaptered = documentClass === 'report' || documentClass === 'book';
   const sided = options.findLast(option => option === 'twoside' || option === 'oneside');
   const twoSided = sided ? sided === 'twoside' : documentClass === 'book';

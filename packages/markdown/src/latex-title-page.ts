@@ -1,4 +1,4 @@
-import { readLatexClass } from './latex-flow';
+import { latexBaseSize } from './latex-class';
 import { latexLineSpacing } from './latex-format';
 import type { LatexPageLayout } from './latex-layout';
 import { readLatexTextMacros } from './latex-macros';
@@ -87,8 +87,7 @@ export function interpretLatexTitlePage(
 ) {
   const macros = readLatexTextMacros(prefix);
   if (!latexCustomTitlePage(prefix, macros)) return;
-  const { options } = readLatexClass(prefix);
-  const points = options.includes('12pt') ? 12 : options.includes('11pt') ? 11 : 10;
+  const points = latexBaseSize(prefix);
   const normalSize = layout.fontSize;
   const parskip = layout.paragraphSpacing;
   const parskipShrink = layout.paragraphShrink;

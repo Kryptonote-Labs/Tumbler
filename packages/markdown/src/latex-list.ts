@@ -50,11 +50,11 @@ export function readLatexEnumitem(source: string) {
         if (!label) return;
       } else if (name === "start" && /^\d+$/.test(value) && Number.isSafeInteger(Number(value))) {
         start = Number(value);
-      } else if (name === 'leftmargin' && latexLength(value, 1) !== undefined) {
+      } else if (name === 'leftmargin' && latexLength(value, 1, 1) !== undefined) {
         leftMargin = value;
-      } else if (name === 'itemsep' && latexLength(value, 1) !== undefined) {
+      } else if (name === 'itemsep' && latexLength(value, 1, 1) !== undefined) {
         itemSeparation = value;
-      } else if (name === 'topsep' && latexLength(value, 1) !== undefined) {
+      } else if (name === 'topsep' && latexLength(value, 1, 1) !== undefined) {
         topSeparation = value;
       } else return;
     }

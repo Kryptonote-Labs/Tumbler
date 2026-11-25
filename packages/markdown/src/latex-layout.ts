@@ -1,5 +1,6 @@
 import { latexLineSpacing } from './latex-format';
-import { readLatexClass, type LatexBlockFlow, type LatexBreak } from './latex-flow';
+import type { LatexBlockFlow, LatexBreak } from './latex-flow';
+import { latexBaseClass, latexBaseSize, readLatexClass } from './latex-class';
 import { latexTypography, texPoint, type LatexTypography } from './latex-typography';
 import { latexLength } from './latex-lengths';
 import { latexDriverUsesClassPaper } from './latex-preamble';
@@ -60,16 +61,13 @@ function readOptions(prefix: string) {
   const { loaded: geometry, options: geometryOptions } = readGeometry(prefix);
   let paperSize: string | undefined;
   let orientation: 'landscape' | 'portrait' | undefined;
-  let fontSize = 10;
+  const fontSize = latexBaseSize(prefix);
   for (const value of [...classOptions, ...geometryOptions]) {
     const [key, setting] = geometryOption(value);
     const named = key === 'paper' ? setting : key;
     if (paperSizes.has(named) && (key === 'paper' || setting === 'true')) paperSize = named;
     if (key === 'landscape' || key === 'portrait')
       orientation = (key === 'landscape') === (setting === 'true') ? 'landscape' : 'portrait';
-  }
-  for (const value of classOptions) {
-    if (/^(10|11|12)pt$/.test(value)) fontSize = Number.parseFloat(value);
   }
   return {
     source,
@@ -79,7 +77,7 @@ function readOptions(prefix: string) {
     orientation,
     fontSize,
     classOptions,
-    documentClass,
+    documentClass: latexBaseClass(documentClass),
   };
 }
 
@@ -228,17 +226,17 @@ function resolvePageLayout(prefix: string, output: LatexOutputPaper = {}) {
   const { twoSided, mirror } = geometrySides(documentClass, classOptions, sideOptions);
   const twoColumns = sizes.has('twocolumn') ? sizes.get('twocolumn') === 'true' :
     sizes.has('onecolumn') ? sizes.get('onecolumn') === 'false' : classOptions.includes('twocolumn');
-  const textPoints = slide && !classOptions.includes('10pt') && !classOptions.includes('12pt') ? 11 : fontSize;
+  const textPoints = fontSize;
   const typography = latexTypography(textPoints, source, twoColumns);
   const { size: font, leading } = typography.text;
   // Standard Computer Modern classes set lengths using the font's quad.
-  const quad = (fontSize === 12 ? 11.74988 : fontSize === 11 ? 10.95003 : 10) * texPoint;
+  const quad = fontSize === 11 ? 10.95003 * texPoint : font * (fontSize >= 12 ? 11.74988 / 12 : 1);
   const letter = documentClass === 'letter';
   const defaultIndent = twoColumns
     ? quad
-    : fontSize === 12
+    : fontSize >= 12
       ? 1.5 * quad
-      : (fontSize === 11 ? 17 : 15) * texPoint;
+      : (fontSize === 11 ? 17 : fontSize === 10 ? 15 : fontSize === 9 ? 14 : 12) * texPoint;
   const xHeight = 0.430555 * font;
   const paragraphs = paragraphLengths(
     source, quad, xHeight, letter ? 0 : defaultIndent, leading, letter ? 0.7 * quad : 0,
@@ -251,11 +249,13 @@ function resolvePageLayout(prefix: string, output: LatexOutputPaper = {}) {
     height = (landscape ? widthOption : heightOption) ?? height;
   }
 
-  const classWidth = (fontSize === 12 ? 390 : fontSize === 11 ? 360 : 345) * texPoint * (twoColumns ? 2 : 1);
+  const classWidths = { 8: 330, 9: 330, 10: 345, 11: 360, 12: 390, 14: 430, 17: 480, 20: 480 };
+  const classWidth = classWidths[fontSize] * texPoint * (twoColumns ? 2 : 1);
+  const topskip = Math.max(9, fontSize) * texPoint;
   const classLeading = leading / latexLineSpacing(source, textPoints).stretch;
   const body = Math.max(
     classLeading,
-    Math.floor((height - 3.5 * inch) / classLeading) * classLeading + fontSize * texPoint,
+    Math.floor((height - 3.5 * inch) / classLeading) * classLeading + topskip,
   );
   const wholePoints = (length: number) => Math.trunc(length / texPoint) * texPoint;
   const classTop = letter
@@ -282,7 +282,7 @@ function resolvePageLayout(prefix: string, output: LatexOutputPaper = {}) {
     ));
     const result = physicalGeometry(sizes, {
       width, height, twoSided, mirror, twoColumns, font: quad, xHeight, classLeading,
-      topSkip: fontSize * texPoint, marginparWidth, letter,
+      topSkip: topskip, marginparWidth, letter,
     });
     ({ left, right, top, bottom, evenLeft, footSkip, margins, binding: bindingOffset } = result);
   }
@@ -319,7 +319,7 @@ function resolvePageLayout(prefix: string, output: LatexOutputPaper = {}) {
     fontSize: font,
     leading,
     ...(['article', 'report', 'book', 'letter'].includes(documentClass) && { typography }),
-    firstBaseline: slide ? leading / 2 + font * 0.4 : fontSize * texPoint,
+    firstBaseline: slide ? leading / 2 + font * 0.4 : topskip,
     footerBaseline: height - bottom + footSkip,
     paragraphIndent: paragraphs.parindent,
     paragraphSpacing: paragraphs.parskip,

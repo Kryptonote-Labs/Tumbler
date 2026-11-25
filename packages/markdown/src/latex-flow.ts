@@ -1,3 +1,5 @@
+import { latexBaseClass, readLatexClass } from './latex-class';
+import { readLatexSpacingCommand } from './latex-spacing-syntax';
 import { isLatexHeading } from './latex-spec';
 import { isLatexTitlePage } from './latex-text-layout';
 import { latexEffectivePrefix } from './latex-project';
@@ -11,6 +13,8 @@ import { readLatexTitledEnvironments } from './latex-titled-environments';
 import { readLatexTitleSetter } from './latex-metadata';
 import type { Node } from 'prosemirror-model';
 import { commandEnd, groupAt, latexCommands, latexDocumentStartCommands, whitespaceEnd } from './latex-syntax';
+
+export { readLatexClass } from './latex-class';
 
 export type LatexBreak = 'column' | 'page' | 'recto';
 export const latexPageNumberFormats = ['arabic', 'roman', 'Roman', 'alph', 'Alph', 'gobble'] as const;
@@ -67,28 +71,6 @@ export function readLatexBookMatter(source: string) {
     case '\\mainmatter': return 'main';
     case '\\backmatter': return 'back';
   }
-}
-
-export function readLatexClass(source: string): { name: string; options: string[] } {
-  for (const { name, end } of latexCommands(source)) {
-    if (name !== 'documentclass') continue;
-    const start = whitespaceEnd(source, end);
-    const optional = groupAt(source, start, '[', ']');
-    const required = groupAt(source, whitespaceEnd(source, optional?.end ?? start));
-    if (required) {
-      return {
-        name: source.slice(required.from, required.to).trim(),
-        options: optional
-          ? source
-              .slice(optional.from, optional.to)
-              .replace(/(?<!\\)%[^\r\n]*/g, '')
-              .split(',')
-              .map((option) => option.trim())
-          : [],
-      };
-    }
-  }
-  return { name: 'article', options: [] };
 }
 
 export function latexBreakCommand(source: string): LatexBreak | undefined {
@@ -150,7 +132,8 @@ const chapterLists = new Set(['tableofcontents', 'listoffigures', 'listoftables'
  * explicit break commands. The measured layout and edit history remain independent. */
 export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
   const prefix = latexEffectivePrefix(document);
-  const { name, options } = readLatexClass(prefix);
+  const { name: className, options } = readLatexClass(prefix);
+  const name = latexBaseClass(className);
   const macros = readLatexTextMacros(prefix);
   const customTitle = latexCustomTitlePage(prefix, macros);
   const titled = readLatexTitledEnvironments(prefix, macros);
@@ -221,6 +204,11 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
         bounded.push({ node, position, before: 'page', after: 'page', title: true });
     }
     const source = node.type.name === 'latex_raw' ? String(node.attrs.source).trim() : '';
+    const spacing = readLatexSpacingCommand(source, 0);
+    if (spacing?.end === source.length) {
+      flow.set(position, { kind: 'omit' });
+      return false;
+    }
     const state = source && readLatexStateMacro(source, macros);
     if (state && state.end === source.length) {
       setDocumentState(state.expansion);

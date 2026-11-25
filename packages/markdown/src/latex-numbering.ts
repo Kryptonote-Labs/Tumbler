@@ -1,3 +1,4 @@
+import { latexBaseClass } from './latex-class';
 import { isLatexHeading } from './latex-spec';
 import { latexEffectivePrefix } from './latex-project';
 import { readLatexSubfigures } from './latex-figures';
@@ -94,7 +95,7 @@ function* sectionDepthAssignments(source: string): Generator<string | undefined>
  */
 export function latexNumbering(document: Node): LatexNumbering | undefined {
   const prefix = latexEffectivePrefix(document);
-  const documentClass = readLatexClass(prefix).name;
+  const documentClass = latexBaseClass(readLatexClass(prefix).name);
   if (documentClass && !['article', 'report', 'book'].includes(documentClass.trim())) return;
   const theoremDefinitions = readLatexTheorems(prefix);
   const theoremCounters = new Set([...theoremDefinitions.values()].map(({ counter }) => counter));
