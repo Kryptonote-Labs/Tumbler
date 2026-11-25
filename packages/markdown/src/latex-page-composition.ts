@@ -1,6 +1,8 @@
 import { latexLength } from './latex-lengths';
-import { latexFontSizePoints } from './latex-presentation';
+import { latexFontSizes } from './latex-size-table';
 import { commandEnd, environmentAt, groupAt, latexCommands, whitespaceEnd } from './latex-syntax';
+
+const sizeCommands = new Set<string>(latexFontSizes);
 
 export type LatexComposedPageKind = 'title' | 'page';
 export type LatexVerticalAlignment = 'top' | 'center' | 'bottom' | 'distribute';
@@ -43,7 +45,7 @@ const defaultStyle = (kind: LatexComposedPageKind): LineStyle => ({
 });
 
 function lineSource(style: LineStyle, text = '\\mbox{}') {
-  const size = latexFontSizePoints.has(style.size) ? style.size : 'normalsize';
+  const size = sizeCommands.has(style.size) ? style.size : 'normalsize';
   return '{' + alignments[style.alignment] + '\\' + size +
     (style.bold ? '\\bfseries' : '') + (style.italic ? '\\itshape' : '') + ' ' + text + '\\par}';
 }
@@ -60,7 +62,7 @@ function editableLine(source: string, start: number) {
   const group = groupAt(source, start);
   if (!group) return;
   const commands = /^(\\raggedright|\\centering|\\raggedleft)\\([A-Za-z]+)(\\bfseries)?(\\itshape)? /.exec(source.slice(group.from, group.to));
-  if (!commands || !latexFontSizePoints.has(commands[2]!)) return;
+  if (!commands || !sizeCommands.has(commands[2]!)) return;
   const alignment = commands[1] === alignments.left ? 'left' :
     commands[1] === alignments.center ? 'center' : 'right';
   const from = group.from + commands[0].length;
