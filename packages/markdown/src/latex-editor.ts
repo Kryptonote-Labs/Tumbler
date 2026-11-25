@@ -6,6 +6,8 @@ import {
   createParagraphNear,
   splitBlockAs,
 } from 'prosemirror-commands';
+import { refreshLatexHeadingContents } from './latex-contents';
+import { Mapping } from 'prosemirror-transform';
 import { collab } from 'prosemirror-collab';
 import { history, redo, undo } from 'prosemirror-history';
 import { InputRule, inputRules, undoInputRule, wrappingInputRule } from 'prosemirror-inputrules';
@@ -433,6 +435,15 @@ export function latexState(
               rebased: transactions.some(item => item.getMeta('rebased')),
               pasted: transactions.some(item => item.getMeta('uiEvent') === 'paste'),
             });
+          const { $from } = previous.selection;
+          if ($from.depth && isLatexHeading($from.parent) &&
+              !transactions.some(item => item.getMeta('rebased') || item.getMeta('latexSourceEdit'))) {
+            const mapping = new Mapping();
+            for (const item of transactions) mapping.appendMapping(item.mapping);
+            const position = $from.before();
+            refreshLatexHeadingContents(transaction, previous.doc, position,
+              mapping.map(position, -1), mapping.map($from.after(), 1));
+          }
           syncLatexIncludes(transaction, previous.doc);
           retainDetachedLatexFiles(transaction, previous.doc);
           for (const received of transactions)

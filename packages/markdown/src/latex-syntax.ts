@@ -172,3 +172,34 @@ export function* latexCommands(source: string, { nested = false } = {}) {
     }
   }
 }
+
+/** Read preamble commands followed by the commands registered for document startup. */
+export function* latexDocumentStartCommands(source: string) {
+  const before: Group[] = [];
+  const start: Group[] = [];
+  const end: Group[] = [];
+  for (const command of latexCommands(source)) {
+    yield command;
+    if (command.name === 'AtBeginDocument') {
+      const body = groupAt(source, whitespaceEnd(source, command.end));
+      if (body) start.push(body);
+    } else if (command.name === 'AddToHook') {
+      const hook = groupAt(source, whitespaceEnd(source, command.end));
+      if (!hook) continue;
+      const name = source.slice(hook.from, hook.to).trim();
+      const phase = name === 'begindocument/before' ? before
+        : name === 'begindocument' ? start
+        : name === 'begindocument/end' ? end
+        : undefined;
+      if (!phase) continue;
+      const next = whitespaceEnd(source, hook.end);
+      const label = groupAt(source, next, '[', ']');
+      const body = groupAt(source, whitespaceEnd(source, label?.end ?? next));
+      if (body) phase.push(body);
+    }
+  }
+  for (const body of [...before, ...start, ...end]) {
+    for (const command of latexCommands(source.slice(body.from, body.to)))
+      yield { name: command.name, start: body.from + command.start, end: body.from + command.end };
+  }
+}

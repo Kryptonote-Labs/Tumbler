@@ -395,6 +395,7 @@ export function paginateLatex(
 ) {
   const breaks: PageBreak[] = [];
   const breakSlots: number[] = [];
+  const folioLeadIns = new Set<number>();
   const footnotes: number[] = [];
   const footHeights: number[] = [0];
   const wideFloats: LatexWideFloat[] = [];
@@ -409,6 +410,8 @@ export function paginateLatex(
   const floatGap = 20 * texPoint;
   let start = 0;
   let pages = 1;
+  let folio = 1;
+  let restartOnNextSheet = false;
   let occupied = false;
   let pending: LatexBreak | undefined;
   // Spacers carry the page's unused body, including the room its footnotes take.
@@ -484,7 +487,13 @@ export function paginateLatex(
     const needed = Math.max(1, Math.floor((distance + notes) / stride) + 1);
     const slot = pages - 1 + needed;
     let next = boundary === 'column' ? slot : Math.ceil(slot / columns) * columns;
-    if (boundary === 'recto' && (next / columns) % 2 !== 0) next += columns;
+    const numberAt = (slot: number) => {
+      const sheets = sheetOf(slot) - sheetOf(pages - 1);
+      return sheets > 0 && restartOnNextSheet ? sheets : folio + sheets;
+    };
+    if (boundary === 'recto' && numberAt(next) % 2 === 0) next += columns;
+    folio = numberAt(next);
+    if (sheetOf(next) !== sheetOf(pages - 1)) restartOnNextSheet = false;
     const advanceBy = next - (pages - 1);
     const previousSpan = columns === 1 ? floatSpans.get(sheetOf(pages - 1)) ?? 0 : 0;
     const reduction = settle();
@@ -514,14 +523,29 @@ export function paginateLatex(
       deferred.push(block);
       continue;
     }
-    if (flow?.kind === 'omit') continue;
+    if (flow?.kind === 'omit') {
+      folio = flow.startAt ?? (flow.numbering ? 1 : folio);
+      continue;
+    }
     if (flow?.kind === 'break') {
       if (occupied) pending = strongerBreak(pending, flow.boundary);
       continue;
     }
-    const before = strongerBreak(pending, flow?.before);
+    const reset = flow?.startAt ?? (flow?.numbering ? 1 : undefined);
+    // An explicit page break ships before the reset. The chapter's own break runs afterwards.
+    const before = reset !== undefined && !flow?.folio && pending
+      ? pending
+      : strongerBreak(pending, flow?.before);
     if (occupied && before) advance(block, before);
     pending = flow?.after;
+    if (reset !== undefined) {
+      folio = reset;
+      if (flow?.before === 'recto' && reset % 2 === 0) {
+        folioLeadIns.add(block.position);
+        advance(block, 'recto');
+      }
+    }
+    if (flow?.folio) restartOnNextSheet = flow.folio.restartAfter;
     const internal = block.forceFragments ? block.split?.() : undefined;
     const forced = internal?.some(line => line.before);
     if (!forced && (fits(block, !block.preferFragments && !block.keepHeadingWithNext) || (!occupied && !block.split))) {
@@ -552,5 +576,5 @@ export function paginateLatex(
     pages = sheet * columns + 1;
     while (footHeights.length < pages) footHeights.push(0);
   }
-  return { breaks, breakSlots, pages, footnotes, footHeights, wideFloats, floatSpans, shrinkages };
+  return { breaks, breakSlots, folioLeadIns, pages, footnotes, footHeights, wideFloats, floatSpans, shrinkages };
 }

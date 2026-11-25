@@ -1,7 +1,7 @@
 import { latexLength } from './latex-lengths';
 import { texPoint } from './latex-typography';
 import { resolveLatexColour } from './latex-colour';
-import { commandEnd, environmentAt, groupAt, latexCommands, whitespaceEnd } from './latex-syntax';
+import { commandEnd, environmentAt, groupAt, latexCommands, latexDocumentStartCommands, whitespaceEnd } from './latex-syntax';
 
 export const latexFontSizePoints = new Map<string, readonly [number, number, number]>([
   ['tiny', [5, 6, 6]], ['scriptsize', [7, 8, 8]], ['footnotesize', [8, 9, 10]],
@@ -118,14 +118,21 @@ export function latexPresentationColour(name: string | undefined, colours: Reado
   return name ? resolveLatexColour(name, colours) : undefined;
 }
 
-type RunningSlot = 'L' | 'C' | 'R';
-type RunningField = { area: 'head' | 'foot'; slot: RunningSlot; source: string };
+export type LatexRunningSlot = 'L' | 'C' | 'R';
+export type LatexRunningField = { area: 'head' | 'foot'; slot: LatexRunningSlot; source: string };
 
-function fancyRunningStyle(source: string) {
-  const fields: RunningField[] = [];
-  let clearDefault = false;
-  let headRule = 0.4 * texPoint;
-  let footRule = 0;
+type RunningStyle = {
+  fields: LatexRunningField[];
+  clearDefault: boolean;
+  headRule: number;
+  footRule: number;
+};
+
+function fancyRunningStyle(source: string, base?: RunningStyle) {
+  const fields = [...(base?.fields ?? [])];
+  let clearDefault = base?.clearDefault ?? false;
+  let headRule = base?.headRule ?? 0.4 * texPoint;
+  let footRule = base?.footRule ?? 0;
   for (const { name, end } of latexCommands(source)) {
     const at = whitespaceEnd(source, end);
     if (name === 'fancyhf' || name === 'renewcommand') {
@@ -170,7 +177,7 @@ function fancyRunningStyle(source: string) {
 export function latexRunningStyles(prefix: string) {
   let defaultStyle: string | undefined;
   const styles = new Map<string, ReturnType<typeof fancyRunningStyle>>();
-  for (const { name, end } of latexCommands(prefix)) {
+  for (const { name, end } of latexDocumentStartCommands(prefix)) {
     if (name !== 'pagestyle' && name !== 'fancypagestyle') continue;
     const group = groupAt(prefix, whitespaceEnd(prefix, end));
     if (!group) continue;
@@ -181,7 +188,8 @@ export function latexRunningStyles(prefix: string) {
       const position = whitespaceEnd(prefix, group.end);
       const base = groupAt(prefix, position, '[', ']');
       const body = groupAt(prefix, whitespaceEnd(prefix, base?.end ?? position));
-      if (body) styles.set(style, fancyRunningStyle(prefix.slice(body.from, body.to)));
+      const inherited = base && styles.get(prefix.slice(base.from, base.to).trim());
+      if (body) styles.set(style, fancyRunningStyle(prefix.slice(body.from, body.to), inherited));
     }
   }
   if (!styles.has('fancy')) styles.set('fancy', fancyRunningStyle(prefix));

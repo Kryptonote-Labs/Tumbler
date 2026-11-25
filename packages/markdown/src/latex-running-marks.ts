@@ -1,5 +1,7 @@
 import type { Node } from 'prosemirror-model';
+import { isLatexBibliographyBlock } from './latex-bibliography';
 import { readLatexClass } from './latex-flow';
+import { latexRunningStyles } from './latex-presentation';
 import { latexNumbering } from './latex-numbering';
 import { latexEffectivePrefix } from './latex-project';
 import { isLatexHeading } from './latex-spec';
@@ -11,8 +13,13 @@ const empty = { text: '', uppercase: false };
 
 /** Resolve TeX's last left mark and first right mark on each physical page. */
 export function latexPageMarks(document: Node, starts: readonly number[]) {
-  const documentClass = readLatexClass(latexEffectivePrefix(document)).name;
+  const prefix = latexEffectivePrefix(document);
+  const { name: documentClass, options } = readLatexClass(prefix);
   const chaptered = documentClass === 'report' || documentClass === 'book';
+  const sided = options.findLast(option => option === 'twoside' || option === 'oneside');
+  const twoSided = sided ? sided === 'twoside' : documentClass === 'book';
+  const defaultStyle = latexRunningStyles(prefix).defaultStyle;
+  const standard = !defaultStyle || defaultStyle === 'headings' || defaultStyle === 'plain' || defaultStyle === 'empty';
   const numbering = latexNumbering(document)?.headings;
   const changes: { position: number; left?: Mark; right: Mark }[] = [];
   document.descendants((node, position) => {
@@ -29,10 +36,18 @@ export function latexPageMarks(document: Node, starts: readonly number[]) {
         : node.textBetween(0, node.content.size, '', (child) =>
             typeof child.attrs.label === 'string' ? child.attrs.label : '',
           ).trim();
-      const number = numbering?.get(position)?.number;
-      const label = number && chaptered && left ? 'Chapter ' + number : number;
-      const mark = { text: label ? label + '  ' + title : title, uppercase: left || chaptered };
-      changes.push(left ? { position, left: mark, right: empty } : { position, right: mark });
+      const numbered = numbering?.get(position);
+      const number = numbered?.number;
+      const label = number && chaptered && left ? (numbered.appendix ? 'Appendix ' : 'Chapter ') + number : number;
+      const mark = {
+        text: label ? label + (chaptered ? '.  ' : '  ') + title : title,
+        uppercase: left || chaptered,
+      };
+      if (standard && !twoSided) {
+        if (left) changes.push({ position, right: mark });
+      } else {
+        changes.push(left ? { position, left: mark, right: empty } : { position, right: mark });
+      }
       return false;
     }
     if (node.type.name === 'latex_raw') {
@@ -40,10 +55,10 @@ export function latexPageMarks(document: Node, starts: readonly number[]) {
       const title = source === '\\tableofcontents' ? 'Contents'
         : source === '\\listoffigures' ? 'List of Figures'
         : source === '\\listoftables' ? 'List of Tables'
-        : /^\\(?:begin\{thebibliography\}|(?:bibliography|printbibliography)\b)/.test(source)
+        : isLatexBibliographyBlock(source)
           ? chaptered ? 'Bibliography' : 'References'
           : undefined;
-      if (title) {
+      if (title && (defaultStyle === 'headings' || (defaultStyle === undefined && documentClass === 'book'))) {
         const mark = { text: title, uppercase: true };
         changes.push({ position, left: mark, right: mark });
       }
