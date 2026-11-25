@@ -52,6 +52,12 @@ export function whitespaceEnd(source: string, position: number) {
   return position;
 }
 
+/** The trimmed braced argument after `after`, and where it ends. */
+export function argument(source: string, after: number) {
+  const group = groupAt(source, whitespaceEnd(source, after));
+  return group && { value: source.slice(group.from, group.to).trim(), end: group.end };
+}
+
 export function argumentAt(source: string, position: number) {
   let start = whitespaceEnd(source, position);
   if (source[start] === '[') {

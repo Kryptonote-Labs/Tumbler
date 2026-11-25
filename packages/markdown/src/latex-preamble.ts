@@ -109,3 +109,31 @@ export function withLatexPackage(
   }
   return prefix;
 }
+
+/** Remove a package from the declarations in `prefix`, dropping a declaration it alone fills. */
+export function withoutLatexPackage(prefix: string, name: string, effectivePrefix = prefix) {
+  const edits: { from: number; to: number; text: string }[] = [];
+  for (const command of latexCommands(prefix)) {
+    if (command.name !== 'usepackage' && command.name !== 'RequirePackage') continue;
+    const at = whitespaceEnd(prefix, command.end);
+    const optional = groupAt(prefix, at, '[', ']');
+    const names = groupAt(prefix, optional ? whitespaceEnd(prefix, optional.end) : at);
+    if (!names) continue;
+    const listed = options(prefix.slice(names.from, names.to)).filter(Boolean);
+    if (!listed.includes(name)) continue;
+    const rest = listed.filter(item => item !== name);
+    if (rest.length) {
+      edits.push({ from: names.from, to: names.to, text: rest.join(',') });
+      continue;
+    }
+    const lineStart = prefix.lastIndexOf('\n', command.start - 1) + 1;
+    const after = /^[^\S\r\n]*(?:\r?\n|$)/.exec(prefix.slice(names.end))![0];
+    const whole = /^\s*$/.test(prefix.slice(lineStart, command.start));
+    edits.push(whole
+      ? { from: lineStart, to: names.end + after.length, text: '' }
+      : { from: command.start, to: names.end, text: '' });
+  }
+  if (!edits.length && effectivePrefix !== prefix && usesLatexPackage(effectivePrefix, name))
+    throw new Error(`Remove ${name} in the project file that loads it.`);
+  return edits.reduceRight((source, edit) => source.slice(0, edit.from) + edit.text + source.slice(edit.to), prefix);
+}

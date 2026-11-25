@@ -47,11 +47,15 @@ export function latexProjectFile(
   name: string,
   extension: string,
 ) {
-  const withExtension = name.endsWith(extension) ? name : name + extension;
-  for (const source of [entry, from]) {
-    const path = resolveLatexProjectPath(source, withExtension);
-    if (path && files.has(path)) return path;
-  }
+  // Like \input, a name with another extension is tried as written too (`\input{lab.sty}`).
+  const names = name.endsWith(extension)
+    ? [name]
+    : /\.\w+$/.test(name) ? [name + extension, name] : [name + extension];
+  for (const candidate of names)
+    for (const source of [entry, from]) {
+      const path = resolveLatexProjectPath(source, candidate);
+      if (path && files.has(path)) return path;
+    }
 }
 
 export function readLatexInclude(source: string, start: number) {

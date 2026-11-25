@@ -2,6 +2,7 @@ import { latexLineSpacing, latexRomanFamily } from './latex-format';
 import { readLatexPackages } from './latex-preamble';
 import { latexLength } from './latex-lengths';
 import { latexRomanGlue, type LatexRomanFont } from './latex-font-metrics';
+import { latexDocumentFont } from './latex-document-fonts';
 
 export const texPoint = 96 / 72.27;
 
@@ -57,6 +58,8 @@ export type LatexTypography = Readonly<{
   spaceShrink: number;
   hyphenation?: 'english';
   romanFont?: LatexRomanFont;
+  /** The browser family for a catalogue body font other than Computer or Latin Modern. */
+  bodyFont?: Readonly<{ family: string; category: 'serif' | 'sans' }>;
   expansion?: { stretch: number; shrink: number };
   inlineTitle: Readonly<{
     text: TextSize;
@@ -94,11 +97,13 @@ export function latexTypography(points: number, prefix: string, twoColumns = fal
     !/\\usepackage\s*(?:\[[^\]]*\]\s*)?\{[^}]*\bpolyglossia\b/.test(prefix);
   const romanFont = points === 12 ? 'cmr12' : 'cmr10';
   const family = latexRomanFamily(prefix);
-  const usesClassicRoman = family === 'cmr' || (family === undefined &&
+  const documentFont = latexDocumentFont(prefix);
+  const bodyFont = documentFont && 'glue' in documentFont ? documentFont : undefined;
+  const usesClassicRoman = !bodyFont && (family === 'cmr' || (family === undefined &&
     !/\\(?:fontfamily|fontencoding|setmainfont|renewcommand\s*\{\\rmdefault\})/.test(prefix) &&
     !/\\usepackage\s*(?:\[[^\]]*\]\s*)?\{[^}]*\b(?:fontenc|fontspec|lmodern|times|palatino|newtxtext|newpxtext)\b/.test(
       prefix,
-    ));
+    )));
   const packages = readLatexPackages(prefix);
   const latinModern = family === 'lmr';
   const arrayStretch = Number([...prefix.matchAll(/\\(?:re)?newcommand\s*\{\\arraystretch\}\s*\{([0-9.]+)\}/g)].at(-1)?.[1] ?? 1);
@@ -170,7 +175,15 @@ export function latexTypography(points: number, prefix: string, twoColumns = fal
       spaceAboveRule: 0.4 * ex,
       spaceBelowRule: 0.65 * ex,
     },
-    ...latexRomanGlue(romanFont, text.size),
+    ...(bodyFont
+      ? {
+          space: bodyFont.glue[0] * text.size,
+          spaceStretch: bodyFont.glue[1] * text.size,
+          spaceShrink: bodyFont.glue[2] * text.size,
+          spaceExtra: bodyFont.glue[3] * text.size,
+        }
+      : latexRomanGlue(romanFont, text.size)),
+    ...(bodyFont ? { bodyFont: { family: bodyFont.family, category: bodyFont.category } } : {}),
     sentenceSpacing: !/\\frenchspacing\b/.test(prefix),
     ...(usesClassicRoman ? { romanFont } : {}),
     ...(expansion ? { expansion } : {}),

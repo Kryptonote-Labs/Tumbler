@@ -5,7 +5,8 @@ import { latexState } from '../src/latex-editor';
 import {
   latexEffectivePrefix, latexFlow, latexNumbering, latexPageLayout, layoutLatexDrawing,
   paginateLatex, parseLatexProject, readLatexDrawing, readLatexFigure, replaceLatexSource, serializeLatexProject,
-  setLatexCaption, interpretLatexText, readLatexTextMacros, latexTitleArguments, materializeLatexStructures,
+  latexProjectFileUsage, setLatexCaption, interpretLatexText, readLatexTextMacros, latexTitleArguments,
+  materializeLatexStructures,
 } from '../src/latex';
 
 test('unlinking a chapter in Visual retains the most recent chapter file and can be undone', () => {
@@ -238,4 +239,16 @@ test('a list item retains its authored vertical adjustment after the final text 
   expect(first?.firstChild?.textContent).toBe('First line');
   expect(first?.lastChild?.attrs.source).toBe('\\vspace*{3mm}');
   expect(serializeLatexProject(document)?.files.get('main.tex')).toBe(source);
+});
+
+test('a package read with \\input counts as a used project file', () => {
+  const doc = parseLatexProject(
+    'main.tex',
+    new Map([
+      ['main.tex', '\\documentclass{article}\n\\input{lab.sty}\n\\begin{document}\nA\n\\end{document}\n'],
+      ['lab.sty', '\\newcommand{\\lab}{Lab}\n'],
+    ]),
+  );
+  expect(latexProjectFileUsage(doc).get('lab.sty')).toBe(1);
+  expect(latexEffectivePrefix(doc)).toContain('\\newcommand{\\lab}{Lab}');
 });
