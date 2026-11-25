@@ -1,4 +1,5 @@
-import { argumentAt, commandEnd, groupAt, latexCommands, lineEnd, whitespaceEnd } from './latex-syntax';
+import { withLatexPackage } from './latex-preamble';
+import { commandEnd, groupAt, latexCommands, lineEnd, whitespaceEnd } from './latex-syntax';
 
 export const latexPaperSizes = new Map<string, [number, number]>([
   ['letterpaper', [8.5 * 96, 11 * 96]],
@@ -133,22 +134,5 @@ export function setLatexGeometry(prefix: string, change: GeometryChange, current
     return prefix;
   }
   const options = changeOptions(change.paperSize === undefined && currentPaperSize ? [currentPaperSize] : [], change);
-  const declaration = geometryPackage('usepackage', options);
-  if (!options.length) return prefix;
-  let insert = 0;
-  for (const command of latexCommands(prefix)) {
-    if (command.name !== 'documentclass' && command.name !== 'usepackage' && command.name !== 'RequirePackage') {
-      if (insert || command.name === 'begin') break;
-      continue;
-    }
-    const group = argumentAt(prefix, command.end);
-    if (group) insert = group.end;
-  }
-  if (!insert) return declaration + newline + prefix;
-  const end = lineEnd(prefix, insert);
-  if (/^[ \t]*(?:%.*)?$/.test(prefix.slice(insert, end).trimEnd())) {
-    insert = prefix[end - 1] === '\r' ? end - 1 : end;
-    return prefix.slice(0, insert) + newline + declaration + prefix.slice(insert);
-  }
-  return prefix.slice(0, insert) + newline + declaration + newline + prefix.slice(insert);
+  return options.length ? withLatexPackage(prefix, 'geometry', prefix, options) : prefix;
 }

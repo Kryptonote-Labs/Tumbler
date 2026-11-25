@@ -69,7 +69,12 @@ export function latexDriverUsesClassPaper(prefix: string, classOptions: readonly
 const defaultOptions = new Map([['ulem', 'normalem'], ['hyperref', 'hidelinks']]);
 
 /** Insert one ordinary package declaration before the document opens. */
-export function withLatexPackage(prefix: string, name: string, effectivePrefix = prefix) {
+export function withLatexPackage(
+  prefix: string,
+  name: string,
+  effectivePrefix = prefix,
+  packageOptions?: readonly string[],
+) {
   if (!/^[\w./@+-]+$/.test(name)) throw new RangeError('Invalid LaTeX package name.');
   const sources = effectivePrefix === prefix ? [prefix] : [prefix, effectivePrefix];
   const loaded = new Set<string>();
@@ -95,7 +100,7 @@ export function withLatexPackage(prefix: string, name: string, effectivePrefix =
     const group = groupAt(prefix, whitespaceEnd(prefix, command.end));
     if (!group || prefix.slice(group.from, group.to) !== 'document') continue;
     const newline = /\r\n|\n/.exec(prefix)?.[0] ?? '\n';
-    const options = defaultOptions.get(name);
+    const options = packageOptions?.join(',') ?? defaultOptions.get(name);
     const declaration = '\\usepackage' + (options ? '[' + options + ']' : '') + '{' + name + '}';
     const line = prefix.lastIndexOf('\n', command.start - 1) + 1;
     const at = /^\s*$/.test(prefix.slice(line, command.start)) ? line : command.start;
