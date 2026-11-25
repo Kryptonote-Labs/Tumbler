@@ -1,4 +1,4 @@
-import { readLatexClass } from './latex-flow';
+import { readLatexClass } from './latex-class';
 import { latexLength } from './latex-lengths';
 import { withLatexPackage } from './latex-preamble';
 import { commandEnd, groupAt, latexCommands, lineEnd, whitespaceEnd } from './latex-syntax';

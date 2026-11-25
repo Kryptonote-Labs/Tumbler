@@ -1,5 +1,6 @@
 import { latexBaseClass, readLatexClass } from './latex-class';
 import { updateLatexBoundary } from './latex-boundary-step';
+import { geometrySides, readGeometry } from './latex-geometry';
 import { readLatexPackages, withLatexPackage } from './latex-preamble';
 import { latexEffectivePrefix } from './latex-project';
 import { latexDocumentStartCommands } from './latex-syntax';
@@ -7,13 +8,14 @@ import type { Transform } from 'prosemirror-transform';
 
 export const latexRightPageBreak = '\\cleardoublepage';
 
-/** The standard class's page opening rules, based on its base class and options. */
+/** The standard class's page opening rules, including geometry side overrides. */
 export function latexPageOpening(prefix: string) {
   const { name, options } = readLatexClass(prefix);
   const base = latexBaseClass(name);
   const book = base === 'book';
   const chaptered = book || base === 'report';
-  const twoSided = options.includes('twoside') || (book && !options.includes('oneside'));
+  const geometry = readGeometry(prefix);
+  const { twoSided } = geometrySides(base, options, geometry.loaded ? geometry.options : []);
   const openRight = !options.includes('openany') && (book || options.includes('openright'));
   return { base, options, chaptered, twoSided, chapterOnRight: chaptered && twoSided && openRight };
 }
