@@ -22,6 +22,7 @@ import {
   type LatexTitleRun,
   type LatexTitleStyle,
 } from './latex-title-page-list';
+import { isTitleList, titleListStyle, type TitleListKind } from './latex-title-page-list-style';
 import { texPoint } from './latex-typography';
 
 export type { LatexTitleItem, LatexTitleRun, LatexTitleStyle } from './latex-title-page-list';
@@ -32,8 +33,11 @@ type State = {
   stretch: number;
   pendingStretch: number;
   align: LatexTitleAlign;
+  parskip: number;
+  parskipShrink: number;
 };
-type Frame = { state: State; material?: LatexTitleMaterial[]; height?: number; environment?: string };
+type List = { kind: TitleListKind; number: number };
+type Frame = { state: State; material?: LatexTitleMaterial[]; height?: number; environment?: string; list?: List };
 type Piece = LatexTitleRun & { space?: true };
 
 const titleFields: readonly LatexTitleField[] = ['title', 'author', 'date', 'submitdate'];
@@ -108,8 +112,6 @@ function interpretPage(
 ) {
   const points = latexBaseSize(prefix);
   const normalSize = layout.fontSize;
-  const parskip = layout.paragraphSpacing;
-  const parskipShrink = layout.paragraphShrink;
   const textHeight = layout.height - layout.top - layout.bottom;
   const normal: LatexTitleStyle = { size: normalSize, family: 'roman', bold: false, italic: false, smallCaps: false };
   const initialStretch = latexLineSpacing(prefix, points).stretch;
@@ -119,11 +121,15 @@ function interpretPage(
     stretch: initialStretch,
     pendingStretch: initialStretch,
     align: 'justify',
+    parskip: layout.paragraphSpacing,
+    parskipShrink: layout.paragraphShrink,
   };
   const page: LatexTitleMaterial[] = [];
   const frames: Frame[] = [];
   let list = page;
   let lines: Piece[][] | undefined;
+  let itemMarker: string | undefined;
+  const lists = (): List[] => frames.flatMap((frame) => frame.list ? [frame.list] : []);
   let source = input;
   // A source offset plus a channel for the body, each title field, or synthetic macro code.
   const channels = titleFields.length + 1;
@@ -150,13 +156,24 @@ function interpretPage(
     const paragraph = lines;
     lines = undefined;
     if (list === page) topSeen = true;
-    for (const line of paragraph)
-      list.push({ kind: 'line', align: state.align, leading: leading(), runs: mergeLine(line) });
+    const activeLists = lists();
+    const indent = activeLists.reduce((margin, entry, depth) => margin + titleListStyle(entry.kind, depth, points).margin, 0);
+    const active = activeLists.at(-1);
+    for (const line of paragraph) {
+      const item = active ? {
+        gap: titleListStyle(active.kind, activeLists.length - 1, points).gap,
+        ...(itemMarker !== undefined && { marker: itemMarker }),
+      } : undefined;
+      list.push({ kind: 'line', align: state.align, leading: leading(), runs: mergeLine(line),
+        ...(item && { indent, item }),
+      });
+      itemMarker = undefined;
+    }
   };
   const append = (piece: Piece) => {
     if (!lines) {
       // TeX adds \parskip before a paragraph unless it starts an internal vertical list.
-      if (list.length) list.push({ kind: 'glue', size: parskip, order: 0, shrink: parskipShrink });
+      if (list.length && itemMarker === undefined) list.push({ kind: 'glue', size: state.parskip, order: 0, shrink: state.parskipShrink });
       lines = [[]];
     }
     lines.at(-1)!.push(piece);
@@ -240,6 +257,23 @@ function interpretPage(
       const group = argument();
       if (!group) return;
       const name = source.slice(group.from, group.to).trim();
+      if (explicit && isTitleList(name)) {
+        const active = lists();
+        const depth = active.length - Number(command === 'end');
+        const style = titleListStyle(name, depth, points);
+        if (command === 'begin') {
+          endParagraph();
+          open({ environment: name, list: { kind: name, number: 0 } });
+          state = { ...state, parskip: style.item, parskipShrink: 0 };
+          if (topSeen) glue({ size: style.top, order: 0 });
+        } else {
+          endParagraph();
+          if (!close(name)) return;
+          glue({ size: style.top, order: 0 });
+        }
+        position = group.end;
+        continue;
+      }
       const definition = macros.get(command === 'begin' ? name : 'end' + name);
       if (explicit && !definition && name !== 'titlepage' && !environments.has(name)) return;
       if (definition && (definition.count || definition.optional !== undefined)) return;
@@ -298,6 +332,27 @@ function interpretPage(
     } else if (command === 'selectfont') {
       state = { ...state, stretch: state.pendingStretch };
       position = after;
+    } else if (command === 'setlength' && explicit) {
+      const name = argument();
+      if (!name || source.slice(name.from, name.to).trim() !== '\\parskip') return;
+      const value = argument(spaceEnd(source, name.end));
+      if (!value) return;
+      const measurement = source.slice(value.from, value.to).trim();
+      const length = readGlue(measurement, 0, quad(), textHeight);
+      if (!length || length.end !== measurement.length) return;
+      state = { ...state, parskip: length.height, parskipShrink: length.shrink };
+      position = value.end;
+    } else if (command === 'item' && explicit) {
+      const active = lists();
+      const current = active.at(-1);
+      if (!current) return;
+      endParagraph();
+      const style = titleListStyle(current.kind, active.length - 1, points);
+      if (current.number) glue({ size: style.item + state.parskip, order: 0 });
+      const option = groupAt(source, after, '[', ']');
+      const number = ++current.number;
+      itemMarker = option ? printable(source.slice(option.from, option.to)) : style.marker(number);
+      position = option ? spaceEnd(source, option.end) : after;
     } else if (command === 'par') {
       endParagraph();
       position = after;
@@ -314,7 +369,7 @@ function interpretPage(
       } else if (lines) {
         // Under \centering and the ragged declarations, \\ ends the paragraph and cancels the
         // \parskip before the next one.
-        glue({ size: extra - parskip, order: 0, shrink: -parskipShrink });
+        glue({ size: extra - state.parskip, order: 0, shrink: -state.parskipShrink });
       }
       position = next;
     } else if (command === 'linebreak' || command === 'newline') {

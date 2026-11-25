@@ -14,7 +14,7 @@ export { isEditableLatexAbstract, latexFrontMatterBlocks, latexFrontMatterOrder,
 export { latexPageOpening, latexRightPageBreak, latexRightPagePrefix } from './latex-page-start';
 import { latexPageLayout } from './latex-layout';
 import { interpretLatexComposedPage } from './latex-title-page';
-export { createLatexComposedPage, replaceLatexComposedText, latexComposedLineGap, latexComposedPageKind, latexComposedPageSource, readLatexPageComposition, editLatexPageComposition, latexComposedTextSource, type LatexCompositionEdit, type LatexComposedPageKind, type LatexVerticalAlignment } from './latex-page-composition';
+export { createLatexComposedPage, replaceLatexComposedText, splitLatexComposedText, latexComposedLineGap, latexComposedPageKind, latexComposedPageSource, readLatexPageComposition, editLatexPageComposition, latexComposedTextSource, type LatexCompositionEdit, type LatexComposedBlockKind, type LatexComposedPageKind, type LatexVerticalAlignment } from './latex-page-composition';
 import { latexAlignedParagraph } from './latex-alignment';
 import { authoredLatexStyleOrder, isLatexStyleMark, latexInlineFormat, latexInlineSize } from './latex-inline-format';
 export { latexFontSizes, latexFontSizePointSizes, latexFontSizeProperties, latexLinkUrl, type LatexFontSize } from './latex-inline-format';

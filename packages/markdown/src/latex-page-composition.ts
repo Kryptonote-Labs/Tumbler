@@ -15,6 +15,7 @@ type LineStyle = { alignment: keyof typeof alignments; size: string; bold: boole
 const open = /^\\clear(?:double)?page\s*\\begingroup(?![A-Za-z@])/;
 const topFill = '\\vspace*{\\fill}';
 const bottomFill = '\\vspace{\\fill}';
+const spacingCommands = /^(?:\\linespread\{([\d.]+)\}\\selectfont\s*)?(?:\\setlength\{\\parskip\}\{([^{}]+)\}\s*)?/;
 const betweenFill = '\\vspace{\\stretch{1}}';
 
 export function latexComposedPageKind(source: string): LatexComposedPageKind | undefined {
@@ -56,7 +57,7 @@ function lineSource(style: LineStyle, text = '\\mbox{}') {
 
 /** Start a standard title page or an ordinary page with separate page boundaries. */
 export function latexComposedPageSource(kind: LatexComposedPageKind, right = false) {
-  const line = lineSource(defaultStyle(kind));
+  const line = '\\linespread{1}\\selectfont\n\\setlength{\\parskip}{0pt}\n' + lineSource(defaultStyle(kind));
   return kind === 'title'
     ? (right ? latexRightPageBreak + '\n' : '') + '\\begin{titlepage}\n' + line + '\n\\end{titlepage}'
     : (right ? latexRightPageBreak : '\\clearpage') + '\n\\begingroup\n' + line + '\n\\clearpage\n\\endgroup';
@@ -91,52 +92,83 @@ function editableLine(source: string, start: number) {
   return { start, end: group.end, from, to, style };
 }
 
-/** Read the ribbon-editable lines and alignment of an explicit page. */
+type ComposedLine = NonNullable<ReturnType<typeof editableLine>>;
+export type LatexComposedBlockKind = 'paragraph' | 'itemize' | 'enumerate';
+type ComposedBlock = { kind: LatexComposedBlockKind | 'line'; start: number; end: number };
+
+/** Find the end of a paragraph without treating commands inside groups as separators. */
+function paragraphEnd(source: string, start: number, limit: number) {
+  for (let at = start; at < limit;) {
+    if (source[at] === '\n') {
+      let next = at + 1;
+      while (source[next] === ' ' || source[next] === '\t' || source[next] === '\r') next++;
+      if (source[next] === '\n') return at;
+    }
+    if (source[at] === '{') at = groupAt(source, at)?.end ?? at + 1;
+    else if (source[at] === '%') {
+      const end = source.indexOf('\n', at);
+      at = end < 0 ? limit : end + 1;
+    } else if (source[at] === '\\') {
+      const end = commandEnd(source, at);
+      const name = source.slice(at, end);
+      if (name === '\\par') return end;
+      if (at > start && (name === '\\begin' || name === '\\vspace' || name === '\\vfill')) return at;
+      at = end;
+    } else at++;
+  }
+  return limit;
+}
+
+/** Read the blocks, page spacing, and alignment of a ribbon-editable page. */
 export function readLatexPageComposition(source: string) {
   const page = latexComposedPageAt(source);
   if (!page) return;
-  const lines: NonNullable<ReturnType<typeof editableLine>>[] = [];
+  // A contents entry precedes the page's spacing settings and content.
+  const bodyStart = whitespaceEnd(source, latexComposedContents(source)?.end ?? page.from);
+  const settings = spacingCommands.exec(source.slice(bodyStart));
+  const settingsEnd = bodyStart + (settings?.[0].length ?? 0);
+  const spacing = { stretch: settings?.[1], paragraphGap: settings?.[2] };
+  const lines: ComposedLine[] = [];
+  const blocks: ComposedBlock[] = [];
   const fills: { from: number; to: number; source: string }[] = [];
-  const start = whitespaceEnd(source, page.from);
+  const start = whitespaceEnd(source, settingsEnd);
+  // A titlepage alone also occurs in imported documents with their own layout.
+  const authored = page.kind === 'page' || settingsEnd > bodyStart;
   for (let at = start; at < page.to;) {
-    const entry = readLatexContentsEntry(source, at);
-    if (entry?.list === 'toc' && at === start) {
-      at = whitespaceEnd(source, entry.end);
-      continue;
-    }
     const line = editableLine(source, at);
+    const fill = [topFill, bottomFill, betweenFill].find((value) => source.startsWith(value, at));
+    const gap = latexComposedLineGap(source, at);
+    const environment = source.startsWith('\\begin', at) ? environmentAt(source, at) : undefined;
+    let next: number;
     if (line) {
       lines.push(line);
-      at = whitespaceEnd(source, line.end);
-      continue;
-    }
-    if (source[at] === '%') {
+      blocks.push({ kind: 'line', start: line.start, end: line.end });
+      next = line.end;
+    } else if (source[at] === '%') {
       const end = source.indexOf('\n', at);
-      at = end < 0 ? page.to : whitespaceEnd(source, end);
-      continue;
+      next = end < 0 ? page.to : end;
+    } else if (fill) {
+      next = at + fill.length;
+      fills.push({ from: at, to: next, source: fill });
+    } else if (gap) {
+      next = gap.to;
+    } else if (environment?.name === 'itemize' || environment?.name === 'enumerate') {
+      next = environment.end;
+      blocks.push({ kind: environment.name, start: at, end: next });
+    } else {
+      if (!authored && /^\\(?:thispagestyle|pagestyle|centering|raggedright|raggedleft)\b/.test(source.slice(at))) return;
+      next = paragraphEnd(source, at, page.to);
+      blocks.push({ kind: 'paragraph', start: at, end: next });
     }
-    const fill = [topFill, bottomFill, betweenFill].find((value) => source.startsWith(value, at));
-    if (fill) fills.push({ from: at, to: at + fill.length, source: fill });
-    else if (page.kind === 'title') {
-      // A title page environment alone does not identify a ribbon composition.
-      const gap = latexComposedLineGap(source, at);
-      if (!gap || !lines.length) return;
-      at = whitespaceEnd(source, gap.to);
-      continue;
-    }
-    const next = fill ? at + fill.length : source[at] === '{'
-      ? groupAt(source, at)?.end
-      : source[at] === '\\' ? commandEnd(source, at) : undefined;
-    at = whitespaceEnd(source, next ?? at + 1);
+    at = whitespaceEnd(source, next);
   }
-  if (page.kind === 'title' && !lines.length) return;
-  const contentStart = whitespaceEnd(source, latexComposedContents(source)?.end ?? page.from);
-  const top = fills.some((fill) => fill.source === topFill && fill.from === contentStart);
+  if (!authored && !lines.length) return;
+  const top = fills.some((fill) => fill.source === topFill && fill.from === start);
   const bottom = fills.some((fill) => fill.source === bottomFill && whitespaceEnd(source, fill.to) === page.to);
   const distributed = fills.some((fill) => fill.source === betweenFill);
   const alignment: LatexVerticalAlignment = top ? bottom ? 'center' : 'bottom'
     : distributed ? 'distribute' : 'top';
-  return { ...page, lines, fills, alignment };
+  return { ...page, start, bodyStart, settingsEnd, spacing, lines, blocks, fills, alignment };
 }
 
 /** The manually inserted gap associated with this line. */
@@ -151,8 +183,11 @@ export type LatexCompositionEdit =
   | { kind: 'line-text'; text: string }
   | { kind: 'page-start'; right: boolean }
   | { kind: 'line-style'; style: Partial<LineStyle> }
-  | { kind: 'add-line' }
+  | { kind: 'page-spacing'; stretch?: string; paragraphGap?: string }
+  | { kind: 'add-block'; block: LatexComposedBlockKind; after?: number }
+  | { kind: 'add-line'; after?: number }
   | { kind: 'remove-line' }
+  | { kind: 'remove-block'; start: number }
   | { kind: 'space'; length: string | null };
 
 function replace(source: string, from: number, to: number, value: string) {
@@ -163,8 +198,7 @@ function alignPage(source: string, alignment: LatexVerticalAlignment) {
   let page = readLatexPageComposition(source);
   if (!page) return source;
   for (const fill of page.fills.reverse()) {
-    if (fill.source === betweenFill || (fill.source === topFill && fill.from ===
-        whitespaceEnd(source, latexComposedContents(source)?.end ?? page.from))
+    if (fill.source === betweenFill || (fill.source === topFill && fill.from === page.start)
         || (fill.source === bottomFill && whitespaceEnd(source, fill.to) === page.to))
       source = replace(source, fill.from, fill.to + Number(source[fill.to] === '\n'), '');
   }
@@ -172,12 +206,12 @@ function alignPage(source: string, alignment: LatexVerticalAlignment) {
   if (!page) return source;
   if (alignment === 'center') source = replace(source, page.to, page.to, bottomFill + '\n');
   if (alignment === 'center' || alignment === 'bottom') {
-    const at = whitespaceEnd(source, latexComposedContents(source)?.end ?? page.from);
+    const at = page.start;
     source = replace(source, at, at, topFill + '\n');
   }
   if (alignment === 'distribute') {
-    for (const line of page.lines.slice(1).reverse())
-      source = replace(source, line.start, line.start, betweenFill + '\n');
+    for (const block of page.blocks.slice(1).reverse())
+      source = replace(source, block.start, block.start, betweenFill + '\n');
   }
   return source;
 }
@@ -193,16 +227,41 @@ export function editLatexPageComposition(source: string, index: number, edit: La
     if (page.kind === 'title') return edit.right ? latexRightPageBreak + '\n' + source : source.slice(right.length);
     return source.replace(/^\\clear(?:double)?page/, () => edit.right ? latexRightPageBreak : '\\clearpage');
   }
+  if (edit.kind === 'page-spacing') {
+    const stretch = edit.stretch ?? page.spacing.stretch;
+    const paragraphGap = edit.paragraphGap ?? page.spacing.paragraphGap;
+    if (stretch && (!/^\d+(?:\.\d+)?$/.test(stretch) || Number(stretch) <= 0))
+      throw new Error('Enter a positive line spacing multiplier.');
+    if (paragraphGap && latexLength(paragraphGap) === undefined)
+      throw new Error('Enter a measurement such as 6mm or 12pt.');
+    const settings = [
+      stretch && '\\linespread{' + stretch + '}\\selectfont',
+      paragraphGap && '\\setlength{\\parskip}{' + paragraphGap + '}',
+    ].filter(Boolean).join('\n');
+    return replace(source, page.bodyStart, page.settingsEnd, settings ? settings + '\n' : '');
+  }
   const line = page.lines[index];
   if (edit.kind === 'line-text' && line) return replaceLatexComposedText(source, line, edit.text);
   if (edit.kind === 'line-style' && line)
     return replace(source, line.start, line.end,
       lineSource({ ...line.style, ...edit.style }, source.slice(line.from, line.to)));
-  if (edit.kind === 'add-line') {
-    const at = line ? latexComposedLineGap(source, line.end)?.to ?? line.end :
-      latexComposedContents(source)?.end ?? page.from;
-    const added = replace(source, at, at, '\n' + lineSource(line?.style ?? defaultStyle(page.kind)) + (line ? '' : '\n'));
+  if (edit.kind === 'add-line' || edit.kind === 'add-block') {
+    const active = edit.after === undefined
+      ? line ?? page.blocks.at(-1)
+      : page.blocks.find((block) => block.end === edit.after);
+    const at = active ? latexComposedLineGap(source, active.end)?.to ?? active.end : page.start;
+    const block = edit.kind === 'add-line' ? lineSource(line?.style ?? defaultStyle(page.kind))
+      : edit.block === 'paragraph' ? '\\mbox{}\\par'
+      : '\\begin{' + edit.block + '}\n\\item \\mbox{}\n\\end{' + edit.block + '}';
+    const added = replace(source, at, at, (active ? '\n' : '') + block + (!active || source[at] !== '\n' ? '\n' : ''));
     return page.alignment === 'distribute' ? alignPage(added, 'distribute') : added;
+  }
+  if (edit.kind === 'remove-block') {
+    const block = page.blocks.find((entry) => entry.start === edit.start);
+    if (!block || block.kind === 'line') return source;
+    const fallback = page.blocks.length === 1 ? lineSource(defaultStyle(page.kind)) + '\n' : '';
+    const removed = replace(source, block.start, block.end + Number(source[block.end] === '\n'), fallback);
+    return page.alignment === 'distribute' ? alignPage(removed, 'distribute') : removed;
   }
   if (edit.kind === 'remove-line' && line) {
     if (page.lines.length === 1) return replace(source, line.from, line.to, '\\mbox{}');
@@ -233,4 +292,35 @@ export function latexComposedTextSource(text: string) {
 /** Replace an editable text range in a composed page with literal text. */
 export function replaceLatexComposedText(source: string, range: { from: number; to: number }, text: string) {
   return replace(source, range.from, range.to, latexComposedTextSource(text));
+}
+
+/** Split a plain-text run, keeping the following text in a real paragraph or list item. */
+export function splitLatexComposedText(
+  source: string,
+  range: { from: number; to: number },
+  left: string,
+  right: string,
+) {
+  const page = readLatexPageComposition(source);
+  const block = page?.blocks.find((entry) => range.from >= entry.start && range.to <= entry.end);
+  if (!block || block.kind === 'line') return;
+  // A break inside an inline group would carry the formatting across a structural boundary.
+  for (let at = block.start; at < range.from;) {
+    if (source[at] === '\\') at = commandEnd(source, at);
+    else if (source[at] === '%') {
+      const end = source.indexOf('\n', at);
+      if (end < 0) return;
+      at = end + 1;
+    } else if (source[at] === '{') {
+      const group = groupAt(source, at);
+      if (!group || group.end > range.from) return;
+      at = group.end;
+    } else at++;
+  }
+  const join = block.kind === 'paragraph' ? '\\par\n' : '\n\\item ';
+  const before = latexComposedTextSource(left.trimEnd()) + join;
+  return {
+    source: replace(source, range.from, range.to, before + latexComposedTextSource(right.trimStart())),
+    target: range.from + before.length,
+  };
 }
