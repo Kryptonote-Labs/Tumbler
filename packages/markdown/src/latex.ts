@@ -9,12 +9,14 @@ import { latexBlockDeclaration, latexMinipageWidth, latexTextEnvironments } from
 export { latexBlockDeclaration, latexMinipageArgument, latexMinipageWidth, isLatexTitlePage } from './latex-text-layout';
 export { latexMathMacros, interpretLatexParagraphMacro, interpretLatexText, interpretLatexTextFragment, readLatexTextMacros, type LatexPrintedText } from './latex-macros';
 import { latexDeclarations, latexTikzFragment, latexVerticalSpace } from './latex-presentation';
-export { latexDeclarations, latexVerticalSpace, latexSectionPresentation, latexPresentationColour, latexRunningFields, latexRunningStyles, latexTikzFragment, latexColumnAliasWidths } from './latex-presentation';
+export { latexDeclarations, latexFontSize, latexVerticalSpace, latexSectionPresentation, latexPresentationColour, latexRunningFields, latexRunningStyles, latexTikzFragment, latexColumnAliasWidths } from './latex-presentation';
 export { readLatexColours } from './latex-colour';
 export { latexPageMarks } from './latex-running-marks';
 import { plainLatexItemLabel, readLatexEnumitem } from './latex-list';
 import { readLatexContentsEntry, readLatexListSequence, readLatexStateMacro } from './latex-state-command';
 export { latexCustomTitlePage, readLatexContentsEntry, readLatexListSequence, readLatexStateMacro } from './latex-state-command';
+export { interpretLatexTitlePage } from './latex-title-page';
+export type { LatexTitleItem, LatexTitleRun, LatexTitleStyle } from './latex-title-page';
 import { readLatexTitledEnvironments } from './latex-titled-environments';
 export { readLatexTitledEnvironments } from './latex-titled-environments';
 import { readLatexTitleSetter } from './latex-metadata';

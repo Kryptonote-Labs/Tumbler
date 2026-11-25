@@ -16,6 +16,15 @@ const fontLeading = new Map<string, readonly [number, number, number]>([
   ['Large', [18, 18, 22]], ['LARGE', [22, 22, 25]], ['huge', [25, 25, 30]], ['Huge', [30, 30, 30]],
 ]);
 
+/** The size and baselineskip a LaTeX size command selects under the class's normal size. */
+export function latexFontSize(command: string, normalSize = 10 * texPoint) {
+  const sizes = latexFontSizePoints.get(command);
+  if (!sizes) return;
+  const points = normalSize / texPoint;
+  const index = points >= 11.5 ? 2 : points >= 10.5 ? 1 : 0;
+  return { size: sizes[index] * texPoint, leading: fontLeading.get(command)![index] * texPoint };
+}
+
 /** Read scoped declarations without absorbing the text or environment they format. */
 export function latexDeclarations(source: string, start = 0, normalSize = 10 * texPoint) {
   let end = start;
@@ -31,14 +40,11 @@ export function latexDeclarations(source: string, start = 0, normalSize = 10 * t
     const position = whitespaceEnd(source, end);
     const next = commandEnd(source, position);
     const command = source.slice(position + 1, next);
-    const sizes = latexFontSizePoints.get(command);
-    if (sizes) {
-      const points = normalSize / texPoint;
-      const index = points >= 11.5 ? 2 : points >= 10.5 ? 1 : 0;
-      scale = (sizes[index] * texPoint) / normalSize;
+    const selected = latexFontSize(command, normalSize);
+    if (selected) {
+      scale = selected.size / normalSize;
       size = undefined;
-      const baseline = fontLeading.get(command)?.[index];
-      leading = baseline === undefined ? undefined : baseline * texPoint;
+      leading = selected.leading;
     } else if (command === 'sffamily' || command === 'rmfamily' || command === 'ttfamily') {
       family = command === 'sffamily' ? 'sans' : command === 'ttfamily' ? 'mono' : 'roman';
     } else if (command === 'bfseries' || command === 'bf' || command === 'mdseries') {
