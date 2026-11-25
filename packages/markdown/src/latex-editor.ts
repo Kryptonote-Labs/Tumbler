@@ -1,9 +1,10 @@
+import { addLatexFormattingPackages, toggleLatexStyle } from './latex-format-commands';
+import { setLatexAlignment } from './latex-alignment';
 import {
   baseKeymap,
   chainCommands,
   createParagraphNear,
   splitBlockAs,
-  toggleMark,
 } from 'prosemirror-commands';
 import { collab } from 'prosemirror-collab';
 import { history, redo, undo } from 'prosemirror-history';
@@ -13,7 +14,6 @@ import {
   DOMParser,
   Fragment,
   Slice,
-  type Mark,
   type Node,
   type ParseOptions,
 } from 'prosemirror-model';
@@ -52,46 +52,6 @@ const latexEditorDOMParser = new LatexEditorDOMParser(schema, [
   ...latexHeadingDOMRules,
   ...DOMParser.fromSchema(schema).rules,
 ]);
-
-function hasStyle(mark: Mark, style: Style) {
-  return (
-    mark.type.name === style || (mark.type.name === 'latex_style' && mark.attrs.style === style)
-  );
-}
-
-export function latexStyleActive(state: EditorState, style: Style) {
-  const { empty, from, to, $from } = state.selection;
-  if (empty) return (state.storedMarks ?? $from.marks()).some((mark) => hasStyle(mark, style));
-  let active = false;
-  state.doc.nodesBetween(from, to, (node) => {
-    if (node.isInline && node.marks.some((mark) => hasStyle(mark, style))) active = true;
-    return !active;
-  });
-  return active;
-}
-
-export function toggleLatexStyle(style: Style): Command {
-  return (state, dispatch) => {
-    if (!latexStyleActive(state, style)) return toggleMark(schema.marks[style]!)(state, dispatch);
-    const { empty, from, to, $from } = state.selection;
-    if (!dispatch) return true;
-    const tr = state.tr;
-    if (empty) {
-      tr.setStoredMarks(
-        (state.storedMarks ?? $from.marks()).filter((mark) => !hasStyle(mark, style)),
-      );
-    } else {
-      state.doc.nodesBetween(from, to, (node, position) => {
-        if (!node.isInline) return;
-        for (const mark of node.marks)
-          if (hasStyle(mark, style))
-            tr.removeMark(Math.max(from, position), Math.min(to, position + node.nodeSize), mark);
-      });
-    }
-    dispatch(tr);
-    return true;
-  };
-}
 
 export function latexHeading(level: number, command?: 'part' | 'chapter'): Command {
   return (state, dispatch) => {
@@ -432,6 +392,15 @@ export function latexState(
         'Shift-Mod-z': redo,
         'Mod-b': toggleLatexStyle('strong'),
         'Mod-i': toggleLatexStyle('em'),
+        'Mod-u': toggleLatexStyle('underline'),
+        'Mod-Shift-x': toggleLatexStyle('strike'),
+        'Mod-Shift-k': toggleLatexStyle('smallCaps'),
+        'Mod-=': toggleLatexStyle('subscript'),
+        'Mod-+': toggleLatexStyle('superscript'),
+        'Mod-Shift-l': setLatexAlignment('left'),
+        'Mod-Shift-e': setLatexAlignment('center'),
+        'Mod-Shift-r': setLatexAlignment('right'),
+        'Mod-Shift-j': setLatexAlignment('justify'),
         'Mod-m': insertLatexMath(false),
         'Shift-Mod-m': insertLatexMath(true),
         Backspace: undoInputRule,
@@ -448,6 +417,7 @@ export function latexState(
       new Plugin({
         appendTransaction(transactions, previous, current) {
           const transaction = current.tr;
+          if (transactions.some(item => item.docChanged)) addLatexFormattingPackages(transaction);
           retainDetachedLatexFiles(transaction, previous.doc);
           for (const received of transactions)
             if (received.getMeta('rebased')) refreshRebasedLatexFiles(transaction, received);

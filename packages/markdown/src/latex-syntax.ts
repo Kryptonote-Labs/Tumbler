@@ -12,6 +12,22 @@ export function lineEnd(source: string, position: number) {
   return end < 0 ? source.length : end;
 }
 
+/** A URL argument can contain percent signs without starting a TeX comment. */
+export function latexUrlArgument(source: string, afterCommand: number): Group | undefined {
+  const at = whitespaceEnd(source, afterCommand);
+  const target = /^\{((?:\\.|[^{}\\])*)\}/.exec(source.slice(at));
+  if (!target) return;
+  const from = at + 1;
+  const to = from + target[1]!.length;
+  return { from, to, end: to + 1 };
+}
+
+function commandWithUrlEnd(source: string, start: number) {
+  const end = commandEnd(source, start);
+  const name = source.slice(start, end);
+  return (name === '\\url' || name === '\\href') ? latexUrlArgument(source, end)?.end ?? end : end;
+}
+
 /** Groups can nest and contain escaped braces and comments. */
 export function groupAt(
   source: string,
@@ -23,7 +39,7 @@ export function groupAt(
   let depth = 1;
   for (let next = position + 1; next < source.length; next++) {
     const character = source[next];
-    if (character === '\\') next = commandEnd(source, next) - 1;
+    if (character === '\\') next = commandWithUrlEnd(source, next) - 1;
     else if (character === '%') next = lineEnd(source, next);
     else if (character === open) depth++;
     else if (character === close && --depth === 0)
@@ -99,7 +115,7 @@ export function environmentAt(source: string, position: number) {
     }
     const tag = environmentTag(source, next);
     if (!tag) {
-      next = commandEnd(source, next) - 1;
+      next = commandWithUrlEnd(source, next) - 1;
       continue;
     }
     if (tag.kind === 'begin') stack.push(tag.name);

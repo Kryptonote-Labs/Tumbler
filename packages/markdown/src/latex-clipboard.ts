@@ -152,7 +152,7 @@ export function latexClipboard(schema: Schema) {
     ];
   });
   const style: TagParseRule = {
-    tag: 'strong[data-latex-order], em[data-latex-order], span[data-latex-font][data-latex-order], span[data-latex-colour][data-latex-order]',
+    tag: '[data-latex-style][data-latex-order]',
     mark: 'latex_style',
     getAttrs: (element) => {
       const delimiters = readDelimiters(element);
@@ -163,18 +163,13 @@ export function latexClipboard(schema: Schema) {
         !Number.isSafeInteger(order)
       )
         return false;
-      const font = element.getAttribute('data-latex-font');
-      const colour = element.getAttribute('data-latex-colour');
-      const style = colour && /^#[a-f0-9]{6}$/.test(colour)
-        ? 'colour'
-        : font === 'sans' || font === 'mono' || font === 'normal'
-          ? font
-          : element.tagName === 'STRONG' ? 'strong' : 'em';
       return {
         open: delimiters.open,
         close: delimiters.close,
-        style,
-        ...(style === 'colour' ? { colour } : {}),
+        style: element.getAttribute('data-latex-style'),
+        colour: element.getAttribute('data-latex-colour'),
+        size: element.getAttribute('data-latex-size'),
+        href: element.getAttribute('data-latex-href'),
         order,
       };
     },

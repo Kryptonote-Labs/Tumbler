@@ -3,7 +3,7 @@ import { texPoint } from './latex-typography';
 import { resolveLatexColour } from './latex-colour';
 import { commandEnd, environmentAt, groupAt, latexCommands, whitespaceEnd } from './latex-syntax';
 
-const fontSizes = new Map<string, readonly [number, number, number]>([
+export const latexFontSizePoints = new Map<string, readonly [number, number, number]>([
   ['tiny', [5, 6, 6]], ['scriptsize', [7, 8, 8]], ['footnotesize', [8, 9, 10]],
   ['small', [9, 10, 10.95]], ['normalsize', [10, 10.95, 12]], ['large', [12, 12, 14.4]],
   ['Large', [14.4, 14.4, 17.28]], ['LARGE', [17.28, 17.28, 20.74]],
@@ -31,7 +31,7 @@ export function latexDeclarations(source: string, start = 0, normalSize = 10 * t
     const position = whitespaceEnd(source, end);
     const next = commandEnd(source, position);
     const command = source.slice(position + 1, next);
-    const sizes = fontSizes.get(command);
+    const sizes = latexFontSizePoints.get(command);
     if (sizes) {
       const points = normalSize / texPoint;
       const index = points >= 11.5 ? 2 : points >= 10.5 ? 1 : 0;

@@ -49,6 +49,7 @@ function atomDOM(node: Node, className: string) {
   for (const key of ['source', 'label', 'before', 'open', 'close']) {
     if (typeof node.attrs[key] === 'string') attrs['data-latex-' + key] = node.attrs[key];
   }
+  if (node.attrs.urlArgument) attrs['data-latex-url-argument'] = '';
   return [node.isInline ? 'span' : 'div', attrs, node.attrs.label ?? node.attrs.source] as const;
 }
 
@@ -120,6 +121,7 @@ export const latexNodes = {
     attrs: {
       source: { validate: 'string' },
       label: { default: null, validate: 'string|null' },
+      urlArgument: { default: false, validate: 'boolean' },
     },
     toDOM: (node) => atomDOM(node, node.attrs.label === null ? 'latex-raw' : 'latex-literal'),
     leafText: (node) => node.attrs.label ?? node.attrs.source,
@@ -158,6 +160,7 @@ export const latexAtomPasteRules: TagParseRule[] = ['latex_inline', 'latex_raw',
   getAttrs: (dom) => ({
     source: dom.getAttribute('data-latex-source'),
     label: dom.getAttribute('data-latex-label'),
+    urlArgument: dom.hasAttribute('data-latex-url-argument'),
     before: dom.getAttribute('data-latex-before'),
     open: dom.getAttribute('data-latex-open'),
     close: dom.getAttribute('data-latex-close'),
