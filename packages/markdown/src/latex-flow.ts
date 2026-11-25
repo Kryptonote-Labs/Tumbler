@@ -129,12 +129,20 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
   let numbering: FolioStyle | undefined;
   let pageStyle: string | undefined;
   let documentStyle: string | undefined;
+  let activeDocumentStyle: string | undefined;
+  function setDocumentStyle(value: string) {
+    activeDocumentStyle = documentStyle = value;
+  }
+  for (const command of latexCommands(prefix)) {
+    const directive = readLatexPageDirective(prefix, command.start);
+    if (directive?.kind === 'document-style') activeDocumentStyle = directive.value;
+  }
   let pageHasContent = false;
   function setDocumentState(source: string) {
     for (const command of latexCommands(source)) {
       const directive = readLatexPageDirective(source, command.start);
       if (directive?.kind === 'numbering') numbering = directive.value;
-      if (directive?.kind === 'document-style') documentStyle = directive.value;
+      if (directive?.kind === 'document-style') setDocumentStyle(directive.value);
     }
   }
   const boundary = (value: 'page' | 'recto' | undefined) =>
@@ -189,6 +197,7 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
         else numbering = directive.value;
       }
       if (directive?.kind === 'document-style') {
+        activeDocumentStyle = directive.value;
         if (pageHasContent) change.documentStyle = directive.value;
         else documentStyle = directive.value;
       }
@@ -232,7 +241,8 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
           ? { before: chapterBoundary }
           : { before: chapterBoundary, after: chapterBoundary });
         if (command === 'part') pageHasContent = false;
-        if (customTitle && !pageStyle) effect({ pageStyle: 'plain' });
+        // The standard chapter command selects \thispagestyle{plain}.
+        if (activeDocumentStyle && activeDocumentStyle !== 'plain') effect({ pageStyle: 'plain' });
       }
     } else if (node.type.name === 'latex_raw') {
       if (name === 'letter' && /^\\opening\s*\{/.test(source)) {

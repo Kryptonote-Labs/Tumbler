@@ -1,3 +1,4 @@
+export { latexBodySpacing } from './latex-body-spacing';
 import { latexAlignedParagraph } from './latex-alignment';
 import { authoredLatexStyleOrder, isLatexStyleMark, latexInlineFormat, latexInlineSize } from './latex-inline-format';
 export { latexFontSizes, latexFontSizeProperties, latexLinkUrl, type LatexFontSize } from './latex-inline-format';

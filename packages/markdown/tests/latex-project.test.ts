@@ -211,3 +211,15 @@ test('list fragments honor authored recto breaks even if both lists could fit on
   expect(result.breakSlots).toEqual([2]);
   expect(result.breaks[0]?.fragment).toBe(1);
 });
+
+test('a counter definition only affects numbering when its macro executes', () => {
+  const prefix = String.raw`\documentclass{report}
+\newcommand{\jump}{\setcounter{chapter}{10}}
+\begin{document}`;
+  const document = (body: string) => parseLatexProject('main.tex', new Map([
+    ['main.tex', prefix + body + '\\end{document}'],
+  ]));
+  expect([...latexNumbering(document('\\chapter{First}'))?.headings.values() ?? []])
+    .toEqual([{ command: 'chapter', number: '1' }]);
+  expect(latexNumbering(document('\\jump\\chapter{First}'))).toBeUndefined();
+});
