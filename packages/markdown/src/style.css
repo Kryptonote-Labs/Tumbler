@@ -424,3 +424,29 @@
 }
 .note-content .note-spelling-issue { text-decoration-color: #c62828; }
 .note-content .note-grammar-issue { text-decoration-color: #245bc4; }
+
+/* A file boundary takes no space in the typeset document. */
+.ProseMirror .latex-include-boundary,
+.ProseMirror .latex-include-caret {
+  position: relative;
+  display: block;
+  height: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.ProseMirror[contenteditable="true"] .latex-include-boundary > span {
+  position: absolute;
+  inset: -3px 0 auto;
+  height: 6px;
+  cursor: text;
+}
+
+.ProseMirror-focused .latex-include-caret::before {
+  position: absolute;
+  inset: -1px auto auto 0;
+  width: 1.25em;
+  border-top: 2px solid currentColor;
+  content: '';
+  pointer-events: none;
+}
