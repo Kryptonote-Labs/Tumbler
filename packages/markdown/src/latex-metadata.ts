@@ -50,15 +50,15 @@ export function latexPreambleCommand(
   return found;
 }
 
-export type LatexTitleField = 'title' | 'author' | 'date';
+export type LatexTitleField = 'title' | 'author' | 'date' | 'submitdate';
 
-/** Standard title setters can execute before or after the document begins. */
+/** Title setters can execute before or after the document begins. */
 export function readLatexTitleSetter(
   source: string, start = 0,
 ): { field: LatexTitleField; argument: NonNullable<ReturnType<typeof argumentAt>>; source: string } | undefined {
   const end = commandEnd(source, start);
   const field = source.slice(start + 1, end);
-  if (field !== 'title' && field !== 'author' && field !== 'date') return;
+  if (field !== 'title' && field !== 'author' && field !== 'date' && field !== 'submitdate') return;
   const argument = argumentAt(source, end);
   if (argument) return { field, argument, source: source.slice(argument.from, argument.to) };
 }
@@ -69,7 +69,7 @@ type TitleArgument = { kind: 'preamble'; source: string } |
 /** The last setters executed before a standard title block, in authored order. */
 export function latexTitleArguments(document: Node, before = document.content.size) {
   const fields = new Map<LatexTitleField, TitleArgument>();
-  for (const field of ['title', 'author', 'date'] as const) {
+  for (const field of ['title', 'author', 'date', 'submitdate'] as const) {
     const argument = latexPreambleCommand(String(document.attrs.prefix ?? ''), field);
     if (argument) fields.set(field, { kind: 'preamble', source: argument.source });
   }

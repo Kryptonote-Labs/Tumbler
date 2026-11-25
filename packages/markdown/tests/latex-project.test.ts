@@ -138,13 +138,17 @@ test('title setters from body includes take effect at the title without printing
   const files = new Map([
     ['main.tex', String.raw`\documentclass{report}
 \title{Preamble title}
+\date{Printed elsewhere}
+\submitdate{Preamble date}
 \begin{document}
 \input{metadata}
 \maketitle
 \title{Too late}
+\submitdate{Too late}
 \end{document}`],
     ['metadata.tex', String.raw`\title{Body title}
-\author{Writer}`],
+\author{Writer}
+\submitdate{October 2008}`],
   ]);
   const doc = parseLatexProject('main.tex', files);
   const titlePosition = doc.firstChild!.nodeSize;
@@ -153,6 +157,10 @@ test('title setters from body includes take effect at the title without printing
   const author = fields.get('author');
   expect(author?.source).toBe('Writer');
   expect(author && author.kind === 'body' && latexFlow(doc).get(author.position)).toEqual({ kind: 'omit' });
+  expect(fields.get('date')?.source).toBe('Printed elsewhere');
+  const submission = fields.get('submitdate');
+  expect(submission?.source).toBe('October 2008');
+  expect(submission && submission.kind === 'body' && latexFlow(doc).get(submission.position)).toEqual({ kind: 'omit' });
   expect(serializeLatexProject(doc)?.files).toEqual(files);
 });
 
