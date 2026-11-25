@@ -65,6 +65,7 @@ export { layoutLatexTikzStateDiagram, readLatexTikzStateDiagram } from './latex-
 export type { LatexTypography } from './latex-typography';
 export { latexLandscapeLayout, latexPageLayout, latexPaperSettings, latexSheetLayout, paginateLatex } from './latex-layout';
 export { paginateLatexRegions, type LatexRegionBlock } from './latex-page-regions';
+export { setLatexGeometry } from './latex-geometry';
 export type { LatexPageLayout, PageBlock, PageBreak, PageLine } from './latex-layout';
 export { latexBreakCommand, latexFlow, latexPageLabel, latexPageNumbers, readLatexPageDirective, readLatexBookMatter, readLatexClass } from './latex-flow';
 export type { LatexBlockFlow, LatexBreak, LatexPageNumber } from './latex-flow';
@@ -116,7 +117,7 @@ export {
 export type { LatexTabular } from './latex-tables';
 
 export const blankLatex =
-  '\\documentclass{article}\n\\usepackage{amsmath}\n\\setlength{\\parindent}{0pt}\n\\setlength{\\parskip}{0.5\\baselineskip plus 2pt}\n\n\\begin{document}\n\n\\end{document}\n';
+  '\\documentclass{article}\n\\usepackage{amsmath}\n\\usepackage[a4paper,margin=1in]{geometry}\n\n\\setlength{\\parindent}{0pt}\n\\setlength{\\parskip}{0.5\\baselineskip plus 2pt}\n\n\\begin{document}\n\n\\end{document}\n';
 export const latexHeadings = [
   'section',
   'subsection',
