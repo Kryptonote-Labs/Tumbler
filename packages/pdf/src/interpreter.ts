@@ -15,7 +15,7 @@ import {
   type PdfColourSpace,
 } from "./colour.ts";
 import { readContentToken, isOperator, inlineImageEnd } from "./content-syntax.ts";
-import { canonicalInlineDictionary, decodePdfImage } from "./images.ts";
+import { canonicalInlineDictionary, checkPdfImageCompatibility, decodePdfImage } from "./images.ts";
 import { identity, matrix, multiply, type PdfMatrix } from "./matrix.ts";
 import {
   array,
@@ -56,7 +56,7 @@ export class PdfInterpreter {
   constructor(
     readonly document: PdfDocument,
     private limits: PdfExecutionLimits = {},
-    private options: { deferImages?: boolean } = {},
+    private options: { deferImages?: boolean; checkImageCompatibility?: boolean } = {},
   ) {
     this.fonts = documentFonts.get(document) ?? new WeakMap<PdfDictionary, PdfFont>();
     documentFonts.set(document, this.fonts);
@@ -225,13 +225,16 @@ export class PdfInterpreter {
             const kind = name(resource.dictionary.get("Subtype"));
             if (kind === "Form")
               this.form(resource, resources, context, elements, `${instance}:form:${start}`);
-            else if (kind === "Image")
+            else if (kind === "Image") {
+              if (this.options.checkImageCompatibility)
+                checkPdfImageCompatibility(source, resource.dictionary, resources);
               elements.push(this.image(base(), () => decodePdfImage(
                 source,
                 resource.dictionary,
                 source.encodedStream(resource),
                 resources,
               )));
+            }
             else unsupported(`PDF XObject /${kind} is not supported.`);
           }
           break;

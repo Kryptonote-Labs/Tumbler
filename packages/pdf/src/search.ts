@@ -1,4 +1,5 @@
 import type { PdfDocument } from "./document.ts";
+import { PdfError } from "./objects.ts";
 import { PdfInterpreter } from "./interpreter.ts";
 import { pdfTextContent, type PdfTextItem } from "./text-content.ts";
 import { placePdfScene } from "./editing/placement.ts";
@@ -78,6 +79,16 @@ function units(items: readonly PdfTextItem[]): Unit[] {
     };
   });
 }
+function searchScene(interpreter: PdfInterpreter, page: number) {
+  try {
+    return interpreter.page(page);
+  } catch (error) {
+    if (!(error instanceof PdfError) ||
+        (error.code !== "unsupported_feature" && error.code !== "resource_limit")) throw error;
+    return undefined;
+  }
+}
+
 /** A read-only snapshot shared by the viewer and CLI. Rebuild after collaborative edits.
  * Extraction includes invisible OCR glyphs; only the current PDF object graph is interpreted. */
 export class PdfSearchIndex {
@@ -90,17 +101,18 @@ export class PdfSearchIndex {
       fonts: PdfEditingFonts;
       flow?: ReturnType<typeof layoutPdfTextFlow>;
     },
-    interpreter = new PdfInterpreter(document),
+    interpreter = new PdfInterpreter(document, undefined, { deferImages: true }),
   ) {
     this.model = editing?.model;
     if (!editing) {
-      this.pages = document.pages.map((_, i) =>
-        units(pdfTextContent(interpreter.page(i)).items),
-      );
+      this.pages = document.pages.map((_, i) => {
+        const scene = searchScene(interpreter, i);
+        return scene ? units(pdfTextContent(scene).items) : [];
+      });
       return;
     }
     const { model, fonts } = editing;
-    if (!editing.flow) fonts.importDocument(document);
+    if (!editing.flow) fonts.importDocument(document, undefined, true);
     const flow =
       editing.flow ?? layoutPdfTextFlow(model, fonts, document.pages);
     this.pages = flow.pages.map((page) => {
@@ -128,8 +140,11 @@ export class PdfSearchIndex {
         units: Unit[];
         range?: { region: string; start: number; end: number };
       }[] = [];
-      if (page.source.index >= 0 && !page.continuation) {
-        const scene = placePdfScene(interpreter.page(page.source.index), model);
+      const source = page.source.index >= 0 && !page.continuation
+        ? searchScene(interpreter, page.source.index)
+        : undefined;
+      if (source) {
+        const scene = placePdfScene(source, model);
         const items = pdfTextContent({
           ...scene,
           elements: scene.elements.filter(

@@ -48,3 +48,23 @@ test('inline images remain available to renderers after deferred text inspection
   const image = scene.elements.find((element) => element.kind === 'image')!;
   expect(image.image.rgba).toEqual(new Uint8ClampedArray([1, 2, 3, 255]));
 });
+
+test('a detailed soft mask never silently collapses into the base image pixels', () => {
+  const pdf = openPdfDocument(pdfFixture([
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Count 1 /Kids [3 0 R] >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Resources << /XObject << /Ink 5 0 R >> >> /Contents 4 0 R >>',
+    pdfStream('q 100 0 0 100 0 0 cm /Ink Do Q'),
+    pdfStream(Uint8Array.of(0), '/Type /XObject /Subtype /Image /Width 1 /Height 1 /ColorSpace /DeviceGray /BitsPerComponent 8 /SMask 6 0 R'),
+    pdfStream(Uint8Array.of(0, 255, 255, 0), '/Type /XObject /Subtype /Image /Width 2 /Height 2 /ColorSpace /DeviceGray /BitsPerComponent 8'),
+  ]));
+  // The worker hands this typed failure to the compatibility renderer.
+  for (const options of [{}, { deferImages: true, checkImageCompatibility: true }]) {
+    try {
+      new PdfInterpreter(pdf, undefined, options).page(0);
+      throw new Error('Expected a compatibility error for the detailed mask.');
+    } catch (error) {
+      expect(error).toMatchObject({ code: 'unsupported_feature' });
+    }
+  }
+});

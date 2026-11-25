@@ -16,6 +16,7 @@ export type PdfPagePaintOptions = {
   flow: ReturnType<typeof layoutPdfTextFlow>;
   selected: readonly string[];
   onvisible?: (visible: boolean) => void;
+  oncompatibility?: () => void;
 };
 type Raster = { background: HTMLCanvasElement; ink: HTMLCanvasElement };
 

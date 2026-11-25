@@ -1,3 +1,4 @@
+import { PdfError } from '../objects.ts';
 import { PdfInterpreter } from '../interpreter.ts';
 import { pdfTextContent, type PdfTextItem } from '../text-content.ts';
 import type { PdfDocument } from '../document.ts';
@@ -65,14 +66,25 @@ export function importPdfText(document: PdfDocument): PdfTextSeed[] {
 }
 
 /** Yield completed pages in source order so callers can build editing state without retaining every page scene. */
-export function* iteratePdfText(document: PdfDocument): Generator<PdfTextSeed> {
-  const interpreter = new PdfInterpreter(document, undefined, { deferImages: true });
+export function* iteratePdfText(
+  document: PdfDocument,
+  onUnavailable?: (index: number, error: PdfError) => void,
+): Generator<PdfTextSeed> {
+  const interpreter = new PdfInterpreter(document, undefined, { deferImages: true, checkImageCompatibility: !!onUnavailable });
   let count = 0;
   for (const page of document.pages) {
     const blocks: PdfTextSeed[] = [];
     const lineCounts = new Map<PdfTextSeed, number>();
-    const scene = interpreter.page(page.index),
-      glyphs = new Map(scene.elements.filter((e) => e.kind === 'glyph').map((e) => [e.id, e]));
+    let scene;
+    try {
+      scene = interpreter.page(page.index);
+    } catch (error) {
+      if (!onUnavailable || !(error instanceof PdfError) ||
+          (error.code !== 'unsupported_feature' && error.code !== 'resource_limit')) throw error;
+      onUnavailable(page.index, error);
+      continue;
+    }
+    const glyphs = new Map(scene.elements.filter((e) => e.kind === 'glyph').map((e) => [e.id, e]));
     const lines: PdfTextItem[][] = [];
     let line: PdfTextItem[] = [];
     for (const item of pdfTextContent(scene).items) {

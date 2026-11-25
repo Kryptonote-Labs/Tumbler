@@ -13,6 +13,8 @@
   import { pdfTextInputChange, type PdfInputSelection } from './text-input.ts';
   import { PdfPageRenderer } from './page-renderer.ts';
   import { paintEditablePdfPage } from './paint-editable-page.ts';
+  import { paintPdfTiles } from './paint-tiles.ts';
+  import type { PdfTileRequest } from './render-protocol.ts';
   import PdfTextBox from './PdfTextBox.svelte';
   import PdfEditableText from './PdfEditableText.svelte';
   import { onMount, tick, untrack } from 'svelte';
@@ -20,6 +22,7 @@
   import * as Y from 'yjs';
   import {
     PdfInterpreter,
+    importPdfMarkup,
     PdfTextModel,
     PdfEditingFonts,
     layoutPdfTextFlow,
@@ -79,6 +82,11 @@
     end = $state(0),
     pending = $state<Partial<PdfTextStyle>>({});
   const visiblePages = new SvelteSet<string>();
+  const compatibilityPages = new SvelteSet<number>();
+  function pageVisibility(id: string, visible: boolean) {
+    if (visible) visiblePages.add(id);
+    else visiblePages.delete(id);
+  }
   let input: HTMLTextAreaElement;
   let root = $state<HTMLDivElement>();
   let compositionBase: PdfTextModel | undefined;
@@ -90,20 +98,38 @@
   $effect(() => {
     if (editable && model.pages.initialize(pdf.pages)) untrack(() => revision++);
   });
-  const interpreter = $derived(new PdfInterpreter(pdf));
+  const interpreter = $derived(new PdfInterpreter(pdf, undefined, { deferImages: true }));
   let renderer = $state.raw<PdfPageRenderer>();
   $effect(() => {
     const current = new PdfPageRenderer(pdf);
+    compatibilityPages.clear();
     renderer = current;
     return () => current.destroy();
   });
   const flow = $derived.by(() => {
     void revision;
-    fonts.importDocument(pdf);
+    fonts.importDocument(pdf, undefined, true);
     return layoutPdfTextFlow(model, fonts, pdf.pages);
   });
   const imageObjects = $derived.by(() => { void revision; return [...model.images.records]; });
   const layouts = $derived(flow.regions);
+  const changedSources = $derived.by(() => {
+    void revision;
+    return new Set(layouts.filter((layout) => layout.render).map((layout) => model.seed(layout.id).page));
+  });
+  const selectedPages = $derived(new Set(layouts.filter((layout) => selected.includes(layout.id)).map((layout) => layout.page)));
+  const sourceProjections = $derived.by(() => {
+    const projections = new Map<number, NonNullable<PdfTileRequest['projection']>>();
+    for (const annotation of importPdfMarkup(pdf)) {
+      const current = projections.get(annotation.page);
+      projections.set(annotation.page, {
+        placements: [],
+        exclude: [],
+        excludeAnnotations: [...(current?.excludeAnnotations ?? []), annotation.id],
+      });
+    }
+    return projections;
+  });
   const origins = $derived(new Map(layouts.map((region) => [region.id, region.origin])));
   $effect(() => onpages?.(flow.pages.length));
   let anchors:
@@ -132,7 +158,7 @@
     return page ? { page: page.source.index, continuation: page.continuation, x: 48, y: 48 } : undefined;
   }
   function imageTransfer(event: DragEvent | ClipboardEvent, index: number) {
-    if (!editable || !onimagefiles) return;
+    if (!editable || !onimagefiles || compatibilityPages.has(flow.pages[index]?.source.index ?? -1)) return;
     const transfer = 'dataTransfer' in event ? event.dataTransfer : event.clipboardData;
     const files = [...(transfer?.files ?? [])].filter(file => ['image/png', 'image/jpeg'].includes(file.type));
     if (!files.length) return;
@@ -262,7 +288,7 @@
     });
   }
   async function select(id: string, first: number, last = first, extend = false) {
-    if (model.placement(id)?.hidden) return;
+    if (model.placement(id)?.hidden || compatibilityPages.has(model.seed(id).page)) return;
     selected = extend ? [...new Set([...selected, id])] : [id];
     active = id;
     activeImage = undefined;
@@ -426,7 +452,8 @@
           : undefined;
   }
   function pointer(event: PointerEvent, page: number) {
-    if (![0, 2].includes(event.button) || (adding && !editable)) return;
+    if (![0, 2].includes(event.button) || (adding && !editable) ||
+        compatibilityPages.has(flow.pages[page]!.source.index)) return;
     const host = event.currentTarget as HTMLElement,
       { x, y } = coordinates(event, host, page);
     imagePastePage = page;
@@ -569,6 +596,10 @@
   bind:this={root}
 >
   {#each flow.pages as page (page.id)}
+    {@const compatibility = compatibilityPages.has(page.source.index)}
+    {@const tiled = page.source.index >= 0 && !page.continuation && !page.rotation &&
+      !changedSources.has(page.source.index) && (compatibility || !selectedPages.has(page.index)) &&
+      !model.pages.records.get(page.source.id)?.get('snapshot')}
     <div
       class="pdf-page-frame"
       use:pdfPagePosition={{ index: page.index, oncurrent: onpagechange }}
@@ -593,9 +624,28 @@
         onpointercancel={() => (dragging = undefined)}
         ondblclick={(e) => double(e, page.index)}
         role="group"
-        aria-label="PDF page"
+        aria-label={compatibility ? 'PDF page, view only' : 'PDF page'}
+        class:compatibility
+        title={compatibility ? 'Text editing is unavailable on this page' : undefined}
       >
-        {#if renderer}<canvas
+        {#if renderer && tiled}
+          <div
+            class="source-raster"
+            role="img"
+            aria-label={`Page ${page.index + 1}`}
+            use:paintPdfTiles={{
+              renderer,
+              index: page.source.index,
+              scale,
+              width: page.source.width,
+              height: page.source.height,
+              projection: sourceProjections.get(page.source.index),
+              onvisible: (visible) => pageVisibility(page.id, visible),
+              oncompatibility: () => compatibilityPages.add(page.source.index),
+              onerror: (error) => console.error(error),
+            }}
+          ></div>
+        {:else if renderer}<canvas
           use:paintEditablePdfPage={{
             index: page.index,
             scale,
@@ -607,17 +657,15 @@
             pdf,
             flow,
             selected,
-            onvisible: (visible) => {
-              if (visible) visiblePages.add(page.id);
-              else visiblePages.delete(page.id);
-            },
+            onvisible: (visible) => pageVisibility(page.id, visible),
+            oncompatibility: () => compatibilityPages.add(page.source.index),
           }}
           aria-label={`Page ${page.index + 1}`}
           style:width="100%"
           style:height="100%"
         ></canvas>{/if}
         <PdfMarkupLayer page={page.source} annotations={annotations.filter(a => a.page === page.source.index && a.continuation === page.continuation)} />
-        {#if visiblePages.has(page.id) || selected.some((id) => layouts.some((l) => l.id === id && l.page === page.index))}<div class="text-layer" style:transform={`scale(${scale})`}>
+        {#if visiblePages.has(page.id) || selectedPages.has(page.index)}<div class="text-layer" style:transform={`scale(${scale})`}>
           {#each imageObjects.filter(([, image]) => !image.hidden && image.page === page.source.index && image.continuation === page.continuation) as [imageId, image] (imageId)}
             <PdfImageBox {model} id={imageId} {image} url={imageUrls[image.asset]} selected={selected.includes(imageId)} group={selected} {editable} {origins} onselect={selectImage} />
           {/each}
@@ -632,7 +680,7 @@
               onedit={() => void select(layout.id, start, end)}
             />
           {/each}
-          <PdfEditableText
+          {#if !compatibility}<PdfEditableText
             {model}
             layouts={layouts.filter((l) => l.page === page.index)}
             {peers}
@@ -640,7 +688,7 @@
             {start}
             {end}
             onfocus={(id) => void select(id, 0)}
-          />
+          />{/if}
         </div>{/if}
       </div>
     </div>
@@ -698,6 +746,15 @@
     color-scheme: light;
     touch-action: none;
     cursor: var(--pdf-link-cursor, text);
+  }
+  .source-raster {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  .pdf-page.compatibility {
+    cursor: default;
   }
   canvas {
     display: block;

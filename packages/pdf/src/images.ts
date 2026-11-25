@@ -16,6 +16,46 @@ import {
 import type { PdfImageData } from "./scene.ts";
 import type { PdfSource } from "./source.ts";
 
+/** Check the native JPEG path without inflating image data during edit import. */
+function nativeJpegFilters(source: PdfSource, info: PdfDictionary, resources: PdfDictionary) {
+  const filter = source.resolve(info.get("Filter")),
+    filters = filter instanceof PdfName ? [filter] : filter === null ? [] : array(filter);
+  if (!["DCTDecode", "DCT"].includes(name(filters.at(-1)))) return;
+  const space = colourSpace(source, info.get("ColorSpace"), resources);
+  if (info.has("Decode")) {
+    const decode = array(source.resolve(info.get("Decode"))).map((value) => number(value));
+    if (decode.length !== space.components * 2)
+      invalid("Image Decode array does not match component count.");
+    if (decode.some((value, index) => value !== index % 2))
+      unsupported("JPEG sample Decode transformations need a component-aware JPEG decoder.");
+  }
+  if (info.has("Mask") || info.has("SMask") || info.get("ImageMask") === true)
+    unsupported("JPEG image masks need component-aware decoding before composition.");
+  const params = source.resolve(info.get("DecodeParms"));
+  const terminalParams = Array.isArray(params)
+    ? source.resolve(params[params.length - 1])
+    : params;
+  if (terminalParams instanceof Map && terminalParams.size)
+    unsupported("JPEG decoding parameters need a component-aware JPEG decoder.");
+  return filters;
+}
+
+function checkMaskResolution(source: PdfSource, info: PdfDictionary, width: number, height: number) {
+  const soft = source.resolve(info.get("SMask"));
+  const mask = soft instanceof PdfStream ? soft : source.resolve(info.get("Mask"));
+  if (mask instanceof PdfStream && (
+    integer(source.resolve(mask.dictionary.get("Width"))) > width ||
+    integer(source.resolve(mask.dictionary.get("Height"))) > height
+  ))
+    unsupported("Image mask needs composition at a higher resolution than its base image.");
+}
+
+/** Check image compatibility without decoding pixel data during edit import. */
+export function checkPdfImageCompatibility(source: PdfSource, info: PdfDictionary, resources: PdfDictionary) {
+  nativeJpegFilters(source, info, resources);
+  checkMaskResolution(source, info, integer(source.resolve(info.get("Width"))), integer(source.resolve(info.get("Height"))));
+}
+
 /** Decode samples in PDF component order; encoded image codecs stay behind the painter's host boundary. */
 export function decodePdfImage(
   source: PdfSource,
@@ -32,27 +72,8 @@ export function decodePdfImage(
   const stencil = info.get("ImageMask") === true,
     bits = integer(source.resolve(info.get("BitsPerComponent") ?? (stencil ? 1 : null)));
   if (![1, 2, 4, 8, 16].includes(bits)) return invalid("Invalid PDF image component depth.");
-  const filter = source.resolve(info.get("Filter")),
-    filters = filter instanceof PdfName ? [filter] : filter === null ? [] : array(filter);
-  const names = filters.map((item) => name(item));
-  const terminal = names[names.length - 1];
-  if (terminal === "DCTDecode" || terminal === "DCT") {
-    const space = colourSpace(source, info.get("ColorSpace"), resources);
-    if (info.has("Decode")) {
-      const decode = array(source.resolve(info.get("Decode"))).map((value) => number(value));
-      if (decode.length !== space.components * 2)
-        invalid("Image Decode array does not match component count.");
-      if (decode.some((value, index) => value !== index % 2))
-        unsupported("JPEG sample Decode transformations need a component-aware JPEG decoder.");
-    }
-    if (info.has("Mask") || info.has("SMask") || stencil)
-      unsupported("JPEG image masks need component-aware decoding before composition.");
-    const params = source.resolve(info.get("DecodeParms"));
-    const terminalParams = Array.isArray(params)
-      ? source.resolve(params[params.length - 1])
-      : params;
-    if (terminalParams instanceof Map && terminalParams.size)
-      unsupported("JPEG decoding parameters need a component-aware JPEG decoder.");
+  const filters = nativeJpegFilters(source, info, resources);
+  if (filters) {
     const prefix = new Map(info);
     prefix.set("Filter", filters.slice(0, -1));
     const parameters = source.resolve(info.get("DecodeParms"));
@@ -68,6 +89,7 @@ export function decodePdfImage(
       stencil: false,
     };
   }
+  checkMaskResolution(source, info, width, height);
   const raw = decodePdfStream(encoded, info, (value) => source.resolve(value));
   const space = stencil ? deviceGray : colourSpace(source, info.get("ColorSpace"), resources);
   const rowLength = Math.ceil((width * space.components * bits) / 8),

@@ -18,7 +18,7 @@ import { PdfSyntax } from '../syntax.ts';
 import { readContentToken, isOperator } from '../content-syntax.ts';
 import { inverse, multiply } from '../matrix.ts';
 import { PdfInterpreter } from '../interpreter.ts';
-import { pageViewport } from '../scene.ts';
+import { pageViewport, type PdfGlyphElement } from '../scene.ts';
 import { layoutPdfTextFlow } from './layout.ts';
 import type { PdfEditingFonts, PdfEditingFont } from './fonts.ts';
 import type { PdfTextModel, PdfTextSeed } from './model.ts';
@@ -46,7 +46,13 @@ function exportTextPdf(
   const annotationContinuations = [...model.annotations.records.values()].some(annotation => !annotation.get('hidden') && Number(annotation.get('continuation') ?? 0) > 0);
   if (!imageContinuations && !annotationContinuations && !model.ids().some((id) => model.dirty(id)))
     return (model.pages.dirty() || model.annotations.records.size) ? exportPdfPageState(document, model) : document.bytes();
-  fonts.importDocument(document);
+  const dirtyIds = model.ids().filter(id => model.dirty(id));
+  // The font picker can reference a complete embedded face originating on a different page.
+  const crossPageFont = dirtyIds.some(id => model.text(id).toDelta().some(
+    (run: { attributes?: Record<string, unknown> }) =>
+      typeof run.attributes?.font === 'string' && run.attributes.font.startsWith('full:pdf:'),
+  ));
+  fonts.importDocument(document, crossPageFont ? undefined : new Set(dirtyIds.map(id => model.seed(id).page)), crossPageFont);
   const flow = layoutPdfTextFlow(model, fonts, document.pages);
   if (!flow.pages.length)
     throw new Error('PDF page changes leave no visible pages. Add a blank page.');
@@ -72,21 +78,20 @@ function exportTextPdf(
     return font;
   };
   const pageContent = new Map<number, string>();
-  const interpreter = new PdfInterpreter(document);
-  const glyphSources = new Map(
-    document.pages.map((page) => [
-      page.index,
-      new Map(
-        interpreter
-          .page(page.index)
-          .elements.flatMap((e) =>
-            e.kind === 'glyph'
-              ? [[`${e.source.instance}/${e.source.object.key}/${e.source.start}`, e] as const]
-              : [],
-          ),
-      ),
-    ]),
-  );
+  const interpreter = new PdfInterpreter(document, undefined, { deferImages: true });
+  const glyphSources = new Map<number, Map<string, PdfGlyphElement>>();
+  function sourceGlyphs(page: number) {
+    let glyphs = glyphSources.get(page);
+    if (!glyphs) {
+      glyphs = new Map();
+      for (const glyph of interpreter.page(page).elements)
+        if (glyph.kind === 'glyph')
+          glyphs.set(`${glyph.source.instance}/${glyph.source.object.key}/${glyph.source.start}`, glyph);
+      interpreter.releasePage(page);
+      glyphSources.set(page, glyphs);
+    }
+    return glyphs;
+  }
   const preserved = new Set(
     flow.regions.filter((region) => region.preserveSource).map((region) => region.id),
   );
@@ -96,9 +101,7 @@ function exportTextPdf(
       frame = model.geometry(id);
     const viewport = pageViewport(sourcePages.get(seed.page)!);
     for (const target of seed.sources) {
-      const glyph = glyphSources
-        .get(seed.page)
-        ?.get(`${target.instance}/${target.object}/${target.start}`);
+      const glyph = sourceGlyphs(seed.page).get(`${target.instance}/${target.object}/${target.start}`);
       if (!glyph || glyph.kind !== 'glyph') throw new Error('PDF text source was not found.');
       const m = inverse(multiply(viewport, glyph.contentTransform));
       const dx = frame.x - seed.x,

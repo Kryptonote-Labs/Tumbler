@@ -1,5 +1,6 @@
 import { observePdfPageVisibility } from "./page-visibility.ts";
 import type { PdfTextContent } from "@tumblerjs/pdf";
+import type { PdfTileRequest } from "./render-protocol.ts";
 import type { PdfPageRenderer } from "./page-renderer.ts";
 type Options = {
   renderer: PdfPageRenderer;
@@ -7,7 +8,10 @@ type Options = {
   scale: number;
   width: number;
   height: number;
-  ontext: (text: PdfTextContent) => void;
+  projection?: PdfTileRequest["projection"];
+  ontext?: (text: PdfTextContent) => void;
+  onvisible?: (visible: boolean) => void;
+  oncompatibility?: () => void;
   onerror: (error: Error) => void;
   onpaint?: () => void;
 };
@@ -88,7 +92,8 @@ export function paintPdfTiles(element: HTMLElement, options: Options) {
               width: Math.ceil(active.width * small),
               height: Math.ceil(active.height * small),
             },
-            text: !hasText && !zooming(),
+            ...(active.projection ? { projection: active.projection } : {}),
+            text: !!active.ontext && !hasText && !zooming(),
           },
           signal,
         );
@@ -96,6 +101,7 @@ export function paintPdfTiles(element: HTMLElement, options: Options) {
           result.bitmap.close();
           return;
         }
+        if (result.compatibility) active.oncompatibility?.();
         preview = bitmapCanvas(result.bitmap);
         Object.assign(preview.style, {
           position: "absolute",
@@ -106,7 +112,7 @@ export function paintPdfTiles(element: HTMLElement, options: Options) {
         element.prepend(preview);
         if (result.text) {
           hasText = true;
-          active.ontext(result.text);
+          active.ontext?.(result.text);
         }
       }
       if (zooming() || settling !== undefined) return;
@@ -150,7 +156,8 @@ export function paintPdfTiles(element: HTMLElement, options: Options) {
               page: active.index,
               scale,
               region: { x: x - 1, y: y - 1, width: width + 2, height: height + 2 },
-              text: !hasText,
+              ...(active.projection ? { projection: active.projection } : {}),
+              text: !!active.ontext && !hasText,
             },
             signal,
           );
@@ -164,7 +171,7 @@ export function paintPdfTiles(element: HTMLElement, options: Options) {
           }
           if (result.text) {
             hasText = true;
-            active.ontext(result.text);
+            active.ontext?.(result.text);
           }
           const tile = document.createElement("div"),
             canvas = bitmapCanvas(result.bitmap);
@@ -224,14 +231,6 @@ export function paintPdfTiles(element: HTMLElement, options: Options) {
     hasText = false;
     options.renderer.release(options.index);
   }
-  const stopVisibility = observePdfPageVisibility(element, viewport, (next) => {
-    visible = next;
-    if (visible) schedule();
-    else if (zooming()) cancel();
-    else release();
-  });
-  const resize = new ResizeObserver(schedule);
-  resize.observe(viewport);
   // A readable page preview travels with the scroll. Device-resolution tiles resume
   // after motion stops, avoiding a burst of new canvases on every scroll frame.
   const scroll = () => {
@@ -243,7 +242,22 @@ export function paintPdfTiles(element: HTMLElement, options: Options) {
     }, 100);
     schedule();
   };
-  viewport.addEventListener("scroll", scroll, { passive: true });
+  const stopVisibility = observePdfPageVisibility(element, viewport, (next) => {
+    visible = next;
+    options.onvisible?.(visible);
+    if (visible) {
+      viewport.addEventListener("scroll", scroll, { passive: true });
+      schedule();
+    } else {
+      viewport.removeEventListener("scroll", scroll);
+      if (settling !== undefined) clearTimeout(settling);
+      settling = undefined;
+      if (zooming()) cancel();
+      else release();
+    }
+  });
+  const resize = new ResizeObserver(schedule);
+  resize.observe(viewport);
   const pauseZoom = () => {
     cancel();
     if (!preview) schedule();
@@ -258,7 +272,7 @@ export function paintPdfTiles(element: HTMLElement, options: Options) {
   return {
     update(next: Options) {
       const previousOptions = options;
-      if (next.renderer !== previousOptions.renderer || next.index !== previousOptions.index)
+      if (next.renderer !== previousOptions.renderer || next.index !== previousOptions.index || next.projection !== previousOptions.projection)
         release();
       else if (next.scale !== previousOptions.scale) {
         cancel();

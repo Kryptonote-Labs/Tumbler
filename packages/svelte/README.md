@@ -346,14 +346,16 @@ viewport so its width stays stable when a vertical scrollbar appears or disappea
 
 The viewer requires module workers, OffscreenCanvas and a bundler that handles
 `new Worker(new URL('./render.worker.ts', import.meta.url), { type: 'module' })`, such as Vite.
-Its worker must be allowed by the host's content security policy. When consuming vendored sources
+The worker loads PDFium WebAssembly on demand when native rendering reports an unsupported
+feature or reaches a page's execution budget. The bundler must support `?url` asset imports.
+Allow module workers and WebAssembly under the host's content security policy. When consuming vendored sources
 outside the app directory in development, include their directory in Vite's `server.fs.allow` so
 it can serve the worker module.
 
 `PdfEditableDocument` shares a worker across nearby pages for source interpretation, source placement
 and painting. It transfers source bitmaps into a background canvas and paints changed text on a separate
-transparent canvas. Unchanged pages allocate no text canvas. Drag previews reuse prepared source and
-text layers. Both views prepare two viewport heights ahead and release rasters outside that window.
+transparent canvas. Unchanged pages use the tiled viewer. Pages painted by PDFium retain their
+original PDF content and are view-only in the editor. Drag previews reuse prepared source and text layers. Both views prepare two viewport heights ahead and release rasters outside that window.
 
 The transparent selection layer batches compatible glyphs into SVG text spans with explicit character
 positions. Contextually shaped scripts and multi-character glyphs retain independent source widths.
