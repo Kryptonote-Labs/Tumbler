@@ -1,5 +1,6 @@
 import { latexBaseClass, readLatexClass } from './latex-class';
 import { readLatexSpacingCommand } from './latex-spacing-syntax';
+import { latexComposedPageKind } from './latex-page-composition';
 import { isLatexHeading } from './latex-spec';
 import { isLatexTitlePage } from './latex-text-layout';
 import { latexEffectivePrefix } from './latex-project';
@@ -302,6 +303,11 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
       if (chapters) plainChapter();
       setDocumentState(lists.afterLists);
       if (lists.after) pageHasContent = false;
+      return false;
+    }
+    if (node.type.name === 'latex_raw' && latexComposedPageKind(source) === 'page') {
+      effect({ before: 'page', after: 'page' });
+      pageHasContent = false;
       return false;
     }
     if (explicitTitle) {

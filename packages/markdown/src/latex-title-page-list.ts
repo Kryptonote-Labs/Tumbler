@@ -12,7 +12,7 @@ export type LatexTitleStyle = Readonly<{
 
 /**
  * Printed text. Text from a title field names it; `source` is the range of the field's source
- * that prints exactly this text, so an edit to the text replaces that range.
+ * that prints exactly this text, so an edit replaces that range. With no field, it is a body range.
  */
 export type LatexTitleRun = {
   text: string;
@@ -26,7 +26,7 @@ export type LatexTitleAlign = 'justify' | 'center' | 'left' | 'right';
 /**
  * TeX's vertical list, positioned the way TeX positions it. `before` is the distance from the
  * previous item's reference point to this one's: a line's reference is its baseline, a fill's is
- * its end and a box's is its bottom. A box's first item is measured from the box's top.
+ * its end and a box's is its top. A box's first item is measured from the box's top.
  */
 export type LatexTitleItem =
   | {
@@ -38,13 +38,13 @@ export type LatexTitleItem =
       runs: LatexTitleRun[];
     }
   /** Infinite glue of `order` 1 (fil) to 3 (filll). Only the highest order in a box stretches. */
-  | { kind: 'fill'; before: number; order: 1 | 2 | 3 }
+  | { kind: 'fill'; before: number; order: 1 | 2 | 3; weight: number }
   | { kind: 'box'; before: number; height?: number; items: LatexTitleItem[]; after: number };
 
 /** Material as TeX appends it, before interline glue is computed. */
 export type LatexTitleMaterial =
   | { kind: 'line'; align: LatexTitleAlign; leading: number; runs: LatexTitleRun[] }
-  | { kind: 'glue'; size: number; order: 0 | 1 | 2 | 3; shrink?: number; vss?: true }
+  | { kind: 'glue'; size: number; order: 0 | 1 | 2 | 3; shrink?: number; vss?: true; weight?: number }
   | { kind: 'box'; leading: number; height?: number; material: LatexTitleMaterial[] };
 
 // Computer Modern heights and depths as fractions of the design size.
@@ -84,27 +84,27 @@ const lineskip = 1 * texPoint;
  * apart, or `\lineskip` apart where that would make them overlap. A box set to a height its
  * contents overfill shrinks its finite glue, unless infinite shrink such as `\vss` absorbs it.
  */
-export function latexTitleBox(material: readonly LatexTitleMaterial[], height?: number): TitleBox {
-  const natural = setList(material, 0);
+export function latexTitleBox(material: readonly LatexTitleMaterial[], height?: number, topSkip = 0, page = false): TitleBox {
+  const natural = setList(material, 0, topSkip, page);
   const excess = height === undefined ? 0 : natural.size - height;
   const ratio =
     excess > 0 && natural.shrink > 0 && !material.some((entry) => entry.kind === 'glue' && entry.vss)
       ? Math.min(1, excess / natural.shrink)
       : 0;
-  const { items, after } = ratio ? setList(material, ratio) : natural;
+  const { items, after } = ratio ? setList(material, ratio, topSkip, page) : natural;
   return { kind: 'box', before: 0, ...(height !== undefined && { height }), items, after };
 }
 
 type TitleBox = Extract<LatexTitleItem, { kind: 'box' }>;
 
-function setList(material: readonly LatexTitleMaterial[], ratio: number) {
+function setList(material: readonly LatexTitleMaterial[], ratio: number, topSkip: number, page: boolean) {
   const items: LatexTitleItem[] = [];
   let pending = 0;
   let size = 0;
   let shrink = 0;
   let previousDepth: number | undefined;
   const interline = (leading: number, top: number) => {
-    if (previousDepth === undefined) return 0;
+    if (previousDepth === undefined) return Math.max(0, topSkip - top);
     const glue = leading - previousDepth - top;
     return glue < 0 ? lineskip : glue;
   };
@@ -117,7 +117,7 @@ function setList(material: readonly LatexTitleMaterial[], ratio: number) {
     if (entry.kind === 'glue') {
       pending += entry.size - (entry.shrink ?? 0) * ratio;
       shrink += entry.shrink ?? 0;
-      if (entry.order) place({ kind: 'fill', before: pending, order: entry.order });
+      if (entry.order) place({ kind: 'fill', before: pending, order: entry.order, weight: entry.weight ?? 1 });
     } else if (entry.kind === 'box') {
       const box = latexTitleBox(entry.material, entry.height);
       // A vbox's height is its whole contents; it has no depth after trailing glue.
@@ -132,5 +132,7 @@ function setList(material: readonly LatexTitleMaterial[], ratio: number) {
       previousDepth = depth;
     }
   }
-  return { items, after: pending, size: size + pending, shrink };
+  // LaTeX's forced page break cancels the last line's depth before its final fill.
+  const after = pending - (page ? previousDepth ?? 0 : 0);
+  return { items, after, size: size + after, shrink };
 }
