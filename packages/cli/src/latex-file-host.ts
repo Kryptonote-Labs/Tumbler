@@ -1,6 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { open, readFile, realpath, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { extname } from 'node:path';
+import { parseLatex, serializeLatex } from '@tumblerjs/markdown/latex';
+import { authorLatexDocument, inspectLatexDocument } from './latex-authoring.ts';
 import { editLatexSource, readLatexSource, type LatexOperationHost } from './latex.ts';
 
 const revisionOf = (source: Uint8Array) => createHash('sha256').update(source).digest('hex');
@@ -17,6 +19,11 @@ export const latexFileHost = {
     const input = await readFile(path);
     return readLatexSource(decode(input), revisionOf(input), offset);
   },
+  async inspectLatex(path, offset) {
+    checkPath(path);
+    const input = await readFile(path);
+    return inspectLatexDocument(parseLatex(decode(input)), revisionOf(input), offset);
+  },
   async editLatex(path, edit) {
     checkPath(path);
     const file = await realpath(path);
@@ -27,7 +34,11 @@ export const latexFileHost = {
       const input = await readFile(file);
       if (revisionOf(input) !== edit.revision)
         throw new Error('The LaTeX changed. Read its latest revision.');
-      const output = Buffer.from(editLatexSource(decode(input), edit), 'utf8');
+      const source = decode(input);
+      const updated = edit.kind === 'apply'
+        ? serializeLatex(authorLatexDocument(parseLatex(source), edit.operation).doc)
+        : editLatexSource(source, edit);
+      const output = Buffer.from(updated, 'utf8');
       if (!input.equals(output)) {
         await writeFile(temporary, output, { flag: 'wx', mode: (await stat(file)).mode });
         if (revisionOf(await readFile(file)) !== edit.revision)

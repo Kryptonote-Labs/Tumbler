@@ -13,8 +13,8 @@ export const RELEASE_PACKAGE_DIRECTORIES = [
   "slides",
   "pdf",
   "svelte",
-  "cli",
   "markdown",
+  "cli",
 ] as const;
 
 export const DEPENDENCY_FIELDS = ["dependencies", "optionalDependencies", "peerDependencies", "devDependencies"] as const;

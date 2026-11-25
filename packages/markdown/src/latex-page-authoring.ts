@@ -93,7 +93,7 @@ export function setLatexPageNumberSection(tr: Transform, position: number, secti
   if (letters) {
     const prefix = String(tr.doc.attrs.prefix);
     const begin = /\\begin\s*\{document\}\s*$/.exec(prefix);
-    if (!begin) throw new Error('Set up a document preamble before using letter numbering.');
+    if (!begin) throw new RangeError('Set up a document preamble before using letter numbering.');
     if (!prefix.includes('\\cs_new_eq:NN \\tumblerPagealph')) {
       const newline = prefix.includes('\r\n') ? '\r\n' : '\n';
       const alphabet = [
