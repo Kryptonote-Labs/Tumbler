@@ -1,3 +1,4 @@
+import { latexBaseClass } from './latex-class';
 import { latexEffectivePrefix } from './latex-project';
 import type { Node } from 'prosemirror-model';
 import { Plugin, PluginKey } from 'prosemirror-state';
@@ -55,7 +56,7 @@ function decorate(document: Node) {
     decorations.push(
       Decoration.node(position, position + document.nodeAt(position)!.nodeSize, {}, spec),
     );
-  if (readLatexClass(latexEffectivePrefix(document)).name === 'letter')
+  if (latexBaseClass(readLatexClass(latexEffectivePrefix(document)).name) === 'letter')
     for (const [position, part] of readLatexLetterParts(document)) {
       const node = document.nodeAt(position);
       if (node) decorations.push(Decoration.node(position, position + node.nodeSize, {}, { latexLetterPart: part }));

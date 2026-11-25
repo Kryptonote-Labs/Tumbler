@@ -1,6 +1,7 @@
 import type { Mark, MarkSpec, Node } from 'prosemirror-model';
 import { resolveLatexColour } from './latex-colour';
-import { latexFontSizePoints } from './latex-presentation';
+import { latexFontSize, latexFontSizes } from './latex-size-table';
+export { latexFontSizes } from './latex-size-table';
 import { texPoint } from './latex-typography';
 import { groupAt, latexUrlArgument, whitespaceEnd } from './latex-syntax';
 
@@ -44,7 +45,6 @@ function readHighlightOpen(source: string, start: number) {
 const commandStyles = new Map<string, string>(Object.entries(textCommands).map(([style, command]) => [command, style]));
 commandStyles.set('underline', 'underline');
 
-export const latexFontSizes = ['tiny', 'scriptsize', 'footnotesize', 'small', 'normalsize', 'large', 'Large', 'LARGE', 'huge', 'Huge'] as const;
 export type LatexFontSize = (typeof latexFontSizes)[number];
 export type LatexToggleStyle = keyof typeof textCommands;
 export type LatexStyle =
@@ -55,9 +55,7 @@ export type LatexStyle =
 
 /** The point size of each size command for a body size in pixels, per the standard classes. */
 export function latexFontSizePointSizes(normalSize: number) {
-  const points = normalSize / texPoint;
-  const index = points >= 11.5 ? 2 : points >= 10.5 ? 1 : 0;
-  return new Map(Array.from(latexFontSizePoints, ([size, sizes]) => [size, sizes[index]]));
+  return new Map(latexFontSizes.map((command) => [command, latexFontSize(command, normalSize)!.size / texPoint]));
 }
 
 export function latexFontSizeProperties(normalSize: number) {

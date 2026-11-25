@@ -1,3 +1,10 @@
+import { latexSpacingRegion } from './latex-spacing';
+import { readLatexSpacingCommand } from './latex-spacing-syntax';
+import { latexBaseClass } from './latex-class';
+export { latexBaseClass, latexBaseSize, latexBaseSizeOptions, setLatexBaseSize, type LatexBaseSize } from './latex-class';
+export { latexSpacingRegion, type LatexLineSpacingChoice } from './latex-spacing';
+export { readLatexSpacingCommand } from './latex-spacing-syntax';
+export { applyLatexRegionSpacing, insertLatexVerticalGap, latexParagraphGap, latexSelectedList, latexSelectedSpacingRegion, setLatexListItemGap, setLatexParagraphGap } from './latex-spacing-commands';
 export { latexBodySpacing } from './latex-body-spacing';
 import { latexAlignedParagraph } from './latex-alignment';
 import { authoredLatexStyleOrder, isLatexStyleMark, latexInlineFormat, latexInlineSize } from './latex-inline-format';
@@ -373,6 +380,7 @@ function blockStart(source: string, position: number, context: SourceContext) {
     !!readLatexParagraphMacro(source, context.macros, position) ||
     !!latexContentsLineAt(source, context.macros, position) ||
     blockCommands.has(command) ||
+    !!readLatexSpacingCommand(source, position) ||
     bibliographyCommands.has(command) ||
     headingLevel(command.slice(1)) > 0 ||
     (context.letter && !!latexLetterCommandAt(source, position)) ||
@@ -408,6 +416,7 @@ function paragraphEnd(source: string, position: number, context: SourceContext) 
 type SourceContext = {
   macros: ReturnType<typeof readLatexTextMacros>;
   enumitem: boolean;
+  setspace: boolean;
   letter: boolean;
   colours: ReturnType<typeof readLatexColours>;
   theorems: ReturnType<typeof readLatexTheorems>;
@@ -419,7 +428,7 @@ type SourceContext = {
 
 function sourceContext(prefix: string): SourceContext {
   const macros = readLatexTextMacros(prefix);
-  return { macros, titled: readLatexTitledEnvironments(prefix, macros), enumitem: usesLatexPackage(prefix, 'enumitem'), letter: readLatexClass(prefix).name === 'letter', colours: readLatexColours(prefix), theorems: readLatexTheorems(prefix),
+  return { macros, titled: readLatexTitledEnvironments(prefix, macros), enumitem: usesLatexPackage(prefix, 'enumitem'), setspace: usesLatexPackage(prefix, 'setspace'), letter: latexBaseClass(readLatexClass(prefix).name) === 'letter', colours: readLatexColours(prefix), theorems: readLatexTheorems(prefix),
     proof: usesLatexPackage(prefix, 'amsthm'), boxes: usesLatexPackage(prefix, 'tcolorbox') };
 }
 
@@ -539,10 +548,11 @@ function environmentBlock(source: string, position: number, before: string, cont
       };
     }
   }
-  if (latexTextEnvironments.has(name) && depth < 64 &&
+  const spacing = context.setspace && latexSpacingRegion(source, position);
+  if ((latexTextEnvironments.has(name) || spacing) && depth < 64 &&
       (name !== 'center' || !latexTikzFragment(source.slice(position, end)))) {
     const width = name === 'minipage' && groupAt(source, whitespaceEnd(source, from));
-    const bodyStart = width ? latexDeclarations(source, width.end).end : from;
+    const bodyStart = spacing ? spacing.end : width ? latexDeclarations(source, width.end).end : from;
     if (name !== 'minipage' || (width && bodyStart <= to && latexMinipageWidth(source.slice(position, bodyStart), 1, 1) !== undefined)) {
       const body = blocks(source.slice(bodyStart, to), { ...context, colours: new Map(context.colours) }, depth + 1);
       if (!body.nodes.length) body.nodes.push(schema.nodes.paragraph!.create({ before: '' }));
@@ -598,7 +608,7 @@ function blocks(source: string, context: SourceContext, depth = 0): { nodes: Nod
     }
     const directive = readLatexPageDirective(source, start);
     const titleSetter = readLatexTitleSetter(source, start);
-    const state = readLatexContentsEntry(source, start) ?? readLatexStateMacro(source, context.macros, start) ?? readLatexListSequence(source, context.macros, start);
+    const state = readLatexSpacingCommand(source, start) ?? readLatexContentsEntry(source, start) ?? readLatexStateMacro(source, context.macros, start) ?? readLatexListSequence(source, context.macros, start);
     if (directive || titleSetter || state || source[start] === '%') {
       const end = directive?.end ?? titleSetter?.argument.end ?? state?.end ?? lineEnd(source, start);
       nodes.push(schema.nodes.latex_raw!.create({ before, source: source.slice(start, end) }));

@@ -1,55 +1,10 @@
 import { readLatexPackages, withLatexPackage } from './latex-preamble';
 import { argument, groupAt, latexCommands, whitespaceEnd } from './latex-syntax';
 
-const spacingCommands = {
-  single: 'singlespacing',
-  onehalf: 'onehalfspacing',
-  double: 'doublespacing',
-} as const;
+import { latexSpacingValue, spacingCommands, type LatexLineSpacingChoice } from './latex-spacing';
+export { latexLineSpacing } from './latex-spacing';
 
-type Spacing = keyof typeof spacingCommands;
 type Family = 'cmr' | 'lmr';
-
-
-export function latexLineSpacing(
-  prefix: string,
-  points = 10,
-): { mode: Spacing | 'custom'; stretch: number } {
-  let mode: Spacing | 'custom' = 'single';
-  let stretch = 1;
-  const size = points === 12 ? 2 : points === 11 ? 1 : 0;
-  const factors = { single: 1, onehalf: [1.25, 1.213, 1.241][size]!, double: [1.667, 1.618, 1.655][size]! };
-  const setspace = readLatexPackages(prefix).find((entry) => entry.name === 'setspace');
-  function preset(value: Spacing) {
-    mode = value;
-    stretch = factors[value];
-  }
-  for (const { name, start, end } of latexCommands(prefix)) {
-    if (start === setspace?.offset) {
-      // setspace processes its known options in declaration order.
-      if (setspace.options.includes('singlespacing')) preset('single');
-      if (setspace.options.includes('onehalfspacing')) preset('onehalf');
-      if (setspace.options.includes('doublespacing')) preset('double');
-    }
-    if (setspace && start > setspace.offset) {
-      if (name === 'singlespacing') preset('single');
-      if (name === 'onehalfspacing') preset('onehalf');
-      if (name === 'doublespacing') preset('double');
-    }
-    if (name !== 'setstretch' && name !== 'renewcommand' && name !== 'linespread') continue;
-    const first = argument(prefix, end);
-    const value =
-      name === 'linespread' || (name === 'setstretch' && setspace) ? first?.value :
-      name === 'renewcommand' && first?.value === '\\baselinestretch'
-        ? argument(prefix, first.end)?.value
-        : undefined;
-    if (value && /^\d*\.?\d+$/.test(value) && Number(value) > 0 && Number.isFinite(Number(value))) {
-      stretch = Number(value);
-      mode = stretch === 1 ? 'single' : 'custom';
-    }
-  }
-  return { mode, stretch };
-}
 
 export function latexRomanFamily(prefix: string) {
   let family: string | undefined;
@@ -103,11 +58,13 @@ export function setLatexDocumentClass(prefix: string, name: string, effectivePre
   return '\\documentclass{' + name + '}' + newline + prefix;
 }
 
-export function setLatexLineSpacing(prefix: string, spacing: Spacing, effectivePrefix = prefix) {
-  const next = withLatexPackage(prefix, 'setspace', effectivePrefix);
-  // Using setstretch for Single avoids singlespacing's additional vertical skip.
-  const command = spacing === 'single' ? '\\setstretch{1}' : '\\' + spacingCommands[spacing];
-  return insertPreambleLine(next, command, /(?:^|(?<=\n))\\(?:setstretch\{1\}|onehalfspacing|doublespacing)\r?\n$/);
+export function setLatexLineSpacing(prefix: string, spacing: LatexLineSpacingChoice, effectivePrefix = prefix) {
+  const value = latexSpacingValue(spacing);
+  const next = typeof spacing === 'string' ? withLatexPackage(prefix, 'setspace', effectivePrefix) : prefix;
+  // setstretch avoids the vertical skip added by singlespacing.
+  const command = typeof spacing !== 'string' ? '\\linespread{' + value + '}' :
+    spacing === 'single' ? '\\setstretch{1}' : '\\' + spacingCommands[spacing];
+  return insertPreambleLine(next, command, /(?:^|(?<=\n))\\(?:setstretch\{1\}|onehalfspacing|doublespacing|linespread\{\d*\.?\d+\})\r?\n$/);
 }
 
 export function setLatexRomanFamily(prefix: string, family: Family, effectivePrefix = prefix) {
