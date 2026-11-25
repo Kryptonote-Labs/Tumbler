@@ -1,5 +1,5 @@
 import { readLatexPackages, withLatexPackage } from './latex-preamble';
-import { groupAt, latexCommands, whitespaceEnd } from './latex-syntax';
+import { argument, groupAt, latexCommands, whitespaceEnd } from './latex-syntax';
 
 const spacingCommands = {
   single: 'singlespacing',
@@ -10,10 +10,6 @@ const spacingCommands = {
 type Spacing = keyof typeof spacingCommands;
 type Family = 'cmr' | 'lmr';
 
-function argument(source: string, after: number) {
-  const group = groupAt(source, whitespaceEnd(source, after));
-  return group && { value: source.slice(group.from, group.to).trim(), end: group.end };
-}
 
 export function latexLineSpacing(
   prefix: string,

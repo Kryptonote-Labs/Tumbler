@@ -53,6 +53,8 @@ import {
 } from './latex-syntax';
 
 export { readLatexPackages } from './latex-preamble';
+export { latexDocumentFont, latexDocumentFonts, setLatexDocumentFont, type LatexDocumentFont, type LatexDocumentFontId } from './latex-document-fonts';
+export { withoutLatexPackage } from './latex-preamble';
 export { latexDocumentClassName, setLatexDocumentClass, latexLineSpacing, setLatexLineSpacing, latexRomanFamily, setLatexRomanFamily } from './latex-format';
 export { isLatexHeading } from './latex-spec';
 export { latexEnvironmentName, latexEnvironmentOption } from './latex-environments';
