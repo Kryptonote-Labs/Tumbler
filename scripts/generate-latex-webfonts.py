@@ -27,6 +27,7 @@ FACES = {
     "cmss10": ("Tumbler TeX Sans", "Regular"),
     "cmss12": ("Tumbler TeX Sans 12", "Regular"),
     "cmssbx10": ("Tumbler TeX Sans", "Bold"),
+    "cmcsc10": ("Tumbler TeX Small Caps", "Regular"),
     "cmtt10": ("Tumbler TeX Mono", "Regular"),
 }
 
