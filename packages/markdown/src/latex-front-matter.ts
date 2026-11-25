@@ -94,16 +94,16 @@ function frontMatterPosition(document: Node, kind: LatexFrontMatter) {
   return position;
 }
 
-/** Show or hide standalone front matter. New lists follow those already in place. */
-export function setLatexFrontMatter(tr: Transform, kind: LatexFrontMatter, shown: boolean) {
+/** Show or hide standalone front matter. Without a position, new lists follow those already in place. */
+export function setLatexFrontMatter(tr: Transform, kind: LatexFrontMatter, shown: boolean, position?: number) {
   const existing = latexFrontMatterBlocks(tr.doc, kind);
   if (!shown) {
-    for (const position of existing.reverse())
-      tr.delete(position, position + tr.doc.nodeAt(position)!.nodeSize);
+    for (const at of existing.reverse())
+      tr.delete(at, at + tr.doc.nodeAt(at)!.nodeSize);
     return;
   }
   if (existing.length) return;
-  const at = frontMatterPosition(tr.doc, kind);
+  const at = position ?? frontMatterPosition(tr.doc, kind);
   const prefix = latexEffectivePrefix(tr.doc);
   const { base, chapterOnRight } = latexPageOpening(prefix);
   const { blockquote, paragraph, latex_raw } = tr.doc.type.schema.nodes;
