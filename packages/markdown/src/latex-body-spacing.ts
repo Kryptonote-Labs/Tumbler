@@ -9,6 +9,18 @@ import { latexEffectivePrefix } from './latex-project';
 import { readLatexListSequence, readLatexStateMacro } from './latex-state-command';
 
 type Region = { stretch: number; before: number; after: number };
+
+/** Convert a region's TeX glue into offsets for CSS line boxes with centered leading. */
+export function latexSpacingRegionLayout(region: Region, naturalLeading: number, outerStretch: number) {
+  const leading = region.stretch * naturalLeading;
+  const lineBoxShift = (region.stretch - outerStretch) * naturalLeading / 2;
+  return {
+    leading,
+    before: region.before * naturalLeading + lineBoxShift,
+    after: region.after * naturalLeading - lineBoxShift,
+    pageStart: -lineBoxShift,
+  };
+}
 type BodySpacing = {
   initial: number;
   spacing: ReadonlyMap<number, number>;

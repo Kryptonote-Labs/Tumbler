@@ -12,6 +12,7 @@ import {
   latexListOptions,
   latexPageLayout,
   latexParagraphGap,
+  latexSpacingRegionLayout,
   latexVerticalSpace,
   parseLatex,
   serializeLatex,
@@ -108,6 +109,13 @@ test.skipIf(!Bun.which('pdflatex') || !Bun.which('pdftotext') ||
   const source = report + String.raw`Globalone\\
 Globaltwo
 
+\begin{spacing}{1}
+Insideone\\
+Insidetwo
+\end{spacing}
+
+Afterregion
+
 \begin{itemize}[itemsep=3mm]
 \item Listone
 \item Listtwo
@@ -137,13 +145,16 @@ Quotetwo
     const layout = latexPageLayout(doc.attrs.prefix);
     const spacing = latexBodySpacing(doc);
     const region = [...spacing.regions.values()][0]!;
-    const single = layout.leading / spacing.initial * region.stretch;
+    const scoped = latexSpacingRegionLayout(region, layout.leading / spacing.initial, spacing.initial);
+    const halfLeading = (layout.leading + scoped.leading) / 2;
     const list = layout.typography!.list[0]!;
     const vertical = latexVerticalSpace(String.raw`\vspace*{4mm}`)!;
     expect(delta('Globalone', 'Globaltwo')).toBeCloseTo(layout.leading, 2);
-    expect(delta('Quoteone', 'Quotetwo')).toBeCloseTo(single, 2);
+    expect(delta('Globaltwo', 'Insideone')).toBeCloseTo(halfLeading + scoped.before, 2);
+    expect(delta('Insidetwo', 'Afterregion')).toBeCloseTo(halfLeading + scoped.after, 2);
+    expect(delta('Quoteone', 'Quotetwo')).toBeCloseTo(scoped.leading, 2);
     // The starred skip inserts a zero-height rule with topskip and preserves the preceding box depth.
-    expect(delta('Globalone', 'Quoteone')).toBeCloseTo(vertical.height + single, 2);
+    expect(delta('Globalone', 'Quoteone')).toBeCloseTo(vertical.height + halfLeading + scoped.before, 2);
     expect(delta('Listone', 'Listtwo')).toBeCloseTo(layout.leading + list.paragraphSeparation + 3 * 96 / 25.4, 2);
     expect(serializeLatex(doc)).toBe(source);
   } finally {

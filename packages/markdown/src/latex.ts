@@ -5,7 +5,7 @@ export { latexBaseClass, latexBaseSize, latexBaseSizeOptions, setLatexBaseSize, 
 export { latexSpacingRegion, type LatexLineSpacingChoice } from './latex-spacing';
 export { readLatexSpacingCommand } from './latex-spacing-syntax';
 export { applyLatexRegionSpacing, insertLatexVerticalGap, latexParagraphGap, latexSelectedList, latexSelectedSpacingRegion, setLatexListItemGap, setLatexParagraphGap } from './latex-spacing-commands';
-export { latexBodySpacing } from './latex-body-spacing';
+export { latexBodySpacing, latexSpacingRegionLayout } from './latex-body-spacing';
 import { latexAlignedParagraph } from './latex-alignment';
 import { authoredLatexStyleOrder, isLatexStyleMark, latexInlineFormat, latexInlineSize } from './latex-inline-format';
 export { latexFontSizes, latexFontSizePointSizes, latexFontSizeProperties, latexLinkUrl, type LatexFontSize } from './latex-inline-format';
