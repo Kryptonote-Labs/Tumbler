@@ -1,7 +1,7 @@
 import type { Node } from 'prosemirror-model';
 import type { Transform } from 'prosemirror-transform';
 import { updateLatexBoundary, updateLatexNodeSource } from './latex-boundary-step';
-import { readLatexPageDirective } from './latex-flow';
+import { latexBreakCommand, readLatexPageDirective } from './latex-flow';
 import { latexComposedPageKind } from './latex-page-composition';
 import { enableLatexEmptyVersos, latexRightPageBreak, latexRightPagePrefix, latexPageOpening } from './latex-page-start';
 import { latexEffectivePrefix } from './latex-project';
@@ -77,18 +77,21 @@ const pageCommands = /^(?:\\(?:clearpage|cleardoublepage|newpage|frontmatter|(?:
 function frontMatterPosition(document: Node, kind: LatexFrontMatter) {
   let position = 0;
   let frontNumbering = false;
+  let precedingBreak: number | undefined;
   for (const node of document.children) {
     const source = rawSource(node);
     const page = latexComposedPageKind(source);
     const directive = readLatexPageDirective(source);
     if (directive?.kind === 'numbering') {
-      if (frontNumbering && directive.value === 'arabic') break;
+      if (frontNumbering && directive.value === 'arabic') return precedingBreak ?? position;
       frontNumbering ||= directive.value === 'roman' || directive.value === 'Roman';
     }
     const front = kind !== 'abstract' &&
       (page === 'page' || isEditableLatexAbstract(node) || latexAbstractAt(source) || latexGeneratedListKind(source));
     if (source !== '\\maketitle' && page !== 'title' && !front && !source.startsWith('%') && !pageCommands.test(source) &&
         directive?.kind !== 'counter' && directive?.kind !== 'extended-letters') break;
+    if (latexBreakCommand(source)) precedingBreak ??= position;
+    else if (!source.startsWith('%')) precedingBreak = undefined;
     position += node.nodeSize;
   }
   return position;

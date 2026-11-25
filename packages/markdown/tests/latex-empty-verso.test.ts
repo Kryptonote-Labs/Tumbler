@@ -6,9 +6,11 @@ import { join } from 'node:path';
 import { Transform } from 'prosemirror-transform';
 import {
   createLatexStructure, enableLatexEmptyVersos, latexEmptyVersos, latexFlow, latexPageNumbers,
-  paginateLatex, parseLatex, serializeLatex, setLatexFrontMatterPageStart, withLatexEmptyVersos,
+  paginateLatex, parseLatex, serializeLatex, setLatexFrontMatter, setLatexFrontMatterPageStart,
+  setLatexPageNumberSection, withLatexEmptyVersos,
   type PageBlock,
 } from '../src/latex';
+import { composeLatexPage } from '../src/latex-thesis';
 
 test('a headless right-hand start adds emptypage once and round-trips through source', () => {
   const source = '\\documentclass[twoside]{report}\r\n\\begin{document}\r\n\\tableofcontents\r\n\\end{document}';
@@ -86,6 +88,61 @@ test('a recto start after an even page counter reset hides the reset sheet', () 
   ]);
 });
 
+function numberedThesis(options = 'twoside') {
+  const tr = new Transform(parseLatex(
+    `\\documentclass[${options}]{report}\n\\begin{document}\n\\chapter{Introduction}\n\\end{document}`,
+  ));
+  const beforeChapter = () => tr.doc.content.size - tr.doc.lastChild!.nodeSize;
+  tr.insert(0, composeLatexPage(tr.doc, 'title', ['Thesis title']));
+  setLatexPageNumberSection(tr, beforeChapter(), { format: 'roman', startAt: 1 });
+  tr.insert(beforeChapter(), composeLatexPage(tr.doc, 'page', ['Dedication']));
+  tr.insert(beforeChapter(), composeLatexPage(tr.doc, 'page', ['Acknowledgements']));
+  setLatexPageNumberSection(tr, beforeChapter(), { format: 'arabic', startAt: 1 });
+  const contents = setLatexFrontMatter(tr, 'tableofcontents', true)!;
+  if (options === 'twoside') setLatexFrontMatterPageStart(tr, contents, true);
+  return serializeLatex(tr.doc);
+}
+
+test('authored thesis numbering and right-hand contents use recto sheets in visual pagination', () => {
+  const source = numberedThesis();
+  expect(source).toMatch(/\\cleardoublepage\n\\tableofcontents\s+\\cleardoublepage\n\\pagenumbering\{arabic\}/);
+  const document = parseLatex(source);
+  const flow = latexFlow(document);
+  const blocks: PageBlock[] = [];
+  const positions = new Map<string, number>();
+  document.forEach((node, position, index) => {
+    blocks.push({ position, top: index * 5, bottom: index * 5 + 5, flow: flow.get(position) });
+    const text = String(node.attrs.source ?? node.textContent);
+    for (const label of ['Dedication', '\\tableofcontents', 'Introduction'])
+      if (text.includes(label)) positions.set(label, position);
+  });
+  const plan = paginateLatex(blocks, 100, 20);
+  const starts: number[] = [];
+  plan.breaks.forEach(({ position }, index) => {
+    while (starts.length < plan.breakSlots[index]!) starts.push(position);
+  });
+  const pageOf = (label: string) => starts.findLastIndex(start => start <= positions.get(label)!) + 2;
+  expect([pageOf('Dedication'), pageOf('\\tableofcontents'), pageOf('Introduction')]).toEqual([3, 5, 7]);
+  expect([...plan.rectoBlanks]).toEqual([1, 5]);
+  expect(latexPageNumbers(flow, starts, plan.folioLeadIns, plan.rectoBlanks)).toEqual([
+    { number: 1, visible: false },
+    { number: 2, visible: false },
+    { number: 1, style: 'roman', visible: true },
+    { number: 2, style: 'roman', visible: true },
+    { number: 3, style: 'roman', visible: true },
+    { number: 4, style: 'roman', visible: false },
+    { number: 1, visible: true },
+  ]);
+});
+
+test('one-sided numbering keeps clearpage even with openright chapters', () => {
+  const source = numberedThesis('oneside,openright');
+  expect(source).toContain('\\clearpage\n\\pagenumbering{roman}');
+  expect(source).toContain('\\clearpage\n\\pagenumbering{arabic}');
+  expect(source).not.toContain('\\cleardoublepage');
+  expect(source).not.toContain('emptypage');
+});
+
 const hasTex = ['pdflatex', 'pdftotext', 'kpsewhich'].every(tool => Bun.which(tool)) &&
   spawnSync('kpsewhich', ['emptypage.sty'], { timeout: 400, stdio: 'ignore' }).status === 0;
 const hasFancyhdr = hasTex &&
@@ -110,6 +167,19 @@ function pdfPages(source: string) {
     rmSync(cwd, { recursive: true, force: true });
   }
 }
+
+test.skipIf(!hasTex && process.env.REQUIRE_LATEX_PDF !== '1')('pdfLaTeX puts authored thesis numbering and contents on rectos', () => {
+  if (!hasTex) throw new Error('The LaTeX folio test requires TeX Live with emptypage and Poppler.');
+  const pages = pdfPages(numberedThesis());
+  expect(pages).toHaveLength(7);
+  expect(pages[0]).toBe('Thesis title');
+  expect(pages[1]).toBe('');
+  expect(pages[2]).toMatch(/^Dedication\s+i$/);
+  expect(pages[3]).toMatch(/^Acknowledgements\s+ii$/);
+  expect(pages[4]).toMatch(/^Contents\s+iii$/);
+  expect(pages[5]).toBe('');
+  expect(pages[6]).toMatch(/^Chapter 1\s+Introduction\s+1$/);
+});
 
 test.skipIf(!hasTex)('pdfLaTeX keeps padding blank before report front matter', () => {
   const tr = new Transform(parseLatex(

@@ -69,7 +69,7 @@ test('report contents uses the front matter, restarted main matter, appendix and
   const parsed = parseLatex(tex);
   expect(serializeLatex(parsed)).toBe(tex);
   expect(measuredPages(parsed)).toMatchObject({
-    labels: ['1', 'ii', '1', '2', '3'],
+    labels: ['1', '2', 'ii', '1', '2', '3'],
     contents: [['Preface', '', 'ii'], ['Methods', '1', '1'], ['Supplement', 'A', '2'], ['Bibliography', '', '3']],
   });
   setLatexBibliographyContents(tr, false);
@@ -90,6 +90,23 @@ Text.
   const after = tr.doc.children.slice(0, -1).reduce((sum, node) => sum + node.nodeSize, 0);
   setLatexPageNumberSection(tr, after, { format: 'alph', startAt: 28 });
   expect(measuredPages(parseLatex(serializeLatex(tr.doc))).labels).toEqual(['ab']);
+});
+
+test('a two-sided geometry setting aligns the reset without rewriting an existing clearpage', () => {
+  const source = String.raw`\documentclass{report}
+\usepackage[twoside]{geometry}
+\begin{document}
+Opening page.
+\clearpage
+Dedication.
+\end{document}`;
+  const tr = new Transform(parseLatex(source));
+  const at = tr.doc.child(0).nodeSize + tr.doc.child(1).nodeSize;
+  setLatexPageNumberSection(tr, at, { format: 'roman', startAt: 1 });
+  expect(serializeLatex(tr.doc)).toBe(source
+    .replace('\\begin{document}', '\\usepackage{emptypage}\n\\begin{document}')
+    .replace('Dedication.', '\\cleardoublepage\n\\pagenumbering{roman}\nDedication.'));
+  expect(measuredPages(tr.doc).labels).toEqual(['1', '2', 'i']);
 });
 
 test('book matter preserves the front and back contents while chapters open on odd folios', () => {

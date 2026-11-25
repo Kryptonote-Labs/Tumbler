@@ -47,6 +47,7 @@ test('the LaTeX CLI creates and edits the same thesis as the editor', async () =
     expect(await apply(blank.revision, { kind: 'thesis', title: 'Signal & Noise' })).toBe(0);
     const starter = latexThesis({ title: 'Signal & Noise' }).source;
     expect(await readFile(path, 'utf8')).toBe(starter);
+    expect(starter).toContain('\\cleardoublepage\n\\pagenumbering{roman}');
 
     const thesis = await inspect();
     const contents = thesis.blocks.find((block) => block.kind === 'tableofcontents');
@@ -91,8 +92,8 @@ test('the LaTeX CLI creates and edits the same thesis as the editor', async () =
     expect(source).toContain(String.raw`\addcontentsline{toc}{chapter}{Dedication}`);
     expect(source).toContain(String.raw`Thanks \& gratitude`);
     expect(source).toContain('\\cleardoublepage\n\\tableofcontents');
-    expect(source).toContain(String.raw`\pagenumbering{Roman}`);
-    expect(source).toContain(String.raw`\pagenumbering{arabic}`);
+    expect(source.match(/\\cleardoublepage\n\\pagenumbering\{Roman\}/g)).toHaveLength(1);
+    expect(source).toContain('\\cleardoublepage\n\\pagenumbering{arabic}');
     expect(source.slice(source.indexOf('\\chapter{Introduction}'))).toBe(
       starter.slice(starter.indexOf('\\chapter{Introduction}')),
     );

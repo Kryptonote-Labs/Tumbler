@@ -1,7 +1,7 @@
 import { latexBreakCommand, readLatexBookMatter, readLatexClass, readLatexPageDirective, type LatexPageNumberFormat } from './latex-flow';
 import { updateLatexBoundary } from './latex-boundary-step';
 import { latexEffectivePrefix } from './latex-project';
-import { enableLatexEmptyVersos, latexRightPageBreak } from './latex-page-start';
+import { enableLatexEmptyVersos, latexPageOpening, latexRightPageBreak } from './latex-page-start';
 import { latexDocumentStartCommands } from './latex-syntax';
 import type { Node } from 'prosemirror-model';
 import type { Transform } from 'prosemirror-transform';
@@ -80,15 +80,17 @@ export function setLatexPageNumberSection(tr: Transform, position: number, secti
   if (letters && startAt < 1) throw new RangeError('Start letter numbering at 1 or higher.');
   const start = sectionStart(tr.doc, position);
   const prior = previous(tr.doc, start).source;
+  const boundary = latexBreakCommand(prior);
+  const matter = readLatexBookMatter(prior);
+  const { base, twoSided, chapterOnRight } = latexPageOpening(latexEffectivePrefix(tr.doc));
   const commands: string[] = [];
-  if (start && !latexBreakCommand(prior) && !readLatexBookMatter(prior)) {
-    const { name, options } = readLatexClass(latexEffectivePrefix(tr.doc));
-    const openRight = options.findLast(option => option === 'openright' || option === 'openany');
-    const chapter = /^\\(?:chapter|part)\b/.test(String(tr.doc.nodeAt(position)?.attrs.open ?? ''));
-    commands.push(chapter && (openRight ? openRight === 'openright' : name === 'book')
-      ? latexRightPageBreak : '\\clearpage');
+  if (start && twoSided) {
+    const matterStartsRight = base === 'book' && matter && (matter !== 'back' || chapterOnRight);
+    if (boundary !== 'recto' && !matterStartsRight) commands.push(latexRightPageBreak);
+    enableLatexEmptyVersos(tr);
+  } else if (start && !boundary && !matter) {
+    commands.push('\\clearpage');
   }
-  if (commands.includes(latexRightPageBreak)) enableLatexEmptyVersos(tr);
   commands.push('\\pagenumbering{' + format + '}');
   if (letters) {
     const prefix = String(tr.doc.attrs.prefix);
