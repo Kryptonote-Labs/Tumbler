@@ -4,18 +4,10 @@ import { latexTypography, texPoint, type LatexTypography } from './latex-typogra
 import { latexLength } from './latex-lengths';
 import { latexDriverUsesClassPaper } from './latex-preamble';
 import { commandEnd, groupAt } from './latex-syntax';
+import { latexPaperSizes as paperSizes, readGeometry } from './latex-geometry';
 
 const inch = 96;
 const millimeter = inch / 25.4;
-const paperSizes = new Map([
-  ['letterpaper', [8.5 * inch, 11 * inch]],
-  ['legalpaper', [8.5 * inch, 14 * inch]],
-  ['a3paper', [297 * millimeter, 420 * millimeter]],
-  ['a4paper', [210 * millimeter, 297 * millimeter]],
-  ['a5paper', [148 * millimeter, 210 * millimeter]],
-  ['executivepaper', [7.25 * inch, 10.5 * inch]],
-]);
-
 export type LatexPageLayout = {
   width: number;
   height: number;
@@ -64,19 +56,7 @@ export function latexLandscapeLayout(portrait: LatexPageLayout): LatexPageLayout
 function readOptions(prefix: string) {
   const source = prefix.replace(/(?<!\\)%[^\n]*/g, '');
   const { name: documentClass, options: classOptions } = readLatexClass(prefix);
-  const geometryOptions: string[] = [];
-  let geometry = false;
-  for (const match of source.matchAll(
-    /\\usepackage\s*(?:\[([^\]]*)\])?\s*\{([^{}]*)\}|\\geometry\s*\{([^{}]*)\}/g,
-  )) {
-    if (match[3] === undefined && !match[2]?.split(',').some((name) => name.trim() === 'geometry'))
-      continue;
-    geometry = true;
-    for (const item of (match[3] ?? match[1] ?? '').split(',')) {
-      if (item.trim() === 'reset') geometryOptions.length = 0;
-      else geometryOptions.push(item.trim());
-    }
-  }
+  const { loaded: geometry, options: geometryOptions } = readGeometry(prefix);
   let paperSize: string | undefined;
   let orientation: 'landscape' | 'portrait' | undefined;
   let fontSize = 10;
@@ -98,12 +78,19 @@ function readOptions(prefix: string) {
   };
 }
 
-export function latexPaperSettings(prefix: string) {
-  const { paperSize, orientation, geometryOptions } = readOptions(prefix);
+export function latexPaperSettings(prefix: string, output?: { defaultPaper: 'a4paper' | 'letterpaper' }) {
+  let { paperSize, orientation, geometryOptions } = readOptions(prefix);
   let margin: string | undefined;
   for (const option of geometryOptions) {
     const [key, value] = option.split('=');
     if (key?.trim() === 'margin') margin = value?.trim();
+  }
+  if (output) {
+    const { width, height } = latexPageLayout(prefix, output);
+    paperSize = [...paperSizes].find(([, [short, long]]) =>
+      (Math.abs(width - short) < 0.01 && Math.abs(height - long) < 0.01) ||
+      (Math.abs(width - long) < 0.01 && Math.abs(height - short) < 0.01),
+    )?.[0];
   }
   return { paperSize, orientation, margin };
 }

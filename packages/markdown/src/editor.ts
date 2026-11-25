@@ -52,7 +52,7 @@ import {
   exitCode,
 } from 'prosemirror-commands';
 import { keymap } from 'prosemirror-keymap';
-import { history, undo, redo } from 'prosemirror-history';
+import { closeHistory, history, undo, redo } from 'prosemirror-history';
 import {
   inputRules,
   InputRule,
@@ -74,7 +74,7 @@ import {
 export { EditorView } from 'prosemirror-view';
 export { getVersion, sendableSteps, receiveTransaction } from 'prosemirror-collab';
 export { Step } from 'prosemirror-transform';
-export { undo, redo, toggleMark, setBlockType, wrapIn, wrapInList, TextSelection };
+export { closeHistory, undo, redo, toggleMark, setBlockType, wrapIn, wrapInList, TextSelection };
 export type { Command, EditorState };
 
 // Replace only the completed syntax; selection and undo are handled by ProseMirror.
