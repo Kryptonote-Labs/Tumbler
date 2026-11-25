@@ -113,6 +113,7 @@ Text
   const updated = setLatexGeometry(source, { margins, twoSided: true, bindingOffset: '5mm' });
   expect(updated).toBe(String.raw`\documentclass[a4paper,12pt,twoside]{report}
 \usepackage[includehead,headsep=8mm,top=2cm,bottom=3cm,inner=2cm,outer=35mm,bindingoffset=5mm]{geometry}
+\usepackage{emptypage}
 \begin{document}
 Text
 \end{document}`);

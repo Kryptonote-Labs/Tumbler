@@ -1,6 +1,7 @@
 import { latexBreakCommand, readLatexBookMatter, readLatexClass, readLatexPageDirective, type LatexPageNumberFormat } from './latex-flow';
 import { updateLatexBoundary } from './latex-boundary-step';
 import { latexEffectivePrefix } from './latex-project';
+import { enableLatexEmptyVersos, latexRightPageBreak } from './latex-page-start';
 import { latexDocumentStartCommands } from './latex-syntax';
 import type { Node } from 'prosemirror-model';
 import type { Transform } from 'prosemirror-transform';
@@ -85,8 +86,9 @@ export function setLatexPageNumberSection(tr: Transform, position: number, secti
     const openRight = options.findLast(option => option === 'openright' || option === 'openany');
     const chapter = /^\\(?:chapter|part)\b/.test(String(tr.doc.nodeAt(position)?.attrs.open ?? ''));
     commands.push(chapter && (openRight ? openRight === 'openright' : name === 'book')
-      ? '\\cleardoublepage' : '\\clearpage');
+      ? latexRightPageBreak : '\\clearpage');
   }
+  if (commands.includes(latexRightPageBreak)) enableLatexEmptyVersos(tr);
   commands.push('\\pagenumbering{' + format + '}');
   if (letters) {
     const prefix = String(tr.doc.attrs.prefix);
@@ -114,5 +116,6 @@ export function setLatexBookMatter(tr: Transform, position: number, matter: Late
   const prior = previous(tr.doc, position);
   const existing = readLatexBookMatter(prior.source);
   if (existing === matter) return;
+  enableLatexEmptyVersos(tr);
   insertCommands(tr, existing ? prior.position : position, position, ['\\' + matter + 'matter']);
 }

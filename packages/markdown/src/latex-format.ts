@@ -1,4 +1,5 @@
 import { readLatexPackages, withLatexPackage } from './latex-preamble';
+import { withLatexEmptyVersos } from './latex-page-start';
 import { argument, groupAt, latexCommands, whitespaceEnd } from './latex-syntax';
 
 import { latexSpacingValue, spacingCommands, type LatexLineSpacingChoice } from './latex-spacing';
@@ -50,12 +51,15 @@ export function setLatexDocumentClass(prefix: string, name: string, effectivePre
   const group = classArgument(prefix);
   if (group) {
     const authored = prefix.slice(group.from, group.to);
-    return prefix.slice(0, group.from) + (authored.trim() ? authored.replace(authored.trim(), () => name) : name) + prefix.slice(group.to);
+    if (authored.trim() === name) return prefix;
+    const value = authored.trim() ? authored.replace(authored.trim(), () => name) : name;
+    const updated = prefix.slice(0, group.from) + value + prefix.slice(group.to);
+    return effectivePrefix === prefix ? withLatexEmptyVersos(updated) : updated;
   }
   if (classArgument(effectivePrefix))
     throw new Error('Change the class in the project file that declares it.');
   const newline = /\r\n|\n/.exec(prefix)?.[0] ?? '\n';
-  return '\\documentclass{' + name + '}' + newline + prefix;
+  return withLatexEmptyVersos('\\documentclass{' + name + '}' + newline + prefix);
 }
 
 export function setLatexLineSpacing(prefix: string, spacing: LatexLineSpacingChoice, effectivePrefix = prefix) {

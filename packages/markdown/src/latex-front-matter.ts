@@ -3,7 +3,7 @@ import type { Transform } from 'prosemirror-transform';
 import { updateLatexBoundary, updateLatexNodeSource } from './latex-boundary-step';
 import { readLatexPageDirective } from './latex-flow';
 import { latexComposedPageKind } from './latex-page-composition';
-import { latexRightPageBreak, latexRightPagePrefix, latexPageOpening } from './latex-page-start';
+import { enableLatexEmptyVersos, latexRightPageBreak, latexRightPagePrefix, latexPageOpening } from './latex-page-start';
 import { latexEffectivePrefix } from './latex-project';
 import type { LatexGeneratedList } from './latex-state-command';
 
@@ -106,6 +106,7 @@ export function setLatexFrontMatter(tr: Transform, kind: LatexFrontMatter, shown
   const at = position ?? frontMatterPosition(tr.doc, kind);
   const prefix = latexEffectivePrefix(tr.doc);
   const { base, chapterOnRight } = latexPageOpening(prefix);
+  if (chapterOnRight) enableLatexEmptyVersos(tr);
   const { blockquote, paragraph, latex_raw } = tr.doc.type.schema.nodes;
   const before = tr.doc.nodeAt(at)?.attrs.before || '\n\n';
   if (kind === 'abstract') {
@@ -154,10 +155,12 @@ export function latexFrontMatterStartsRight(document: Node, position: number) {
 
 /** Set a front matter page start. The next-page override of openright is local to the list. */
 export function setLatexFrontMatterPageStart(tr: Transform, position: number, right: boolean) {
-  if (latexFrontMatterStartsRight(tr.doc, position) === right) return;
   const node = tr.doc.nodeAt(position);
   const source = rawSource(node);
   const list = latexGeneratedListKind(source);
+  if (right && (list || (node && isEditableLatexAbstract(node)) || latexAbstractAt(source)))
+    enableLatexEmptyVersos(tr);
+  if (latexFrontMatterStartsRight(tr.doc, position) === right) return;
   const { chapterOnRight } = latexPageOpening(latexEffectivePrefix(tr.doc));
   if (list) {
     const command = '\\' + list;
