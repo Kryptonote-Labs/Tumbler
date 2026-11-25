@@ -65,8 +65,9 @@ export function latexDeclarations(source: string, start = 0, normalSize = 10 * t
 export function latexVerticalSpace(source: string, start = 0) {
   const end = commandEnd(source, start);
   if (source.slice(start, end) !== '\\vspace') return;
-  const starred = source[end] === '*';
-  const group = groupAt(source, whitespaceEnd(source, end + Number(starred)));
+  const at = whitespaceEnd(source, end);
+  const starred = source[at] === '*';
+  const group = groupAt(source, whitespaceEnd(source, at + Number(starred)));
   if (!group) return;
   const length = source.slice(group.from, group.to).trim();
   const height = latexLength(length, 1, 1);

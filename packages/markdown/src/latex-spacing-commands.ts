@@ -173,7 +173,10 @@ function verticalGap(side: Side, value: string, starred: boolean, replace: boole
     const tr = state.tr;
     if (replace && existing) {
       if (length) updateLatexNodeSource(tr, existing.position, source);
-      else tr.delete(existing.position, existing.position + existing.node.nodeSize);
+      else {
+        tr.delete(existing.position, existing.position + existing.node.nodeSize);
+        if (side === 'before') tr.setNodeAttribute(existing.position, 'before', existing.node.attrs.before);
+      }
     } else if (length) {
       const next = tr.doc.nodeAt(position);
       const before = side === 'before' ? next?.attrs.before ?? (position === 0 ? '' : '\n\n') : '\n\n';

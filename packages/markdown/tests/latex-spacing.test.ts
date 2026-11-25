@@ -90,6 +90,9 @@ test('authors paragraph and fixed gaps and preserves unrelated list options', ()
   expect(setLatexParagraphGap('after', '6pt')(state, dispatch)).toBe(true);
   expect(latexParagraphGap(state, 'before')).toBe('4mm');
   expect(latexParagraphGap(state, 'after')).toBe('6pt');
+  expect(setLatexParagraphGap('before', '')(state, dispatch)).toBe(true);
+  expect(serializeLatex(state.doc)).toStartWith(report + 'Body text.');
+  expect(setLatexParagraphGap('before', '4mm')(state, dispatch)).toBe(true);
   expect(insertLatexVerticalGap('2mm', false)(state, dispatch)).toBe(true);
   expect(serializeLatex(state.doc)).toContain('\\vspace*{4mm}\n\n\\vspace{2mm}\n\nBody text.\n\n\\vspace{6pt}');
   const position = state.doc.content.size - state.doc.lastChild!.nodeSize + 3;
@@ -101,6 +104,7 @@ test('authors paragraph and fixed gaps and preserves unrelated list options', ()
   const authored = serializeLatex(state.doc);
   expect(authored).toContain('\\begin{itemize}[leftmargin=3em,itemsep=3mm]');
   expect(serializeLatex(parseLatex(authored))).toBe(authored);
+  expect(parseLatex(authored.replace('itemsep=3mm', 'itemsep=2ex')).lastChild?.type.name).toBe('bullet_list');
 });
 
 test.skipIf(!Bun.which('pdflatex') || !Bun.which('pdftotext') ||
