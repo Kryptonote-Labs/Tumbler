@@ -1,6 +1,8 @@
-import { latexBaseClass, readLatexClass } from './latex-class';
+import { readLatexClass } from './latex-class';
 import { readLatexSpacingCommand } from './latex-spacing-syntax';
 import { latexComposedPageKind } from './latex-page-composition';
+import { hasStandardBookAbstract, latexAbstractAt, latexGeneratedListAt } from './latex-front-matter';
+import { latexPageOpening, latexRightPagePrefix } from './latex-page-start';
 import { isLatexHeading } from './latex-spec';
 import { isLatexTitlePage } from './latex-text-layout';
 import { latexEffectivePrefix } from './latex-project';
@@ -127,25 +129,17 @@ export function readLatexPageDirective(source: string, position = 0) {
     return { kind: 'page-style' as const, value, end: argument.end };
 }
 
-const chapterLists = new Set(['tableofcontents', 'listoffigures', 'listoftables']);
-
 /** Resolve source directives into layout effects at editor positions. Unknown classes keep
  * explicit break commands. The measured layout and edit history remain independent. */
 export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
   const prefix = latexEffectivePrefix(document);
-  const { name: className, options } = readLatexClass(prefix);
-  const name = latexBaseClass(className);
+  const { base: name, options, chaptered: chapters, twoSided: recto, chapterOnRight } = latexPageOpening(prefix);
   const macros = readLatexTextMacros(prefix);
   const customTitle = latexCustomTitlePage(prefix, macros);
   const titled = readLatexTitledEnvironments(prefix, macros);
-  const chapters = name === 'report' || name === 'book';
   const columns = options.includes('twocolumn');
   const standard = chapters || name === 'article';
-  const openRight = options.findLast((option) => option === 'openright' || option === 'openany');
-  const twoSided = options.findLast((option) => option === 'twoside' || option === 'oneside');
-  const recto = twoSided ? twoSided === 'twoside' : name === 'book';
-  const chapterBoundary: LatexBreak =
-    recto && (openRight ? openRight === 'openright' : name === 'book') ? 'recto' : 'page';
+  const chapterBoundary: LatexBreak = chapterOnRight ? 'recto' : 'page';
   const titleOption = options.findLast(
     (option) => option === 'titlepage' || option === 'notitlepage',
   );
@@ -196,13 +190,18 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
     if (node.type.name === 'latex_include' && /^\\include\b/.test(node.attrs.open ?? ''))
       bounded.push({ node, position, before: 'page', after: 'page' });
     if (node.type.name === 'blockquote') {
-      const group = /^\\begin\s*\{([^}]+)\}/.exec(String(node.attrs.open))?.[1];
+      const open = String(node.attrs.open);
+      const abstract = latexAbstractAt(open);
+      const group = /^\\begin\s*\{([^}]+)\}/.exec(open.slice(abstract?.start ?? 0))?.[1];
       const environment = group && titled.get(group);
+      const explicit = abstract?.right ? boundary('recto') : undefined;
       if (environment) bounded.push({
-        node, position, before: boundary(environment.before), after: boundary(environment.after),
+        node, position, before: explicit ?? boundary(environment.before), after: boundary(environment.after),
       });
       else if (titlePage && group === 'abstract' && name !== 'book')
-        bounded.push({ node, position, before: 'page', after: 'page', title: true });
+        bounded.push({ node, position, before: explicit ?? 'page', after: 'page', title: true });
+      else if (group === 'abstract' && (explicit || (name === 'book' && hasStandardBookAbstract(prefix))))
+        bounded.push({ node, position, before: explicit ?? 'page' });
     }
     const source = node.type.name === 'latex_raw' ? String(node.attrs.source).trim() : '';
     const spacing = readLatexSpacingCommand(source, 0);
@@ -305,13 +304,14 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
       if (lists.after) pageHasContent = false;
       return false;
     }
+    const rightPage = recto && !!latexRightPagePrefix(source);
     if (node.type.name === 'latex_raw' && latexComposedPageKind(source) === 'page') {
-      effect({ before: 'page', after: 'page' });
+      effect({ before: rightPage ? 'recto' : 'page', after: 'page' });
       pageHasContent = false;
       return false;
     }
     if (explicitTitle) {
-      effect({ before: name === 'book' && recto ? 'recto' : 'page', after: 'page', startAt: 1, folio: { visible: false, restartAfter: !recto } });
+      effect({ before: rightPage || (name === 'book' && recto) ? 'recto' : 'page', after: 'page', startAt: 1, folio: { visible: false, restartAfter: !recto } });
       pageHasContent = false;
       return false;
     }
@@ -327,6 +327,13 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
         plainChapter();
       }
     } else if (node.type.name === 'latex_raw') {
+      const list = latexGeneratedListAt(source);
+      if (list?.end === source.length) {
+        if (list.right) effect({ before: rightPage ? 'recto' : 'page' });
+        else if (chapters) effect({ before: list.right === false ? 'page' : chapterBoundary });
+        if (chapters) plainChapter();
+        return false;
+      }
       if (name === 'letter' && /^\\opening\s*\{/.test(source)) {
         effect({ before: 'page', numbering: 'arabic', folio: { visible: false, restartAfter: false } });
         return;
@@ -357,9 +364,6 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
         });
       } else if (command === 'maketitle' && name === 'article' && !titlePrinted) {
         titlePrinted = true;
-        plainChapter();
-      } else if (chapters && chapterLists.has(command)) {
-        effect({ before: chapterBoundary });
         plainChapter();
       }
     }

@@ -1,8 +1,11 @@
 import { serializeLatexSelection } from './latex';
 import { latexHeadings } from './latex-headings';
 import { isLatexBibliographyBlock } from './latex-bibliography';
+import { latexBaseClass } from './latex-class';
 import { updateLatexBoundary, updateLatexNodeSource } from './latex-boundary-step';
-import { readLatexClass } from './latex-flow';
+import { isEditableLatexAbstract, latexAbstractAt } from './latex-front-matter';
+import { latexComposedContents, latexComposedPageAt, latexComposedTextSource } from './latex-page-composition';
+import { latexFlow, readLatexClass, type LatexBlockFlow } from './latex-flow';
 import { latexNumbering } from './latex-numbering';
 import { latexEffectivePrefix } from './latex-project';
 import { isLatexHeading } from './latex-spec';
@@ -33,6 +36,45 @@ function isStarred(node: Node) {
 
 function rawSource(node: Node | null) {
   return node?.type.name === 'latex_raw' ? String(node.attrs.source).trim() : '';
+}
+
+function pageContents(node: Node | null) {
+  if (!node) return;
+  if (isEditableLatexAbstract(node)) {
+    const source = String(node.attrs.open);
+    const open = latexAbstractAt(source)!;
+    const start = whitespaceEnd(source, open.end);
+    const entry = readLatexContentsEntry(source, start);
+    return { source, at: open.end, entry: entry?.list === 'toc' ? { ...entry, start } : undefined, attribute: 'open' as const };
+  }
+  if (node.type.name !== 'latex_raw') return;
+  const source = String(node.attrs.source);
+  const page = latexComposedPageAt(source);
+  if (page?.end === source.length)
+    return { source, at: page.from, entry: latexComposedContents(source), attribute: 'source' as const };
+}
+
+/** Read the source title of an explicit contents entry on a composed page or abstract. */
+export function readLatexPageContents(document: Node, position: number) {
+  return pageContents(document.nodeAt(position))?.entry?.title;
+}
+
+/** Write the entry inside the page's opening boundary so TeX records its own folio. */
+export function setLatexPageContents(tr: Transform, position: number, title: string | null) {
+  const page = pageContents(tr.doc.nodeAt(position));
+  if (!page) return;
+  const { source, at, entry, attribute } = page;
+  const name = latexBaseClass(readLatexClass(latexEffectivePrefix(tr.doc)).name);
+  const chaptered = name === 'book' || name === 'report';
+  const text = title?.trim().replace(/\s*\r?\n\s*/g, ' ');
+  const newline = source.includes('\r\n') ? '\r\n' : '\n';
+  const command = text ? contentsSource(chaptered ? 'chapter' : 'section', latexComposedTextSource(text)) : '';
+  const next = entry
+    ? command ? source.slice(0, entry.start) + command + source.slice(entry.end) : source.slice(0, at) + source.slice(entry.end)
+    : command ? source.slice(0, at) + newline + command + source.slice(at) : source;
+  if (next === source) return;
+  if (attribute === 'open') tr.setNodeAttribute(position, attribute, next);
+  else updateLatexNodeSource(tr, position, next);
 }
 
 function headingEntry(document: Node, position: number, heading: Node) {
@@ -95,7 +137,7 @@ export function refreshLatexHeadingContents(
 }
 
 function bibContentsCommand(prefix: string) {
-  const { name } = readLatexClass(prefix);
+  const name = latexBaseClass(readLatexClass(prefix).name);
   return name === 'report' || name === 'book'
     ? '\\addcontentsline{toc}{chapter}{\\bibname}'
     : '\\addcontentsline{toc}{section}{\\refname}';
@@ -192,7 +234,7 @@ export type LatexContentsEntry = {
 /** Resolve automatic and explicitly added entries in the order LaTeX writes them. */
 export function latexContentsEntries(document: Node): LatexContentsEntry[] {
   const prefix = latexEffectivePrefix(document);
-  const { name } = readLatexClass(prefix);
+  const name = latexBaseClass(readLatexClass(prefix).name);
   const chaptered = name === 'book' || name === 'report';
   const numbering = latexNumbering(document)?.headings;
   const bibtexInContents = !!bibliographyHook(prefix);
@@ -207,6 +249,7 @@ export function latexContentsEntries(document: Node): LatexContentsEntry[] {
   }
   const levels = ['part', 'chapter', ...latexHeadings];
   const entries: LatexContentsEntry[] = [];
+  let flow: ReadonlyMap<number, LatexBlockFlow> | undefined;
   function add(position: number, command: string, title: string, number = '', titleSource?: string) {
     const index = levels.indexOf(command);
     if (index < 0) return;
@@ -227,6 +270,22 @@ export function latexContentsEntries(document: Node): LatexContentsEntry[] {
       const titleSource = short ? open.slice(short.from, short.to) : headingTitle(document, position, node);
       add(position, headingCommand(node), titleSource, numbering?.get(position)?.number, titleSource);
       return false;
+    }
+    const page = pageContents(node);
+    if (page?.entry) {
+      let at = position;
+      if (page.attribute === 'open') {
+        flow ??= latexFlow(document);
+        node.descendants((child, offset) => {
+          const candidate = position + offset + 1;
+          const rule = flow?.get(candidate);
+          if (at === position && child.isBlock && (child.isAtom || child.isTextblock) &&
+              (!rule || rule.kind === 'content')) at = candidate;
+          return at === position;
+        });
+      }
+      const { level, title } = page.entry;
+      add(at, level, title, '', title);
     }
     const source = rawSource(node);
     const entry = readLatexContentsEntry(source);

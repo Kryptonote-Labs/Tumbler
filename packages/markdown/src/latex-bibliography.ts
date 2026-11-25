@@ -2,6 +2,7 @@ import type { Node } from 'prosemirror-model';
 import type { Transform } from 'prosemirror-transform';
 import { serializeLatex } from './latex';
 import { updateLatexBoundary, updateLatexNodeSource } from './latex-boundary-step';
+import { readLatexBibliographyContents, setLatexBibliographyContents } from './latex-contents';
 import { commandEnd, environmentAt, groupAt, latexCommands, lineEnd, whitespaceEnd } from './latex-syntax';
 
 /** One BibTeX entry. Field values are kept as written, without their outer braces. */
@@ -292,6 +293,7 @@ export function addLatexBibliographyDatabase(tr: Transform, name: string) {
   const { files, style } = latexBibliographyFiles(source);
   const file = name + '.bib';
   if (files.includes(file)) return;
+  const empty = emptyLatexBibliographyPosition(tr.doc);
   const prefix = String(tr.doc.attrs.prefix);
   if (/\\addbibresource\b|\\usepackage\s*(?:\[[^\]]*\]\s*)?\{biblatex\}/.test(prefix)) {
     const begin = /\\begin\s*\{document\}\s*$/.exec(prefix);
@@ -301,7 +303,11 @@ export function addLatexBibliographyDatabase(tr: Transform, name: string) {
       'prefix',
       prefix.slice(0, begin.index) + '\\addbibresource{' + file + '}\n' + prefix.slice(begin.index),
     );
-    if (!/\\printbibliography\b/.test(source))
+    if (empty !== undefined) {
+      const { included } = readLatexBibliographyContents(tr.doc);
+      if (included) setLatexBibliographyContents(tr, false);
+      updateLatexNodeSource(tr, empty, included ? '\\printbibliography[heading=bibintoc]' : '\\printbibliography');
+    } else if (!/\\printbibliography\b/.test(source))
       tr.insert(
         tr.doc.content.size,
         raw.create({ before: '\n\n', source: '\\printbibliography' }),
@@ -323,11 +329,53 @@ export function addLatexBibliographyDatabase(tr: Transform, name: string) {
     });
   }
   if (added) return;
+  const command = (style ? '' : '\\bibliographystyle{unsrt}\n') + '\\bibliography{' + name + '}';
+  if (empty !== undefined) {
+    updateLatexNodeSource(tr, empty, command + '\n' + bibliographyFallback);
+    return;
+  }
   tr.insert(
     tr.doc.content.size,
     raw.create({
       before: '\n\n',
-      source: (style ? '' : '\\bibliographystyle{unsrt}\n') + '\\bibliography{' + name + '}',
+      source: command,
     }),
   );
+}
+
+const emptyBibliography = '\\begin{thebibliography}{9}\n\\end{thebibliography}';
+const bibliographyFallback = '\\IfFileExists{\\jobname.bbl}{}{\\begin{thebibliography}{9}\\end{thebibliography}}';
+
+/** Keep the empty-heading fallback with the BibTeX command it accompanies. */
+export function latexBibliographyFallbackEnd(source: string, from: number) {
+  const start = whitespaceEnd(source, from);
+  if (source.startsWith(bibliographyFallback, start)) return start + bibliographyFallback.length;
+  return from;
+}
+
+export function isEmptyLatexBibliography(source: string) {
+  return /^\s*\\begin\{thebibliography\}\{9\}\s*\\end\{thebibliography\}\s*$/.test(source);
+}
+
+/** Find a standalone bibliography with no items or other authored content. */
+function emptyLatexBibliographyPosition(document: Node) {
+  let found: number | undefined;
+  document.forEach((node, position) => {
+    if (found === undefined && node.type.name === 'latex_raw' && isEmptyLatexBibliography(String(node.attrs.source)))
+      found = position;
+  });
+  return found;
+}
+
+/** Reserve a bibliography heading before a database or references are available. */
+export function insertEmptyLatexBibliography(tr: Transform) {
+  let present = false;
+  tr.doc.descendants(node => {
+    if (node.type.name === 'latex_raw' && isLatexBibliographyBlock(String(node.attrs.source))) present = true;
+    return !present && !node.isTextblock;
+  });
+  if (present) return;
+  tr.insert(tr.doc.content.size, tr.doc.type.schema.nodes.latex_raw!.create({
+    before: '\n\n', source: emptyBibliography,
+  }));
 }
