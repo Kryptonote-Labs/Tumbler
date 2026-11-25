@@ -1,3 +1,4 @@
+import { latexHeadings } from './latex-headings';
 import { latexBaseClass } from './latex-class';
 import { isLatexHeading } from './latex-spec';
 import { latexEffectivePrefix } from './latex-project';
@@ -34,7 +35,7 @@ const counterAt = new RegExp(opaqueCounters.source, 'y');
 const standardAppendix = /^\s*\\par\s*\\setcounter\s*\{chapter\}\s*\{0\}\s*\\setcounter\s*\{section\}\s*\{0\}(?:\s*\\def\s*\\[A-Za-z@]+[0-9]*\s*\{Appendix\})+\s*\\def\s*\\thechapter\s*\{\s*\\Alph\s*\{chapter\}\s*\}\s*$/;
 const rawCounters =
   /\\(?:part|chapter|section|subsection|subsubsection|caption|captionof)\b|\\begin\s*\{(?:equation|align|gather|figure|table)\*?\}/;
-const latexHeadings = ['section', 'subsection', 'subsubsection', 'paragraph', 'subparagraph'];
+
 const floatEnvironment = /^\\begin\s*\{(figure|table|longtable)\*?\}/;
 const subfloats = /\\begin\s*\{(subfigure|subtable)\}[\s\S]*?\\end\s*\{\1\}/g;
 const numberedEquation = /^\\begin\s*\{(equation|align|gather)\}$/;

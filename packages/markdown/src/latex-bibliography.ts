@@ -1,4 +1,7 @@
 import type { Node } from 'prosemirror-model';
+import type { Transform } from 'prosemirror-transform';
+import { serializeLatex } from './latex';
+import { updateLatexBoundary, updateLatexNodeSource } from './latex-boundary-step';
 import { commandEnd, environmentAt, groupAt, latexCommands, lineEnd, whitespaceEnd } from './latex-syntax';
 
 /** One BibTeX entry. Field values are kept as written, without their outer braces. */
@@ -277,4 +280,54 @@ export function bibEntryName(entry: BibEntry) {
 /** A body block that prints a bibliography heading and its entries. */
 export function isLatexBibliographyBlock(source: string) {
   return /^\s*(?:\\bibliographystyle\s*\{[^{}]*\}\s*)?(?:\\bibliography\s*\{|\\printbibliography\b|\\begin\s*\{thebibliography\})/.test(source);
+}
+
+/**
+ * Name a database in the document's `\bibliography`, adding the bibliography at the end of the
+ * body when there is none.
+ */
+export function addLatexBibliographyDatabase(tr: Transform, name: string) {
+  const raw = tr.doc.type.schema.nodes.latex_raw!;
+  const source = serializeLatex(tr.doc);
+  const { files, style } = latexBibliographyFiles(source);
+  const file = name + '.bib';
+  if (files.includes(file)) return;
+  const prefix = String(tr.doc.attrs.prefix);
+  if (/\\addbibresource\b|\\usepackage\s*(?:\[[^\]]*\]\s*)?\{biblatex\}/.test(prefix)) {
+    const begin = /\\begin\s*\{document\}\s*$/.exec(prefix);
+    if (!begin) throw new Error('Add a document preamble before adding a bibliography.');
+    updateLatexBoundary(
+      tr,
+      'prefix',
+      prefix.slice(0, begin.index) + '\\addbibresource{' + file + '}\n' + prefix.slice(begin.index),
+    );
+    if (!/\\printbibliography\b/.test(source))
+      tr.insert(
+        tr.doc.content.size,
+        raw.create({ before: '\n\n', source: '\\printbibliography' }),
+      );
+    return;
+  }
+  let added = false;
+  if (files.length) {
+    tr.doc.descendants((node, position) => {
+      const source = node.attrs.source;
+      if (added || typeof source !== 'string' || !/\\bibliography\s*\{/.test(source)) return true;
+      const updated = source.replace(
+        /(\\bibliography\s*\{[^{}]*)\}/,
+        (_match, head: string) => head + ',' + name + '}',
+      );
+      updateLatexNodeSource(tr, position, updated);
+      added = updated !== source;
+      return false;
+    });
+  }
+  if (added) return;
+  tr.insert(
+    tr.doc.content.size,
+    raw.create({
+      before: '\n\n',
+      source: (style ? '' : '\\bibliographystyle{unsrt}\n') + '\\bibliography{' + name + '}',
+    }),
+  );
 }

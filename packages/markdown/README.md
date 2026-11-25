@@ -49,6 +49,23 @@ layout constraints at editor positions. `readLatexTableBlock(source)` exposes
 the first, repeated, body, and final row groups and retains their source offsets.
 Use `setLatexTableCell` to change a cell in the original source.
 
+You can author a document without an editor view. Start with `parseLatex(source)` and a
+ProseMirror `Transform`. Insert blocks at document offsets with `createLatexHeading`
+and `createLatexComposedPage`. For a composed page, use `readLatexPageComposition`
+and `editLatexPageComposition` to read or update its lines, then apply the result
+with `updateLatexNodeSource`.
+
+Use `setLatexFrontMatter` to show or hide the abstract, contents, or lists of
+figures and tables. Use `setLatexPageNumberSection` at a block boundary to restart
+numbering, and `setLatexHeadingMode` for unnumbered headings with contents
+entries. `addLatexBibliographyDatabase` references a bibliography database by its
+name without the `.bib` extension. `setLatexBibliographyEntries` writes an embedded
+database into the preamble.
+
+For preamble settings, use `setLatexDocumentClass`, `setLatexBaseSize`,
+`setLatexGeometry`, and `setLatexLineSpacing`. Apply their results with
+`updateLatexBoundary`, then use `serializeLatex(transform.doc)` to export.
+
 The browser supplies measured blocks and internal fragment anchors to
 `paginateLatex`. A continuation can reserve room for a footer on one sheet
 and repeat a header on the next. The paginator returns placements without

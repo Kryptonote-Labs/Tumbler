@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { Transform } from 'prosemirror-transform';
 import {
   editLatexPageComposition, interpretLatexComposedPage, latexComposedPageSource,
-  latexComposedTextSource, latexFlow, latexPageLayout, materializeLatexStructures, parseLatex, readLatexPageComposition,
+  latexFlow, latexPageLayout, materializeLatexStructures, parseLatex, readLatexPageComposition,
   serializeLatex,
 } from '../src/latex';
 
@@ -12,8 +12,7 @@ const prefix = String.raw`\documentclass[a4paper,12pt,twoside]{report}
 const layout = latexPageLayout(prefix);
 
 function fillLine(source: string, index: number, text: string) {
-  const line = readLatexPageComposition(source)!.lines[index]!;
-  return source.slice(0, line.from) + latexComposedTextSource(text) + source.slice(line.to);
+  return editLatexPageComposition(source, index, { kind: 'line-text', text });
 }
 
 function baselines(source: string, preamble = prefix) {
