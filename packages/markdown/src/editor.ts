@@ -1,3 +1,5 @@
+export { latexLinkSelection, latexStyleActive, removeLatexStyle, setLatexLink, setLatexStyle, toggleLatexStyle } from './latex-format-commands';
+export { latexSelectionAlignment, setLatexAlignment, type LatexAlignment } from './latex-alignment';
 import { isLatex } from './latex';
 import { latexState } from './latex-editor';
 export {
@@ -5,8 +7,6 @@ export {
   latexHeading,
   latexLetterPartSpec,
   latexNumberSpec,
-  latexStyleActive,
-  toggleLatexStyle,
   type LatexNumberSpec,
 } from './latex-editor';
 export { LatexRangeSelection, latexRangeSelection } from './latex-selection';
@@ -369,7 +369,7 @@ export const clearNoteFormatting: Command = (state, dispatch) => {
   }
   let formatted = false;
   state.doc.nodesBetween(from, to, (node) => {
-    if (node.isText && node.marks.length) formatted = true;
+    if (node.isInline && node.marks.length) formatted = true;
     return !formatted;
   });
   if (!formatted) return false;

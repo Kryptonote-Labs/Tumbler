@@ -43,6 +43,8 @@ const dependencies = new Map<string, readonly string[]>([
   ['pgfplots', ['tikz']],
   ['tcolorbox', ['pgf']],
   ['siunitx', ['color']],
+  ['bookmark', ['hyperref']],
+  ['hyperref', ['url']],
 ]);
 const drivers = new Set(['pdftex','dvips','dvipdfmx','xetex','luatex','tex4ht']);
 
@@ -61,4 +63,40 @@ export function latexDriverUsesClassPaper(prefix: string, classOptions: readonly
     const page = settings.findLast(option => /^(?:no)?setpagesize(?:\s*=.*)?$/.test(option));
     return page === undefined || (page.startsWith('setpagesize') && !/=\s*false$/.test(page));
   });
+}
+
+
+const defaultOptions = new Map([['ulem', 'normalem'], ['hyperref', 'hidelinks']]);
+
+/** Insert one ordinary package declaration before the document opens. */
+export function withLatexPackage(prefix: string, name: string) {
+  if (!/^[a-z0-9-]+$/i.test(name)) throw new RangeError('Invalid LaTeX package name.');
+  const loaded = new Set(readLatexPackages(prefix).map(item => item.name));
+  for (const command of latexCommands(prefix)) {
+    if (command.name !== 'documentclass') continue;
+    const at = whitespaceEnd(prefix, command.end);
+    const options = groupAt(prefix, at, '[', ']');
+    const group = groupAt(prefix, options ? whitespaceEnd(prefix, options.end) : at);
+    if (group && prefix.slice(group.from, group.to).trim() === 'beamer') {
+      loaded.add('hyperref');
+      loaded.add('xcolor');
+    }
+    break;
+  }
+  for (const item of loaded)
+    for (const dependency of dependencies.get(item) ?? []) loaded.add(dependency);
+  if (loaded.has(name)) return prefix;
+  for (const command of latexCommands(prefix)) {
+    if (command.name !== 'begin') continue;
+    const group = groupAt(prefix, whitespaceEnd(prefix, command.end));
+    if (!group || prefix.slice(group.from, group.to) !== 'document') continue;
+    const newline = /\r\n|\n/.exec(prefix)?.[0] ?? '\n';
+    const options = defaultOptions.get(name);
+    const declaration = '\\usepackage' + (options ? '[' + options + ']' : '') + '{' + name + '}';
+    const line = prefix.lastIndexOf('\n', command.start - 1) + 1;
+    const at = /^\s*$/.test(prefix.slice(line, command.start)) ? line : command.start;
+    const before = prefix.slice(0, at);
+    return before + (at === line ? '' : newline) + declaration + newline + prefix.slice(at);
+  }
+  return prefix;
 }

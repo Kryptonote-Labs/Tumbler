@@ -61,6 +61,15 @@ export function latexParagraphText(node: Node, resolvedInline?: (source: string)
   let supported = true;
   node.forEach((child, position) => {
     if (!supported) return;
+    // Browser line boxes account for inline boxes, scripts and font changes that the
+    // plain-text line composer cannot currently measure.
+    if (child.marks.some(mark => mark.type.name === 'latex_style' && (
+      ['smallCaps', 'superscript', 'subscript', 'size', 'highlight'].includes(mark.attrs.style) ||
+      /^\\underline\b/.test(mark.attrs.open)
+    ))) {
+      supported = false;
+      return;
+    }
     if (child.type.name === 'latex_inline') {
       const source = String(child.attrs.source).trim();
       if (source === '\\null' || /^\\label\s*\{[^{}]+\}$/.test(source) || readLatexPageDirective(source)) return;
@@ -96,7 +105,7 @@ export function latexParagraphText(node: Node, resolvedInline?: (source: string)
       typeof content !== 'string' ||
       content.length !== child.nodeSize ||
       /[\u0590-\u08ff\u3000-\u9fff]/.test(content) ||
-      child.marks.some((mark) => !['strong', 'em', 'latex_style'].includes(mark.type.name))
+      child.marks.some((mark) => !['strong', 'em', 'latex_style', 'latex_link'].includes(mark.type.name))
     ) {
       supported = false;
       return;

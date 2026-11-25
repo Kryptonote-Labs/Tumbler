@@ -1,3 +1,5 @@
+import { latexAlignment } from './latex-alignment';
+import { latexLinkMark, latexStyleMark } from './latex-inline-format';
 import { latexBlockAttrs, latexDocumentAttrs, latexNodes, latexStructureNodes } from './latex-spec';
 import MarkdownIt from 'markdown-it';
 import { Schema, type MarkSpec, type Node as MarkdownNode } from 'prosemirror-model';
@@ -114,28 +116,22 @@ for (const name of latexStructureNodes) {
   const node = nodes.get(name)!;
   nodes = nodes.update(name, { ...node, attrs: { ...node.attrs, ...latexBlockAttrs } });
 }
+const paragraph = nodes.get('paragraph')!;
+nodes = nodes.update('paragraph', {
+  ...paragraph,
+  attrs: { ...paragraph.attrs, latexAlignment: { default: null, validate: 'string|null' } },
+  parseDOM: [{
+    tag: 'p',
+    getAttrs: (element) => ({ latexAlignment: latexAlignment(element.getAttribute('data-latex-align')) ?? null }),
+  }],
+  toDOM: (node) => ['p', { 'data-latex-align': latexAlignment(node.attrs.latexAlignment) ?? null }, 0],
+});
+
 export const noteSchema = new Schema({
   nodes,
   marks: baseSchema.spec.marks
-    .addToEnd('latex_style', {
-      attrs: {
-        open: { validate: 'string' },
-        close: { validate: 'string' },
-        style: { validate: 'string' },
-        order: { validate: 'number' },
-        colour: { default: null, validate: 'string|null' },
-      },
-      excludes: '',
-      toDOM: (mark) => {
-        const style = mark.attrs.style;
-        const colour: unknown = mark.attrs.colour;
-        if (style === 'colour' && typeof colour === 'string' && /^#[a-f0-9]{6}$/.test(colour))
-          return ['span', { 'data-latex-colour': colour, style: 'color:' + colour }, 0];
-        return style === 'sans' || style === 'mono' || style === 'normal'
-          ? ['span', { 'data-latex-font': style }, 0]
-          : [style === 'strong' ? 'strong' : 'em', 0];
-      },
-    })
+    .addToEnd('latex_style', latexStyleMark)
+    .addToEnd('latex_link', latexLinkMark)
     .update('code', {
       ...baseSchema.spec.marks.get('code'),
       toDOM: () => ['code', { spellcheck: 'false', autocorrect: 'off', autocapitalize: 'off' }, 0],

@@ -153,3 +153,16 @@
   font-style: normal;
   font-weight: 400;
 }
+
+
+@font-face {
+  font-family: 'Tumbler TeX Small Caps';
+  src: url('./fonts/latex/tumblertexsmallcaps-regular.woff2') format('woff2');
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Latin Modern Small Caps';
+  src: url('./fonts/latex/lmromancaps10-regular.otf') format('opentype');
+  font-display: swap;
+}

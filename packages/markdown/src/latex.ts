@@ -1,3 +1,6 @@
+import { latexAlignedParagraph } from './latex-alignment';
+import { authoredLatexStyleOrder, isLatexStyleMark, latexInlineFormat, latexInlineSize } from './latex-inline-format';
+export { latexFontSizes, latexFontSizeProperties, latexLinkUrl, type LatexFontSize } from './latex-inline-format';
 import { latexContentsLineAt } from './latex-contents-line';
 export { latexContentsLineStyle } from './latex-contents-line';
 export { readLatexHyperref } from './latex-links';
@@ -16,6 +19,7 @@ import { latexLetterCommandAt } from './latex-letter';
 export { latexColourDefinition } from './latex-colour';
 export type { LatexLetterPart } from './latex-letter';
 import { usesLatexPackage } from './latex-preamble';
+export { withLatexPackage } from './latex-preamble';
 import { latexFormattingAlias, readLatexParagraphMacro, readLatexTextMacros } from './latex-macros';
 import { Fragment, type Mark, type Node } from 'prosemirror-model';
 import { Transform } from 'prosemirror-transform';
@@ -33,6 +37,7 @@ import {
   documentBody,
   environmentAt,
   groupAt,
+  latexUrlArgument,
   lineEnd,
   mathEnd,
   verbatimEnd,
@@ -208,25 +213,25 @@ function inline(
       );
       end = formulaEnd + close.length;
     } else {
-      const colourName = command === '\\textcolor' && groupAt(source, whitespaceEnd(source, end));
-      const colour = colourName && context.colours.get(source.slice(colourName.from, colourName.to).trim());
-      const style = colour ? 'colour' : latexFormattingAlias(command.slice(1), context.macros);
-      const argument = style && groupAt(source, whitespaceEnd(source, colourName ? colourName.end : end));
+      const argument = latexInlineFormat(
+        source, position, end, command, context.colours,
+        latexFormattingAlias(command.slice(1), context.macros),
+      );
       if (argument && argument.from < argument.to) {
-        const formatting = schema.marks.latex_style!.create({
-          style,
-          ...(colour ? { colour } : {}),
+        const { style, colour, href, size } = argument;
+        const formatting = schema.marks[style === 'link' ? 'latex_link' : 'latex_style']!.create({
+          style, colour, href, size,
           order: order.next++,
           open: source.slice(position, argument.from),
           close: '}',
         });
-        inline(
-          source.slice(argument.from, argument.to),
-          context,
-          depth + 1,
-          [...marks, formatting],
-          order,
-        ).forEach((child) => nodes.push(child));
+        const content = source.slice(argument.from, argument.to);
+        if (argument.url) {
+          nodes.push(schema.nodes.latex_inline!.create({ source: content, label: href, urlArgument: true }, null, [...marks, formatting]));
+        } else {
+          inline(content, context, depth + 1, [...marks, formatting], order)
+            .forEach((child) => nodes.push(child));
+        }
         end = argument.end;
       } else {
         if (character === '%') end = Math.min(source.length, lineEnd(source, end) + 1);
@@ -309,6 +314,7 @@ function headingAt(source: string, position: number) {
 function declarationScope(source: string, position: number) {
   if (source[position] !== '{' || source.slice(source.lastIndexOf('\n', position - 1) + 1, position).trim())
     return;
+  if (latexInlineSize(source, position)) return;
   const bodyStart = latexDeclarations(source, position + 1).end;
   if (bodyStart === position + 1) return;
   const scope = groupAt(source, position);
@@ -325,7 +331,7 @@ function declarationScope(source: string, position: number) {
 
 function blockStart(source: string, position: number, context: SourceContext) {
   if (source.startsWith('$$', position) || source.startsWith('\\[', position)) return true;
-  if (source[position] === '{') return !!declarationScope(source, position);
+  if (source[position] === '{') return !!(latexAlignedParagraph(source, position) ?? declarationScope(source, position));
   if (source[position] !== '\\') return false;
   const command = source.slice(position, commandEnd(source, position));
   return (
@@ -358,7 +364,9 @@ function paragraphEnd(source: string, position: number, context: SourceContext) 
       else unmatched.add(close);
     } else if (character === '\\') {
       const end = commandEnd(source, next);
-      next = (source.slice(next, end) === '\\verb' ? verbatimEnd(source, end) : end) - 1;
+      const command = source.slice(next, end);
+      const url = (command === '\\url' || command === '\\href') && latexUrlArgument(source, end);
+      next = (command === '\\verb' ? verbatimEnd(source, end) : url ? url.end : end) - 1;
     } else if (character === '{') next = (groupAt(source, next)?.end ?? source.length) - 1;
   }
   return source.length;
@@ -568,6 +576,17 @@ function blocks(source: string, context: SourceContext, depth = 0): { nodes: Nod
       position = end;
       continue;
     }
+    const aligned = latexAlignedParagraph(source, start);
+    if (aligned) {
+      nodes.push(schema.nodes.paragraph!.create({
+        before,
+        latexAlignment: aligned.alignment,
+        open: source.slice(start, aligned.from),
+        close: source.slice(aligned.to, aligned.end),
+      }, inline(source.slice(aligned.from, aligned.to), context)));
+      position = aligned.end;
+      continue;
+    }
     const group = depth < 64 && declarationScope(source, start);
     if (group) {
       const { scope, bodyStart, end } = group;
@@ -735,14 +754,28 @@ export function parseLatexProject(entry: string, files: ReadonlyMap<string, stri
   return parsed.type.create({ ...parsed.attrs, latexProject }, parsed.content);
 }
 
+function escapedText(text: string) {
+  return text.replace(/[\\%${}#&_\^~\u00a0]/g, (value) => escapeText.get(value) ?? value);
+}
+
+function isLatexUrlMark(mark: Mark) {
+  return /^\\url\b/.test(mark.attrs.open ?? '');
+}
+
+function isLatexUlemMark(mark: Mark) {
+  return /^\\(?:uline|sout|bgroup\\markoverwith)\b/.test(mark.attrs.open ?? '');
+}
+
+function latexMarkOrder(mark: Mark) {
+  const order: number = mark.attrs.order ?? 100;
+  // Keep authored ulem wrappers inside font and colour scopes so their text can wrap.
+  return order === authoredLatexStyleOrder && isLatexUlemMark(mark) ? order + 1 : order;
+}
+
 function inlineSource(node: Node, record?: (position: number, offset: number) => void) {
   let result = '';
-  let active: Mark[] = [];
-  node.forEach((child, position) => {
-    const next = child.marks.filter((mark) =>
-      ['strong', 'em', 'latex_style'].includes(mark.type.name),
-    );
-    next.sort((a, b) => (a.attrs.order ?? 100) - (b.attrs.order ?? 100));
+  let active: readonly Mark[] = [];
+  function write(content: string, next: readonly Mark[], position?: number, text = false) {
     let keep = 0;
     while (keep < active.length && keep < next.length && active[keep]!.eq(next[keep]!)) keep++;
     for (let index = active.length - 1; index >= keep; index--)
@@ -750,24 +783,51 @@ function inlineSource(node: Node, record?: (position: number, offset: number) =>
     for (const mark of next.slice(keep))
       result += mark.attrs.open ?? (mark.type.name === 'strong' ? '\\textbf{' : '\\emph{');
     active = next;
-    record?.(position, result.length);
+    const inner = active.at(-1);
+    // A size command that relied on the next token to delimit it may need an explicit
+    // delimiter when an edit replaces that token with ordinary text.
+    if (inner?.attrs.style === 'size' && result.endsWith(inner.attrs.open) &&
+        ((/[A-Za-z]$/.test(inner.attrs.open) && /^[A-Za-z@]/.test(content)) ||
+         (!inner.attrs.open.endsWith('{}') && /^\s/.test(content)))) result += '{}';
+    if (position !== undefined) record?.(position, result.length);
+    if (text && record && position !== undefined) {
+      for (let index = 0; index < content.length; index++) {
+        const char = content[index]!;
+        result += escapeText.get(char) ?? char;
+        record(position + index + 1, result.length);
+      }
+    } else {
+      result += text ? escapedText(content) : content;
+    }
+  }
+  node.forEach((child, position) => {
+    const next = child.marks.filter(mark =>
+      mark.type.name === 'strong' || mark.type.name === 'em' || isLatexStyleMark(mark),
+    );
+    next.sort((a, b) => latexMarkOrder(a) - latexMarkOrder(b));
     if (child.isText) {
       const text = child.text!;
-      if (record) {
-        for (let index = 0; index < text.length; index++) {
-          result += escapeText.get(text[index]!) ?? text[index]!;
-          record(position + index + 1, result.length);
+      const decorators = next.filter(isLatexUlemMark);
+      if (decorators.length > 1 && decorators.some(mark => mark.attrs.order === authoredLatexStyleOrder)) {
+        // ulem boxes a nested decoration. Keep interword glue outside those boxes.
+        const outer = next.filter(mark => mark === decorators[0] || !isLatexUlemMark(mark));
+        let at = position;
+        for (const chunk of text.split(/( +)/).filter(Boolean)) {
+          write(chunk, chunk.startsWith(' ') ? outer : next, at, true);
+          at += chunk.length;
         }
       } else {
-        result += text.replace(/[\\%${}#&_\^~\u00a0]/g, (value) => escapeText.get(value) ?? value);
+        write(text, next, position, true);
       }
+      return;
     }
-    else if (child.type.name === 'latex_math') result += mathSource(child);
-    else if (child.type.name === 'hard_break') result += '\\\\\n';
-    else result += child.attrs.source ?? child.textContent;
-    if (!child.isText) record?.(position + child.nodeSize, result.length);
+    if (child.attrs.urlArgument && !next.some(isLatexUrlMark)) write(escapedText(child.attrs.label), next, position);
+    else if (child.type.name === 'latex_math') write(mathSource(child), next, position);
+    else if (child.type.name === 'hard_break') write('\\\\\n', next, position);
+    else write(child.attrs.source ?? child.textContent, next, position);
+    record?.(position + child.nodeSize, result.length);
   });
-  for (const mark of active.reverse()) result += mark.attrs.close ?? '}';
+  write('', []);
   return result;
 }
 
@@ -801,6 +861,13 @@ function blockSource(node: Node): string {
     case 'latex_heading': {
       const command = latexHeadings[node.attrs.level - 1] ?? latexHeadings[0];
       result = (open ?? '\\' + command + '{') + inlineSource(node) + (close ?? '}');
+      break;
+    }
+    case 'paragraph': {
+      const last = node.lastChild;
+      const comment = last?.type.name === 'latex_inline' && String(last.attrs.source).startsWith('%');
+      const endComment = close && comment && !String(last.attrs.source).endsWith('\n') ? '\n' : '';
+      result = (open ?? '') + inlineSource(node) + endComment + (close ?? '');
       break;
     }
     case 'latex_contents_line':
@@ -1104,7 +1171,7 @@ export function latexSourceMap(document: Node) {
     const heading = node.type.name === 'heading' || node.type.name === 'latex_heading';
     const start = block.offset + (heading
       ? (node.attrs.open ?? '\\' + (latexHeadings[node.attrs.level - 1] ?? latexHeadings[0]) + '{').length
-      : 0);
+      : node.attrs.open?.length ?? 0);
     const offsets = [start];
     inlineSource(node, (position, relative) => { offsets[position] = start + relative; });
     return offsets;

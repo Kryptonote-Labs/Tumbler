@@ -112,15 +112,15 @@ export function latexClipboard(schema: Schema) {
         : withDelimiters(spec, before, open, close);
     };
   }
-  const marks = {
-    ...base.marks,
-    latex_style(mark, inline) {
+  const marks = { ...base.marks };
+  for (const name of ['latex_style', 'latex_link']) {
+    marks[name] = (mark, inline) => {
       const { open, close, order } = mark.attrs;
-      const rendered = withDelimiters(base.marks.latex_style!(mark, inline), null, open, close);
+      const rendered = withDelimiters(base.marks[name]!(mark, inline), null, open, close);
       rendered.dom.setAttribute('data-latex-order', String(order));
       return rendered;
-    },
-  } satisfies DOMSerializer['marks'];
+    };
+  }
   // Clipboard headings from Markdown and other editors become LaTeX headings.
   const baseRules = DOMParser.fromSchema(schema).rules.map((rule) =>
     'node' in rule && rule.node === 'heading' ? { ...rule, node: 'latex_heading' } : rule,
@@ -152,7 +152,7 @@ export function latexClipboard(schema: Schema) {
     ];
   });
   const style: TagParseRule = {
-    tag: 'strong[data-latex-order], em[data-latex-order], span[data-latex-font][data-latex-order], span[data-latex-colour][data-latex-order]',
+    tag: '[data-latex-style]:not([data-latex-style=link])[data-latex-order]',
     mark: 'latex_style',
     getAttrs: (element) => {
       const delimiters = readDelimiters(element);
@@ -163,18 +163,13 @@ export function latexClipboard(schema: Schema) {
         !Number.isSafeInteger(order)
       )
         return false;
-      const font = element.getAttribute('data-latex-font');
-      const colour = element.getAttribute('data-latex-colour');
-      const style = colour && /^#[a-f0-9]{6}$/.test(colour)
-        ? 'colour'
-        : font === 'sans' || font === 'mono' || font === 'normal'
-          ? font
-          : element.tagName === 'STRONG' ? 'strong' : 'em';
       return {
         open: delimiters.open,
         close: delimiters.close,
-        style,
-        ...(style === 'colour' ? { colour } : {}),
+        style: element.getAttribute('data-latex-style'),
+        colour: element.getAttribute('data-latex-colour'),
+        size: element.getAttribute('data-latex-size'),
+        href: element.getAttribute('data-latex-href'),
         order,
       };
     },
@@ -186,6 +181,7 @@ export function latexClipboard(schema: Schema) {
       ...latexAtomPasteRules,
       include,
       ...structureRules,
+      { ...style, tag: '[data-latex-style=link][data-latex-order]', mark: 'latex_link' },
       style,
       ...baseRules,
     ]),
