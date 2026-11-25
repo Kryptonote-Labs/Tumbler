@@ -2,8 +2,10 @@ import { expect, test } from 'bun:test';
 import { Transform } from 'prosemirror-transform';
 import {
   editLatexPageComposition, interpretLatexComposedPage, latexComposedPageSource,
-  latexFlow, latexPageLayout, materializeLatexStructures, parseLatex, readLatexPageComposition,
-  serializeLatex, splitLatexComposedText,
+  latexContentsEntries, latexFlow, latexPageLabel, latexPageLayout, latexPageNumbers,
+  materializeLatexStructures, paginateLatexRegions, parseLatex, readLatexPageComposition, replaceLatexSource,
+  serializeLatex, setLatexFrontMatter, setLatexPageContents, splitLatexComposedText, updateLatexNodeSource,
+  type PageBlock,
 } from '../src/latex';
 
 const prefix = String.raw`\documentclass[a4paper,12pt,twoside]{report}
@@ -103,6 +105,96 @@ test('an ordinary centred dedication matches pdfTeX and preserves the running fo
   const parsed = parseLatex(tex);
   expect(serializeLatex(parsed)).toBe(tex);
   expect(latexFlow(parsed).get(parsed.child(0).nodeSize)).toEqual({ kind: 'content', before: 'page', after: 'page' });
+});
+
+const dedication = [
+  '\\begingroup',
+  '\\linespread{1}\\selectfont',
+  '\\setlength{\\parskip}{0pt}',
+  '{\\centering\\Large\\bfseries Dedication\\par}',
+  '{\\raggedright\\normalsize Sample line\\par}',
+  '\\clearpage',
+  '\\endgroup',
+].join('\n');
+
+test('an opener-less page between front matter pages keeps its contents entry and folio', () => {
+  const cover = fillLine(latexComposedPageSource('title'), 0, 'Example cover');
+  const following = fillLine(latexComposedPageSource('page'), 0, 'Acknowledgements');
+  const source = [
+    '\\documentclass{report}', '\\begin{document}', cover,
+    '\\clearpage % Front matter', '\\pagenumbering{roman}', '', dedication, '', following,
+    '\\pagenumbering{arabic}', 'Body text.', '\\end{document}', '',
+  ].join('\n');
+  const document = parseLatex(source);
+  const previous = parseLatex(source.replace(dedication, '\\clearpage\n' + dedication));
+  expect(replaceLatexSource(previous, source).doc.eq(document)).toBe(true);
+  expect(serializeLatex(document)).toBe(source);
+  expect(document.child(4).attrs.source).toBe(dedication);
+  expect(readLatexPageComposition(document.child(4).attrs.source)?.lines).toHaveLength(2);
+  expect(document.child(5).attrs.source).toBe(following);
+
+  const position = document.children.slice(0, 4).reduce((at, node) => at + node.nodeSize, 0);
+  const tr = new Transform(document);
+  setLatexPageContents(tr, position, 'Dedication');
+  const parsed = parseLatex(serializeLatex(tr.doc));
+  expect(latexContentsEntries(parsed)).toMatchObject([{ position, title: 'Dedication' }]);
+  const flow = latexFlow(parsed);
+  expect(flow.get(position)).toEqual({ kind: 'content', numbering: 'roman', startAt: 1, after: 'page' });
+  const blocks: PageBlock[] = [];
+  parsed.forEach((_, at, index) => blocks.push({ position: at, top: index * 20, bottom: index * 20 + 20, flow: flow.get(at) }));
+  const plan = paginateLatexRegions(blocks, latexPageLayout('\\documentclass{report}'));
+  expect(plan.pages).toBe(4);
+  const folios = latexPageNumbers(flow, plan.breaks.map((item) => item.position), plan.folioLeadIns);
+  expect(folios.map(latexPageLabel)).toEqual(['1', 'i', 'ii', '1']);
+  const list = setLatexFrontMatter(tr, 'tableofcontents', true)!;
+  expect(tr.doc.nodeAt(list - 1)?.attrs.source).toBe(following);
+  expect(tr.doc.nodeAt(list + 1)?.attrs.source).toBe('\\pagenumbering{arabic}');
+});
+
+test.each([
+  ['a clear page break', '\\clearpage'],
+  ['a right-page break', '\\cleardoublepage'],
+  ['a one-column page break', '\\newpage'],
+  ['a title page', fillLine(latexComposedPageSource('title'), 0, 'Example cover')],
+  ['an explicit composed page', fillLine(latexComposedPageSource('page'), 0, 'Previous page')],
+  ['an inherited composed page', '\\clearpage\n' + dedication],
+])('a grouped page can inherit the boundary after %s', (_, prior) => {
+  const source = prior + '\n% Retain the page boundary\n\\pagenumbering{roman}\n\\setcounter{page}{3}\n\n' + dedication;
+  const document = parseLatex(source);
+  expect(document.lastChild?.attrs.source).toBe(dedication);
+  expect(serializeLatex(document)).toBe(source);
+});
+
+test.each([
+  ['ordinary text', 'Body text.', ''],
+  ['a commented break', 'Body text.\n% \\clearpage', ''],
+  ['text after a break', '\\clearpage\nBody text.', ''],
+  ['a numbering change mid-page', 'Body text.\n\\pagenumbering{roman}', ''],
+  ['a column break', '\\documentclass[twocolumn]{article}\n\\begin{document}\nBody text.\n\\newpage', '\n\\end{document}'],
+  ['a break inside a minipage', '\\begin{minipage}{\\textwidth}\nBody text.\n\\clearpage', '\n\\end{minipage}'],
+])('a group after %s needs a page boundary to become a composed page', (_, prior, close) => {
+  const source = prior + '\n\n' + dedication + close;
+  const document = parseLatex(source);
+  document.descendants(node => expect(node.attrs.source).not.toBe(dedication));
+  expect(serializeLatex(document)).toBe(source);
+});
+
+test('line and style edits preserve the inherited break, and the page start control adds its own', () => {
+  const source = ('Body text.\n\\cleardoublepage\n\\setcounter{page}{3}\n\n' + dedication + '\n').replaceAll('\n', '\r\n');
+  const tr = new Transform(parseLatex(source));
+  const position = tr.doc.content.size - tr.doc.lastChild!.nodeSize;
+  const page = String(tr.doc.lastChild!.attrs.source);
+  const edited = editLatexPageComposition(fillLine(page, 1, 'Updated line'), 1, {
+    kind: 'line-style', style: { italic: true },
+  });
+  updateLatexNodeSource(tr, position, edited);
+  const expected = source.replace('\\normalsize Sample line', '\\normalsize\\itshape Updated line');
+  expect(serializeLatex(tr.doc)).toBe(expected);
+  expect(serializeLatex(parseLatex(expected))).toBe(expected);
+  expect(editLatexPageComposition(edited, 0, { kind: 'page-start', right: false })).toBe(edited);
+  const right = editLatexPageComposition(edited, 0, { kind: 'page-start', right: true });
+  expect(right).toBe('\\cleardoublepage\r\n' + edited);
+  expect(editLatexPageComposition(right, 0, { kind: 'page-start', right: false })).toBe('\\clearpage\r\n' + edited);
 });
 
 test('distribute is reversible and changing a fixed gap preserves literal editable text', () => {

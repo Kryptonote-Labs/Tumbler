@@ -1,6 +1,6 @@
 import { readLatexClass } from './latex-class';
 import { readLatexSpacingCommand } from './latex-spacing-syntax';
-import { latexComposedPageKind } from './latex-page-composition';
+import { latexComposedPageAt } from './latex-page-composition';
 import { hasStandardBookAbstract, latexAbstractAt, latexGeneratedListAt } from './latex-front-matter';
 import { latexPageOpening, latexRightPagePrefix } from './latex-page-start';
 import { isLatexHeading } from './latex-spec';
@@ -308,8 +308,9 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
       return false;
     }
     const rightPage = recto && !!latexRightPagePrefix(source);
-    if (node.type.name === 'latex_raw' && latexComposedPageKind(source) === 'page') {
-      effect({ before: rightPage ? 'recto' : 'page', after: 'page' });
+    const composition = source ? latexComposedPageAt(source) : undefined;
+    if (composition?.kind === 'page' && composition.end === source.length) {
+      effect(composition.inheritedStart ? { after: 'page' } : { before: rightPage ? 'recto' : 'page', after: 'page' });
       pageHasContent = false;
       return false;
     }

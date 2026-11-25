@@ -22,7 +22,7 @@ export { latexFontSizes, latexFontSizePointSizes, latexFontSizeProperties, latex
 import { latexContentsLineAt } from './latex-contents-line';
 export { latexContentsLineStyle } from './latex-contents-line';
 export { readLatexHyperref } from './latex-links';
-import { latexBlockDeclaration, latexMinipageWidth, latexTextEnvironments } from './latex-text-layout';
+import { isLatexTitlePage, latexBlockDeclaration, latexMinipageWidth, latexTextEnvironments } from './latex-text-layout';
 export { latexBlockDeclaration, latexMinipageArgument, latexMinipageWidth, isLatexTitlePage } from './latex-text-layout';
 export { latexMathMacros, interpretLatexParagraphMacro, interpretLatexText, interpretLatexTextFragment, readLatexTextMacros, type LatexPrintedText } from './latex-macros';
 import { latexDeclarations, latexTikzFragment } from './latex-presentation';
@@ -39,7 +39,7 @@ export type { LatexTitleItem, LatexTitleRun, LatexTitleStyle } from './latex-tit
 import { readLatexTitledEnvironments } from './latex-titled-environments';
 export { readLatexTitledEnvironments } from './latex-titled-environments';
 import { readLatexTitleSetter } from './latex-metadata';
-import { readLatexBookMatter, readLatexClass, readLatexPageDirective } from './latex-flow';
+import { latexBreakCommand, readLatexBookMatter, readLatexClass, readLatexPageDirective } from './latex-flow';
 import { latexColourDefinition, readLatexColours } from './latex-colour';
 import { readLatexTheorems, latexBoxTitle, latexEnvironmentName } from './latex-environments';
 import { latexLetterCommandAt } from './latex-letter';
@@ -433,6 +433,9 @@ type SourceContext = {
   enumitem: boolean;
   setspace: boolean;
   letter: boolean;
+  composedPages: boolean;
+  twoColumns: boolean;
+  boxed?: true;
   colours: ReturnType<typeof readLatexColours>;
   theorems: ReturnType<typeof readLatexTheorems>;
   titled: ReturnType<typeof readLatexTitledEnvironments>;
@@ -443,7 +446,11 @@ type SourceContext = {
 
 function sourceContext(prefix: string): SourceContext {
   const macros = readLatexTextMacros(prefix);
-  return { prefix, macros, titled: readLatexTitledEnvironments(prefix, macros), enumitem: usesLatexPackage(prefix, 'enumitem'), setspace: usesLatexPackage(prefix, 'setspace'), letter: latexBaseClass(readLatexClass(prefix).name) === 'letter', colours: readLatexColours(prefix), theorems: readLatexTheorems(prefix),
+  const { name, options } = readLatexClass(prefix);
+  const base = latexBaseClass(name);
+  return { prefix, macros, titled: readLatexTitledEnvironments(prefix, macros), enumitem: usesLatexPackage(prefix, 'enumitem'), setspace: usesLatexPackage(prefix, 'setspace'), letter: base === 'letter',
+    composedPages: ['article', 'report', 'book'].includes(base), twoColumns: options.includes('twocolumn'),
+    colours: readLatexColours(prefix), theorems: readLatexTheorems(prefix),
     proof: usesLatexPackage(prefix, 'amsthm'), boxes: usesLatexPackage(prefix, 'tcolorbox') };
 }
 
@@ -555,7 +562,9 @@ function environmentBlock(source: string, position: number, before: string, cont
     const bodyStart = option?.end ?? from;
     const opener = source.slice(position, bodyStart);
     if (bodyStart <= to && (!box || !option || latexBoxTitle(opener) !== undefined)) {
-      const body = blocks(source.slice(bodyStart, to), { ...context, colours: new Map(context.colours) }, depth + 1);
+      const body = blocks(source.slice(bodyStart, to), {
+        ...context, ...(box && { boxed: true }), colours: new Map(context.colours),
+      }, depth + 1);
       if (!body.nodes.length) body.nodes.push(schema.nodes.paragraph!.create({ before: '' }));
       return {
         node: schema.nodes.latex_container!.create({ before, open: opener, close: body.tail + close }, body.nodes),
@@ -569,7 +578,9 @@ function environmentBlock(source: string, position: number, before: string, cont
     const width = name === 'minipage' && groupAt(source, whitespaceEnd(source, from));
     const bodyStart = spacing ? spacing.end : width ? latexDeclarations(source, width.end).end : from;
     if (name !== 'minipage' || (width && bodyStart <= to && latexMinipageWidth(source.slice(position, bodyStart), 1, 1) !== undefined)) {
-      const body = blocks(source.slice(bodyStart, to), { ...context, colours: new Map(context.colours) }, depth + 1);
+      const body = blocks(source.slice(bodyStart, to), {
+        ...context, ...(width && { boxed: true }), colours: new Map(context.colours),
+      }, depth + 1);
       if (!body.nodes.length) body.nodes.push(schema.nodes.paragraph!.create({ before: '' }));
       return {
         node: schema.nodes.latex_container!.create({
@@ -604,6 +615,24 @@ function environmentBlock(source: string, position: number, before: string, cont
   };
 }
 
+/** A bare group can use an earlier break across whitespace, comments and page state. */
+function followsLatexPageBoundary(nodes: readonly Node[], twoColumns: boolean) {
+  for (let index = nodes.length - 1; index >= 0; index--) {
+    const node = nodes[index]!;
+    if (isLatexTitlePage(node)) return true;
+    if (node.type.name !== 'latex_raw') return false;
+    const source = String(node.attrs.source);
+    if (source.startsWith('%')) continue;
+    const directive = readLatexPageDirective(source);
+    if (directive && directive.kind !== 'blank' && directive.end === source.length) continue;
+    const boundary = latexBreakCommand(source);
+    if (boundary) return boundary !== 'column' || !twoColumns;
+    const page = latexComposedPageAt(source);
+    return page?.kind === 'page' && page.end === source.length;
+  }
+  return false;
+}
+
 function blocks(source: string, context: SourceContext, depth = 0): { nodes: Node[]; tail: string } {
   const nodes: Node[] = [];
   let position = 0;
@@ -621,8 +650,10 @@ function blocks(source: string, context: SourceContext, depth = 0): { nodes: Nod
         continue;
       }
     }
-    const composition = source[start] === '\\' && latexComposedPageAt(source, start);
-    if (composition && ['article', 'report', 'book'].includes(latexBaseClass(readLatexClass(context.prefix).name))) {
+    const composition = context.composedPages && source[start] === '\\' &&
+      (!source.startsWith('\\begingroup', start) || (!context.boxed && followsLatexPageBoundary(nodes, context.twoColumns))) &&
+      latexComposedPageAt(source, start);
+    if (composition) {
       const page = source.slice(start, composition.end);
       if ((composition.kind === 'page' || readLatexPageComposition(page)) &&
           interpretLatexComposedPage(context.prefix, latexPageLayout(context.prefix), page)) {
