@@ -87,7 +87,7 @@ function frontMatterPosition(document: Node, kind: LatexFrontMatter) {
     }
     const front = kind !== 'abstract' &&
       (page === 'page' || isEditableLatexAbstract(node) || latexAbstractAt(source) || latexGeneratedListKind(source));
-    if (source !== '\\maketitle' && page !== 'title' && !front && !pageCommands.test(source) &&
+    if (source !== '\\maketitle' && page !== 'title' && !front && !source.startsWith('%') && !pageCommands.test(source) &&
         directive?.kind !== 'counter' && directive?.kind !== 'extended-letters') break;
     position += node.nodeSize;
   }

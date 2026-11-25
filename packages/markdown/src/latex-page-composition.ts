@@ -12,25 +12,30 @@ export type LatexComposedPageKind = 'title' | 'page';
 export type LatexVerticalAlignment = 'top' | 'center' | 'bottom' | 'distribute';
 const alignments = { left: '\\raggedright', center: '\\centering', right: '\\raggedleft' };
 type LineStyle = { alignment: keyof typeof alignments; size: string; bold: boolean; italic: boolean };
-const open = /^\\clear(?:double)?page\s*\\begingroup(?![A-Za-z@])/;
+const open = /^(?:(\\clear(?:double)?page)\s*)?\\begingroup(?![A-Za-z@])/;
+const titleOpen = /^\\begin\s*\{titlepage\}/;
 const topFill = '\\vspace*{\\fill}';
 const bottomFill = '\\vspace{\\fill}';
 const spacingCommands = /^(?:\\linespread\{([\d.]+)\}\\selectfont\s*)?(?:\\setlength\{\\parskip\}\{([^{}]+)\}\s*)?/;
 const betweenFill = '\\vspace{\\stretch{1}}';
 
 export function latexComposedPageKind(source: string): LatexComposedPageKind | undefined {
-  if (/^\\begin\s*\{titlepage\}/.test(source.slice(latexRightPagePrefix(source).length))) return 'title';
-  if (open.test(source)) return 'page';
+  if (titleOpen.test(source.slice(latexRightPagePrefix(source).length))) return 'title';
+  const opener = open.exec(source);
+  if (opener && (opener[1] || latexComposedPageAt(source)?.end === source.length)) return 'page';
 }
 
+/** Read a page at a block boundary. For a bare group, the caller must establish the page start. */
 export function latexComposedPageAt(source: string, start = 0) {
   const rest = source.slice(start);
-  const kind = latexComposedPageKind(rest);
-  if (kind === 'title') {
-    const environment = environmentAt(source, start + latexRightPagePrefix(rest).length);
-    if (environment) return { kind, ...environment };
-  } else if (kind === 'page') {
-    const from = start + open.exec(rest)![0].length;
+  const titleStart = latexRightPagePrefix(rest).length;
+  if (titleOpen.test(rest.slice(titleStart))) {
+    const environment = environmentAt(source, start + titleStart);
+    if (environment) return { kind: 'title' as const, ...environment };
+  }
+  const opener = open.exec(rest);
+  if (opener) {
+    const from = start + opener[0].length;
     let depth = 1;
     let previous: { name: string; start: number; end: number } | undefined;
     for (const command of latexCommands(source.slice(from))) {
@@ -38,7 +43,7 @@ export function latexComposedPageAt(source: string, start = 0) {
       if (command.name === 'endgroup' && --depth === 0) {
         if (previous?.name !== 'clearpage' ||
             source.slice(from + previous.end, from + command.start).trim()) return;
-        return { kind, from, to: from + previous.start, end: from + command.end };
+        return { kind: 'page' as const, inheritedStart: !opener[1], from, to: from + previous.start, end: from + command.end };
       }
       previous = command;
     }
@@ -225,6 +230,7 @@ export function editLatexPageComposition(source: string, index: number, edit: La
     const right = latexRightPagePrefix(source);
     if (edit.right === !!right) return source;
     if (page.kind === 'title') return edit.right ? latexRightPageBreak + '\n' + source : source.slice(right.length);
+    if (page.inheritedStart) return latexRightPageBreak + (source.includes('\r\n') ? '\r\n' : '\n') + source;
     return source.replace(/^\\clear(?:double)?page/, () => edit.right ? latexRightPageBreak : '\\clearpage');
   }
   if (edit.kind === 'page-spacing') {
