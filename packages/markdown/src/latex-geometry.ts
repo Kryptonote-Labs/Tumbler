@@ -66,7 +66,11 @@ export function readGeometry(prefix: string) {
   return { loaded: declarations.length > 0, options: options.slice(options.lastIndexOf('reset') + 1) };
 }
 
-type GeometryChange = { paperSize?: string; orientation?: string; margin?: string };
+type GeometryChange = {
+  paperSize?: string | undefined;
+  orientation?: string | undefined;
+  margin?: string | undefined;
+};
 
 function optionKind(option: string): keyof GeometryChange | undefined {
   const key = option.split('=')[0]?.trim() ?? '';
