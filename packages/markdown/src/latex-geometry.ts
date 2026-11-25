@@ -93,7 +93,7 @@ export function geometryPair(value: string) {
 export const latexMarginSides = ['top', 'bottom', 'left', 'right'] as const;
 export type LatexMargins = Record<(typeof latexMarginSides)[number], string>;
 
-type GeometryChange = {
+export type GeometryChange = {
   paperSize?: string | undefined;
   orientation?: string | undefined;
   margin?: string | undefined;
@@ -199,7 +199,7 @@ function geometryPackage(name: string, options: string[]) {
 }
 
 /** Update page settings in the geometry package, folding in safe legacy preamble overrides. */
-export function setLatexGeometry(prefix: string, change: GeometryChange, currentPaperSize?: string) {
+export function writeLatexGeometry(prefix: string, change: GeometryChange, currentPaperSize?: string) {
   if (change.margins && Object.values(change.margins).some(value => latexLength(value) === undefined))
     throw new Error('Enter a measurement such as 2cm or 1in.');
   if (change.bindingOffset && !((latexLength(change.bindingOffset) ?? -1) >= 0))

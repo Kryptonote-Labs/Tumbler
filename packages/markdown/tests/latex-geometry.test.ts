@@ -130,3 +130,39 @@ test('switching sides supersedes package options and the book default', () => {
   expect(latexMarginSettings(updated).twoSided).toBe(false);
   expect(latexSheetLayout(latexPageLayout(updated), 1).left).toBe(latexPageLayout(updated).left);
 });
+
+test('geometry edits reject margins that leave no room for text', () => {
+  const source = String.raw`\documentclass{article}
+\usepackage[a4paper,margin=1in]{geometry}`;
+  const noRoom = 'The margins leave no room for text.';
+  expect(() => setLatexGeometry(source, { margin: '10.5cm' })).toThrow(noRoom);
+  expect(() => setLatexGeometry(source, {
+    margins: { left: '2cm', right: '2cm', top: '15cm', bottom: '15cm' },
+  })).toThrow(noRoom);
+  expect(() => setLatexGeometry(source, { bindingOffset: '17cm' })).toThrow(noRoom);
+  expect(() => setLatexGeometry(String.raw`\documentclass[twoside]{article}
+\usepackage[a4paper,left=18cm]{geometry}`, { twoSided: false })).toThrow(noRoom);
+});
+
+test('geometry edits use the new paper and orientation and allow positive text dimensions', () => {
+  const source = String.raw`\documentclass{article}
+\usepackage[a4paper,margin=1in]{geometry}`;
+  const updated = setLatexGeometry(source, {
+    paperSize: 'a3paper', orientation: 'landscape', twoSided: true, bindingOffset: '7.99cm',
+    margins: { left: '17cm', right: '17cm', top: '2cm', bottom: '2cm' },
+  });
+  const { width, left, right } = latexPageLayout(updated);
+  expect(width - left - right).toBeCloseTo(0.1 * 96 / 25.4, 6);
+});
+
+test.each(['margin=12cm', 'left=20cm', 'top=15cm,bottom=15cm', 'margin=10.5cm'])(
+  'imported geometry with %s leaves room for text on both sides in the editor',
+  (options) => {
+    const source = `\\documentclass[twoside]{article}\\usepackage[a4paper,${options}]{geometry}`;
+    const paper = latexPageLayout(source);
+    for (const { width, height, left, right, top, bottom } of [paper, latexSheetLayout(paper, 1)]) {
+      expect(width - left - right).toBeGreaterThan(0);
+      expect(height - top - bottom).toBeGreaterThan(0);
+    }
+  },
+);

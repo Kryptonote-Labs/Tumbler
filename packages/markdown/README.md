@@ -67,8 +67,10 @@ can paint the returned breaks without changing the editable document or running 
 `latexMarginSettings(prefix)` reads the effective margins and binding offset. Left and right
 are the odd-page margins in a two-sided document. Use `setLatexGeometry(prefix, { margins,
 twoSided, bindingOffset })` to edit those settings. `latexPageLayout` includes the gutter and
-the space reserved for headers and footers in its text-block geometry. Pass the page number
-minus one to `latexSheetLayout` to resolve the horizontal margins for that page.
+the space reserved for headers and footers in its text-block geometry. Margin, gutter, and
+page-side edits throw if the resolved text area has no width or height. Imported geometry with
+no text area gets an editable fallback without changing the source. Pass the page number minus
+one to `latexSheetLayout` to resolve the horizontal margins for that page.
 
 `paginateLatexRegions` applies the regular page planner to sections with different physical
 sheet dimensions. Landscape environments keep their source delimiters and contain normal

@@ -4,7 +4,7 @@ import { latexTypography, texPoint, type LatexTypography } from './latex-typogra
 import { latexLength } from './latex-lengths';
 import { latexDriverUsesClassPaper } from './latex-preamble';
 import { commandEnd, groupAt } from './latex-syntax';
-import { geometryOption, geometrySides, hasExplicitMargins, latexPaperSizes as paperSizes, readGeometry } from './latex-geometry';
+import { geometryOption, geometrySides, hasExplicitMargins, latexPaperSizes as paperSizes, readGeometry, writeLatexGeometry, type GeometryChange } from './latex-geometry';
 import { geometryValues, marginValue, physicalGeometry } from './latex-geometry-layout';
 
 const inch = 96;
@@ -172,9 +172,32 @@ function paragraphLengths(source: string, quad: number, xHeight: number, default
 
 type LatexOutputPaper = { defaultPaper?: 'a4paper' | 'letterpaper' };
 
+const hasRoom = (length: number) => Number.isFinite(length) && length > 0;
+
+/** Update the preamble and check the text area after applying all page settings together. */
+export function setLatexGeometry(prefix: string, change: GeometryChange, currentPaperSize?: string) {
+  const next = writeLatexGeometry(prefix, change, currentPaperSize);
+  if ((change.margin !== undefined || change.margins !== undefined ||
+    change.bindingOffset !== undefined || change.twoSided !== undefined) &&
+    !resolvePageLayout(next).hasTextArea)
+    throw new Error('The margins leave no room for text.');
+  return next;
+}
+
 /** Read the standard class and geometry options that determine the editable page. */
 export function latexPageLayout(prefix: string, output?: LatexOutputPaper): LatexPageLayout {
-  return resolvePageLayout(prefix, output).layout;
+  const { layout, footSkip } = resolvePageLayout(prefix, output);
+  const { width, height, left, right, top, bottom, leading } = layout;
+  // Give imported geometry with no text area enough space to edit without changing the source.
+  if (!hasRoom(width - left - right)) {
+    layout.left = layout.right = Math.max(0, width - 24) / 2;
+    delete layout.evenLeft;
+  }
+  if (!hasRoom(height - top - bottom)) {
+    layout.top = layout.bottom = Math.max(0, height - 2 * leading) / 2;
+    layout.footerBaseline = height - layout.bottom + footSkip;
+  }
+  return layout;
 }
 
 /** Resolve the values shown when editing a document's margins, before adding its gutter. */
@@ -307,6 +330,8 @@ function resolvePageLayout(prefix: string, output: LatexOutputPaper = {}) {
   };
   return {
     layout,
+    footSkip,
+    hasTextArea: hasRoom(width - left - right) && hasRoom(height - top - bottom),
     marginSettings: { margins, twoSided, bindingOffset, explicit: activeGeometry && hasExplicitMargins(geometryOptions) },
   };
 }
