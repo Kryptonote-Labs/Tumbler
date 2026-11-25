@@ -16,7 +16,7 @@ import { plainLatexItemLabel, readLatexEnumitem } from './latex-list';
 import { readLatexContentsEntry, readLatexListSequence, readLatexStateMacro } from './latex-state-command';
 export { latexCustomTitlePage, readLatexContentsEntry, readLatexListSequence, readLatexStateMacro } from './latex-state-command';
 export { interpretLatexTitlePage } from './latex-title-page';
-export type { LatexTitleBlock, LatexTitleRun, LatexTitleStyle } from './latex-title-page';
+export type { LatexTitleItem, LatexTitleRun, LatexTitleStyle } from './latex-title-page';
 import { readLatexTitledEnvironments } from './latex-titled-environments';
 export { readLatexTitledEnvironments } from './latex-titled-environments';
 import { readLatexTitleSetter } from './latex-metadata';

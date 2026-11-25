@@ -1,7 +1,14 @@
-import { expect, test } from "bun:test";
-import { interpretLatexTitlePage, latexPageLayout, type LatexTitleBlock } from "../src/latex";
+import { expect, test } from 'bun:test';
+import {
+  interpretLatexTitlePage,
+  latexPageLayout,
+  type LatexTitleItem,
+  type LatexTitleRun,
+} from '../src/latex';
 
-const report = String.raw`\documentclass[12pt,twoside]{report}
+// A report class that defines its own title page.
+const report = String.raw`\documentclass[a4paper,12pt,twoside]{report}
+\usepackage[left=2cm,right=2cm,top=2cm,bottom=3cm]{geometry}
 \setlength{\parskip}{2ex plus 0.5ex minus 0.2ex}
 \setlength{\parindent}{0pt}
 \makeatletter
@@ -10,6 +17,7 @@ const report = String.raw`\documentclass[12pt,twoside]{report}
 \def\maketitle{
   \begin{titlepage}{
     \Large Faculty of Letters \\
+    School of Natural Sciences, Philosophy and Logic \\
     Division of Applied Theory
     \rm
     \vskip 3in
@@ -42,50 +50,61 @@ const report = String.raw`\documentclass[12pt,twoside]{report}
   \cleardoublepage
 }
 \makeatother
-\title{Learning}
 \begin{document}
 `;
 
-test("a class title page is read as styled text and editable fields", () => {
-  const layout = latexPageLayout(report);
-  const page = interpretLatexTitlePage(report, layout);
-  const [outer] = page ?? [];
-  expect(outer?.kind).toBe("box");
-  if (outer?.kind !== "box") return;
-  expect(outer.height).toBeCloseTo(layout.height - layout.top - layout.bottom);
-  expect(outer.blocks.at(-1)).toEqual({ kind: "skip", height: 0, stretch: 1 });
-  const inner = outer.blocks[0];
-  if (inner?.kind !== "box") throw new Error("expected the inner box");
-  expect(inner.height).toBe(864);
-  const paragraphs = inner.blocks.filter((block) => block.kind === "paragraph");
-  const text = (block: LatexTitleBlock) =>
-    block.kind === "paragraph"
-      ? block.lines.map((line) =>
-          line.map((run) => (run.kind === "text" ? run.text : `<${run.field}>`)).join(""),
-        )
-      : [];
-  expect(paragraphs.map(text)).toEqual([
-    ["Faculty of Letters", "Division of Applied Theory"],
-    ["<title>"],
-    ["<author>"],
-    ["Submitted for the degree of", "the Diploma of the Faculty, <submitdate>"],
+const fields = new Map([
+  ['title', '\\LARGE {\\bf A Study of Paper Folding}\\\\\n \\vspace*{6mm}\n'],
+  ['author', 'Kit Ashby'],
+  ['submitdate', 'March 2031'],
+] as const);
+
+type Baseline = { text: string; y: number; runs: LatexTitleRun[] };
+
+/** Baselines from the top of the text block, as TeX places them before fills stretch. */
+function baselines(box: LatexTitleItem, top = 0): Baseline[] {
+  if (box.kind !== 'box') return [];
+  const result: Baseline[] = [];
+  let y = top;
+  for (const item of box.items) {
+    y += item.before;
+    if (item.kind === 'line')
+      result.push({ text: item.runs.map((run) => run.text).join(''), y, runs: item.runs });
+    if (item.kind === 'box') {
+      result.push(...baselines(item, y));
+      y += item.height ?? 0;
+    }
+  }
+  return result;
+}
+
+test('a class title page is set where pdfTeX sets it, with fields in their printed style', () => {
+  const page = interpretLatexTitlePage(report, latexPageLayout(report), fields);
+  if (!page) throw new Error('expected an interpreted title page');
+  const lines = baselines(page);
+  expect(lines.map((line) => line.text)).toEqual([
+    'Faculty of Letters',
+    'School of Natural Sciences, Philosophy and Logic',
+    'Division of Applied Theory',
+    'A Study of Paper Folding',
+    'Kit Ashby',
+    'Submitted for the degree of',
+    'the Diploma of the Faculty, March 2031',
   ]);
-  const [heading, title, author, note] = paragraphs;
-  expect(heading?.align).toBe("center");
-  // \titlepage resets the class's 1.5 stretch; \Large is 17.28pt on 22pt in a 12pt class.
+  // pdfTeX's baselines for this page, in CSS pixels from the top of the text block.
+  const expected = [15.7, 44.9, 74.1, 407.6, 481.8, 897.6, 916.8];
+  expect(lines.map((line, index) => Math.abs(line.y - expected[index]!) < 0.5)).not.toContain(false);
+
   const point = 96 / 72.27;
-  expect(heading?.leading).toBeCloseTo(22 * point);
-  const titleRun = title?.lines[0]?.[0];
-  expect(titleRun?.style).toMatchObject({ bold: true, size: 17.28 * point });
-  // The group closes before the paragraph ends, so the author line keeps the normal baselineskip.
-  expect(author?.lines[0]?.[0]?.style.size).toBeCloseTo(17.28 * point);
-  expect(author?.leading).toBeCloseTo(14.5 * point);
-  expect(note?.lines[0]?.[0]?.style).toMatchObject({ bold: false, size: 12 * point });
-  expect(inner.blocks).toContainEqual({ kind: "skip", height: 288, stretch: 0 });
-  expect(inner.blocks).toContainEqual({ kind: "skip", height: 0, stretch: 1 });
+  const title = lines[3]!.runs[0]!;
+  expect(title).toMatchObject({ field: 'title', style: { bold: true, size: 20.74 * point } });
+  // The run is the authored text inside `{\bf …}`, so an edit keeps the TeX around it.
+  expect(fields.get('title').slice(title.source!.from, title.source!.to)).toBe('A Study of Paper Folding');
+  expect(lines[4]!.runs[0]).toMatchObject({ field: 'author', source: { from: 0, to: 9 } });
+  expect(lines[6]!.runs.at(-1)).toMatchObject({ text: 'March 2031', field: 'submitdate' });
 });
 
-test("a title page with TeX the interpreter does not model is left to the compiler", () => {
-  const source = report.replace("Division of Applied Theory", "\\hfill Division of Applied Theory");
-  expect(interpretLatexTitlePage(source, latexPageLayout(source))).toBeUndefined();
+test('a title page with TeX the interpreter does not model is left to the compiler', () => {
+  const source = report.replace('Division of Applied Theory', '\\hfill Division of Applied Theory');
+  expect(interpretLatexTitlePage(source, latexPageLayout(source), fields)).toBeUndefined();
 });
