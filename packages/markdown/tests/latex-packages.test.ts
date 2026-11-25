@@ -4,9 +4,9 @@ import {
   latexEffectivePrefix, readLatexClass, parseLatex, parseLatexFragment, serializeLatex, serializeLatexProject,
   serializeLatexSelection, updateLatexProjectFile,
 } from '../src/latex';
-import { latexDocumentClassName, setLatexDocumentClass, addLatexPackage, latexLineSpacing, latexRomanFamily, setLatexLineSpacing, setLatexRomanFamily } from '../src/latex-format';
+import { latexDocumentClassName, setLatexDocumentClass, latexLineSpacing, latexRomanFamily, setLatexLineSpacing, setLatexRomanFamily } from '../src/latex-format';
 import { latexPageLayout } from '../src/latex-layout';
-import { readLatexPackages } from '../src/latex-preamble';
+import { readLatexPackages, withLatexPackage } from '../src/latex-preamble';
 
 const preamble = String.raw`\documentclass[12pt]{article}
 \begin{document}
@@ -36,7 +36,7 @@ test('adds package declarations once and lets a font choice override an imported
     ['fontenc', ['T1']],
     ['lmodern', []],
   ]);
-  expect(addLatexPackage(computer, 'fontenc')).toBe(computer);
+  expect(withLatexPackage(computer, 'fontenc')).toBe(computer);
 });
 
 test('retains class options and ignores commented declarations when selecting a custom class', () => {
@@ -109,4 +109,12 @@ test('a fragment ending in a comment leaves a following document delimiter on it
   const fragment = parseLatexFragment(document, '% a note');
   const tr = new Transform(document).insert(document.content.size, fragment);
   expect(serializeLatex(tr.doc)).toEndWith('% a note\n\\end{document}');
+});
+
+test('package insertion shares formatting defaults and resolves declarations in project files', () => {
+  const prefix = '\\documentclass{article}\n\\input{packages}\n\\begin{document}';
+  const effective = prefix.replace('\\input{packages}', '\\usepackage{tikz}');
+  expect(withLatexPackage(prefix, 'xcolor', effective)).toBe(prefix);
+  expect(withLatexPackage(prefix, 'ulem', effective)).toContain('\\usepackage[normalem]{ulem}');
+  expect(withLatexPackage(prefix, 'local/lab', effective)).toContain('\\usepackage{local/lab}');
 });

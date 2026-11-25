@@ -1,4 +1,4 @@
-import { readLatexPackages } from './latex-preamble';
+import { readLatexPackages, withLatexPackage } from './latex-preamble';
 import { groupAt, latexCommands, whitespaceEnd } from './latex-syntax';
 
 const spacingCommands = {
@@ -78,13 +78,6 @@ function insertPreambleLine(prefix: string, line: string, replace?: RegExp) {
   return before + (before && !before.endsWith('\n') ? newline : '') + line + newline + prefix.slice(begin.start);
 }
 
-export function addLatexPackage(prefix: string, name: string, effectivePrefix = prefix) {
-  if (!/^[\w./@+-]+$/.test(name)) throw new Error('Enter a LaTeX package name.');
-  if ([prefix, effectivePrefix].some((source) => readLatexPackages(source).some((entry) => entry.name === name)))
-    return prefix;
-  return insertPreambleLine(prefix, '\\usepackage{' + name + '}');
-}
-
 function classArgument(prefix: string) {
   for (const { name, end } of latexCommands(prefix)) {
     if (name !== 'documentclass') continue;
@@ -115,14 +108,14 @@ export function setLatexDocumentClass(prefix: string, name: string, effectivePre
 }
 
 export function setLatexLineSpacing(prefix: string, spacing: Spacing, effectivePrefix = prefix) {
-  const next = addLatexPackage(prefix, 'setspace', effectivePrefix);
+  const next = withLatexPackage(prefix, 'setspace', effectivePrefix);
   // Using setstretch for Single avoids singlespacing's additional vertical skip.
   const command = spacing === 'single' ? '\\setstretch{1}' : '\\' + spacingCommands[spacing];
   return insertPreambleLine(next, command, /(?:^|(?<=\n))\\(?:setstretch\{1\}|onehalfspacing|doublespacing)\r?\n$/);
 }
 
 export function setLatexRomanFamily(prefix: string, family: Family, effectivePrefix = prefix) {
-  const next = family === 'lmr' ? addLatexPackage(prefix, 'lmodern', effectivePrefix) : prefix;
+  const next = family === 'lmr' ? withLatexPackage(prefix, 'lmodern', effectivePrefix) : prefix;
   return insertPreambleLine(next, '\\renewcommand{\\rmdefault}{' + family + '}',
     /(?:^|(?<=\n))\\renewcommand\{\\rmdefault\}\{(?:cmr|lmr)\}\r?\n$/);
 }
