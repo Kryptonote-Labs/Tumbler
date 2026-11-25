@@ -31,7 +31,7 @@
     renderer = current;
     return () => current.destroy();
   });
-  const interpreter = $derived(new PdfInterpreter(document));
+  const interpreter = $derived(new PdfInterpreter(document, undefined, { deferImages: true }));
   let host = $state<HTMLDivElement>();
   onMount(() => {
     const element = host;

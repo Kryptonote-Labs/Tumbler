@@ -83,7 +83,10 @@ export class PdfEditableSource {
     if (!this.cached || this.cached.key !== key || this.cached.renderer !== active.renderer) {
       this.clear();
       const controller = new AbortController();
-      const value = active.renderer.render(tile, controller.signal).then(({ bitmap }) => bitmap);
+      const value = active.renderer.render(tile, controller.signal).then(({ bitmap, compatibility }) => {
+        if (compatibility) active.oncompatibility?.();
+        return bitmap;
+      });
       const entry = { key, renderer: active.renderer, controller, value };
       this.cached = entry;
       void value.catch(() => {

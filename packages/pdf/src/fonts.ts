@@ -23,6 +23,7 @@ import { matrix, type PdfMatrix } from './matrix.ts';
 import { cffOpenType } from './cff-container.ts';
 import { readType1Program } from './type1-program.ts';
 import { type1Outline } from './type1-outline.ts';
+import { pdfSymbolCmap } from './symbol-cmap.ts';
 
 export interface PdfGlyph {
   readonly code: number;
@@ -53,6 +54,7 @@ export class PdfFont {
   private readonly mapping: PdfCMap;
   private readonly unicode: PdfCMap;
   private readonly outline: OutlineFont | undefined;
+  private readonly symbolGlyph: ReturnType<typeof pdfSymbolCmap>;
   private readonly type1: ReturnType<typeof readType1Program> | undefined;
   private readonly standard: Font | undefined;
   private readonly simple = new Map<number, { unicode: string; glyph: string }>();
@@ -137,6 +139,9 @@ export class PdfFont {
       }
     }
     this.outline = outline;
+    if (this.kind === 'TrueType' && this.program &&
+        (!encoding || (integer(source.resolve(descriptor.get('Flags')) ?? 0) & 4)))
+      this.symbolGlyph = pdfSymbolCmap(this.program);
     this.unitsPerEm = outline?.unitsPerEm ?? 1000;
     const standard = standardName(this.baseName);
     this.standard = standard ? Font.load(standard) : undefined;
@@ -336,6 +341,13 @@ export class PdfFont {
       yield this.glyph(code);
     }
   }
+  private unicodeGlyph(code: number) {
+    try {
+      return this.outline?.glyphForCodePoint(code).id;
+    } catch {
+      return unsupported(`Embedded font ${this.baseName} has no supported glyph mapping.`);
+    }
+  }
   private glyph(value: PdfCode): PdfGlyph {
     const key = this.mapping.key(value),
       cid = this.mapping.cids.get(key) ?? value.code;
@@ -358,10 +370,10 @@ export class PdfFont {
         ? this.cidMap
           ? (this.cidMap[cid * 2] ?? 0) * 256 + (this.cidMap[cid * 2 + 1] ?? 0)
           : cid
-        : (namedGlyph ??
+        : (namedGlyph ?? this.symbolGlyph?.(value.code) ??
           (this.rawCff
             ? 0
-            : this.outline?.glyphForCodePoint(simple?.unicode.codePointAt(0) ?? value.code).id) ??
+            : this.unicodeGlyph(simple?.unicode.codePointAt(0) ?? value.code)) ??
           value.code);
     if (glyphId < 0 || (this.outline && glyphId >= this.outline.numGlyphs)) glyphId = 0;
     let path: string | undefined;

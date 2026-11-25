@@ -81,7 +81,7 @@ OCR text is selectable. Selection does not edit the source PDF.
 ## Rendering verification
 
 Run `bun run compatibility:pdf <corpus> <new-report-directory>` with Python `pypdfium2`
-installed. PDFium is an independent test oracle, never a production dependency. The bundled
+installed. This check compares the native engine against an independent PDFium build. The bundled
 corpus is `packages/pdf/test/fixtures`. Reports retain native/reference/difference images and
 source hashes. The 1% gate measures changed non-font page pixels at 72 DPI, with a perceptual
 pixel threshold of 0.1. Non-font antialiasing counts toward the error. Separate checks require

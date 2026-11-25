@@ -29,5 +29,5 @@ export type PdfRenderRequest =
   | { type: "render"; id: number; tile: PdfTileRequest }
   | { type: "release"; page: number };
 export type PdfRenderResponse =
-  | { id: number; bitmap: ImageBitmap; text?: PdfTextContent }
+  | { id: number; bitmap: ImageBitmap; text?: PdfTextContent; compatibility?: true }
   | { id: number; error: string; code?: PdfError["code"] };

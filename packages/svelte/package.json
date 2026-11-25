@@ -14,7 +14,8 @@
     "src",
     "README.md",
     "LICENSE",
-    "scripts"
+    "scripts",
+    "third-party"
   ],
   "license": "MIT",
   "repository": {
@@ -34,7 +35,8 @@
     "rtf.js": "3.0.9",
     "@tumblerjs/pdf": "0.1.0-alpha.28",
     "@tumblerjs/ooxml": "0.1.0-alpha.28",
-    "@tumblerjs/formulas": "0.1.0-alpha.28"
+    "@tumblerjs/formulas": "0.1.0-alpha.28",
+    "@hyzyla/pdfium": "3.0.0"
   },
   "peerDependencies": {
     "svelte": "^5.0.0",

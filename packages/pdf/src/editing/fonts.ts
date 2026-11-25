@@ -1,3 +1,4 @@
+import { PdfError } from '../objects.ts';
 import '../buffer-runtime.ts';
 import { Buffer } from 'buffer';
 import { create, type Font, type Glyph } from 'fontkit';
@@ -63,6 +64,7 @@ export class PdfEditingFonts {
   private shapes = new WeakMap<PdfEditingFont, Map<string, Pick<PdfEditingShape, 'glyphs' | 'positions'>>>();
   private fonts = new Map<string, PdfEditingFont>();
   private documents = new WeakSet<PdfDocument>();
+  private importedPages = new WeakMap<PdfDocument, Set<number>>();
   add(key: string, bytes: Uint8Array, source?: PdfFont) {
     const font = create(Buffer.from(bytes));
     if ('fonts' in font) throw new Error('Supply a single editing font.');
@@ -82,11 +84,23 @@ export class PdfEditingFonts {
       italic: /italic|oblique/i.test(subfamily),
     });
   }
-  private *importPages(document: PdfDocument) {
+  private *importPages(document: PdfDocument, indices?: ReadonlySet<number>, allowUnavailable = false) {
     if (this.documents.has(document)) return;
-    const interpreter = new PdfInterpreter(document, undefined, { deferImages: true });
+    let imported = this.importedPages.get(document);
+    if (!imported) this.importedPages.set(document, imported = new Set());
+    const interpreter = new PdfInterpreter(document, undefined, { deferImages: true, checkImageCompatibility: allowUnavailable });
     for (const page of document.pages) {
-      for (const element of interpreter.page(page.index).elements) {
+      if (imported.has(page.index) || (indices && !indices.has(page.index))) continue;
+      let scene;
+      try {
+        scene = interpreter.page(page.index);
+      } catch (error) {
+        if (!allowUnavailable || !(error instanceof PdfError) ||
+            (error.code !== 'unsupported_feature' && error.code !== 'resource_limit')) throw error;
+        yield;
+        continue;
+      }
+      for (const element of scene.elements) {
         if (element.kind !== 'glyph' || !element.font.program || !element.font.sourceId) continue;
         const source = element.font,
           key = source.sourceId!;
@@ -105,6 +119,7 @@ export class PdfEditingFonts {
       }
       this.revision++;
       interpreter.releasePage(page.index);
+      imported.add(page.index);
       yield;
     }
     for (const face of [...this.fonts.values()]) {
@@ -118,10 +133,10 @@ export class PdfEditingFonts {
         this.fonts.set(key, full);
       }
     }
-    this.documents.add(document);
+    if (!indices) this.documents.add(document);
   }
-  importDocument(document: PdfDocument) {
-    const pages = this.importPages(document);
+  importDocument(document: PdfDocument, indices?: ReadonlySet<number>, allowUnavailable = false) {
+    const pages = this.importPages(document, indices, allowUnavailable);
     while (!pages.next().done) { /* Consume synchronously for headless callers. */ }
   }
   /** Prepare source fonts a page at a time, allowing the host to paint or cancel between pages. */
@@ -129,7 +144,7 @@ export class PdfEditingFonts {
     const result = new PdfEditingFonts();
     result.fonts = new Map(this.fonts);
     await yieldControl();
-    for (const _ of result.importPages(document)) await yieldControl();
+    for (const _ of result.importPages(document, undefined, true)) await yieldControl();
     return result;
   }
   fork(document: PdfDocument) {
