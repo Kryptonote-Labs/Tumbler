@@ -25,8 +25,10 @@ export { readLatexHyperref } from './latex-links';
 import { latexBlockDeclaration, latexMinipageWidth, latexTextEnvironments } from './latex-text-layout';
 export { latexBlockDeclaration, latexMinipageArgument, latexMinipageWidth, isLatexTitlePage } from './latex-text-layout';
 export { latexMathMacros, interpretLatexParagraphMacro, interpretLatexText, interpretLatexTextFragment, readLatexTextMacros, type LatexPrintedText } from './latex-macros';
-import { latexDeclarations, latexTikzFragment, latexVerticalSpace } from './latex-presentation';
-export { latexDeclarations, latexFontSize, latexVerticalSpace, latexSectionPresentation, latexPresentationColour, latexRunningFields, latexRunningStyles, latexTikzFragment, latexColumnAliasWidths } from './latex-presentation';
+import { latexDeclarations, latexTikzFragment } from './latex-presentation';
+import { latexVerticalSpace } from './latex-vertical-space';
+export { latexFillShares, latexVerticalSpace } from './latex-vertical-space';
+export { latexDeclarations, latexFontSize, latexSectionPresentation, latexPresentationColour, latexRunningFields, latexRunningStyles, latexTikzFragment, latexColumnAliasWidths } from './latex-presentation';
 export { readLatexColours } from './latex-colour';
 export { latexPageMarks } from './latex-running-marks';
 import { plainLatexItemLabel, readLatexEnumitem } from './latex-list';
@@ -275,12 +277,16 @@ function inline(
         else if (command === '\\verb') end = verbatimEnd(source, end);
         else if (character === '{') end = groupAt(source, position)?.end ?? source.length;
         else if (character === '\\' && !escaped.has(command)) {
-          if (source[end] === '*') end++;
-          for (;;) {
-            const start = whitespaceEnd(source, end);
-            const group = groupAt(source, start) ?? groupAt(source, start, '[', ']');
-            if (!group) break;
-            end = group.end;
+          const space = latexVerticalSpace(source, position);
+          if (space) end = space.end;
+          else {
+            if (source[end] === '*') end++;
+            for (;;) {
+              const start = whitespaceEnd(source, end);
+              const group = groupAt(source, start) ?? groupAt(source, start, '[', ']');
+              if (!group) break;
+              end = group.end;
+            }
           }
         }
         if (command === '\\quad' || command === '\\qquad') end = whitespaceEnd(source, end);

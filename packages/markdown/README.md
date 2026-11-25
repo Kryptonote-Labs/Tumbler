@@ -45,7 +45,14 @@ in a project, or `detachLatexInclude(transform, position)` to turn an instance
 into independent editable blocks.
 
 `latexFlow(document)` resolves standard class and command behavior into
-layout constraints at editor positions. `readLatexTableBlock(source)` exposes
+layout constraints at editor positions. `latexVerticalSpace(source)` reads literal
+fixed skips, `\fill` and `\stretch{n}` while preserving their source ranges.
+Supply fixed skips in measured heights and flexible skips in `PageLine.fills`.
+Standalone unstarred skips also supply `PageBlock.discardableSpace` so
+`paginateLatex` can discard them at page tops. The plan reports how much to add
+to each flexible skip and which standalone skips to collapse.
+
+`readLatexTableBlock(source)` exposes
 the first, repeated, body, and final row groups and retains their source offsets.
 Use `setLatexTableCell` to change a cell in the original source.
 
