@@ -22,8 +22,6 @@ import type { Node } from 'prosemirror-model';
 import { Transform } from 'prosemirror-transform';
 
 export const thesisTitle = 'Title of the thesis';
-export const thesisAuthor = 'Author name';
-export const thesisDate = 'Submission date';
 
 /** Create a composed page with the line styles used by the Thesis starter. */
 export function composeLatexPage(
@@ -62,16 +60,19 @@ const chapters = [
   { title: 'Results', section: 'Discussion', text: 'Present and discuss the findings here.' },
 ];
 
-/** Seed the Thesis template with the same blocks and setup used by the editor. */
+/** Seed the Thesis template with the same blocks and setup used by the editor. Lines the writer
+ * has not supplied stay empty so editors can prompt for them and nothing stray reaches the PDF. */
 export function latexThesis({
   title = thesisTitle,
-  author = thesisAuthor,
+  author = '',
+  date = '',
   paperSize = 'a4paper',
   orientation = '',
   margin = '1in',
 }: {
   title?: string | undefined;
   author?: string | undefined;
+  date?: string | undefined;
   paperSize?: string;
   orientation?: string;
   margin?: string;
@@ -92,17 +93,13 @@ export function latexThesis({
   tr.replaceWith(
     0,
     append(),
-    composeLatexPage(tr.doc, 'title', [title, author || thesisAuthor, thesisDate]),
+    composeLatexPage(tr.doc, 'title', [title, author, date]),
   );
   setLatexPageNumberSection(tr, append(), { format: 'roman', startAt: 1 });
   setLatexFrontMatter(tr, 'abstract', true);
 
-  for (const lines of [
-    ['Acknowledgements', 'Acknowledgement text'],
-    ['Dedication', 'Dedication text'],
-    ['Epigraph', 'Quotation text'],
-  ]) {
-    tr.insert(append(), composeLatexPage(tr.doc, 'page', lines));
+  for (const heading of ['Acknowledgements', 'Dedication', 'Epigraph']) {
+    tr.insert(append(), composeLatexPage(tr.doc, 'page', [heading, '']));
   }
   setLatexFrontMatter(tr, 'tableofcontents', true);
   setLatexFrontMatter(tr, 'listoffigures', true);

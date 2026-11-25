@@ -307,7 +307,7 @@ JSON
 
 | Kind | Fields |
 | --- | --- |
-| `thesis` | Optional `title` and `author`. Seeds a standard blank LaTeX document with the Thesis starter. |
+| `thesis` | Optional `title`, `author` and `date`. Seeds a standard blank LaTeX document with the Thesis starter; omitted lines stay empty. |
 | `insert-page` | `at`, `page` (`title` or `page`), and `lines` (one or more plain-text strings). Set `contentsTitle` to include the page in the table of contents. |
 | `front-matter` | `block` (`abstract`, `tableofcontents`, `listoffigures`, or `listoftables`). Adds the block if missing. Optional `startsRight` selects a right-hand start when true or the next page when false. |
 | `page-numbering` | `at`, `format` (`arabic`, `roman`, `Roman`, `alph`, `Alph`, or `gobble`), and optional `startAt` (default 1). |
