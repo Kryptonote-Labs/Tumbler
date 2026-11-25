@@ -21,6 +21,7 @@ type FolioEffect = {
   folio?: { visible: false; restartAfter: boolean };
   numbering?: LatexPageNumberFormat;
   startAt?: number;
+  extendedLetters?: 'alph' | 'Alph';
   pageStyle?: string;
   documentStyle?: string;
 };
@@ -35,15 +36,26 @@ export type LatexBlockFlow =
       after?: LatexBreak;
     } & FolioEffect);
 
-export type LatexPageNumber = { number: number; visible: boolean; style?: Exclude<LatexPageNumberFormat, 'arabic'>; pageStyle?: string };
+export type LatexPageNumber = { number: number; visible: boolean; style?: Exclude<LatexPageNumberFormat, 'arabic'>; extendedLetters?: true; pageStyle?: string };
+
+function alphabeticPageNumber(number: number, uppercase: boolean, extended: boolean | undefined) {
+  if (number > 26 && !extended) return '';
+  let label = '';
+  while (number > 0) {
+    number--;
+    label = String.fromCharCode((uppercase ? 65 : 97) + number % 26) + label;
+    number = Math.floor(number / 26);
+  }
+  return label;
+}
 
 export function latexPageLabel(folio: LatexPageNumber) {
   const { number, style } = folio;
   switch (style) {
     case 'roman': return latexRomanNumber(number).toLowerCase();
     case 'Roman': return latexRomanNumber(number);
-    case 'alph': return number > 0 && number <= 26 ? String.fromCharCode(96 + number) : '';
-    case 'Alph': return number > 0 && number <= 26 ? String.fromCharCode(64 + number) : '';
+    case 'alph':
+    case 'Alph': return alphabeticPageNumber(number, style === 'Alph', folio.extendedLetters);
     case 'gobble': return '';
     default: return String(number);
   }
@@ -96,6 +108,15 @@ export function readLatexPageDirective(source: string, position = 0) {
   const name = source.slice(position, end);
   if (name === '\\null' && /^\s*(?:$|\\(?:newpage|clearpage|cleardoublepage)\b)/.test(source.slice(end)))
     return { kind: 'blank' as const, end };
+  if (name === '\\renewcommand') {
+    const group = groupAt(source, whitespaceEnd(source, end));
+    if (!group || source.slice(group.from, group.to).trim() !== '\\thepage') return;
+    const body = groupAt(source, whitespaceEnd(source, group.end));
+    const alias = body && /^\\tumblerPage([Aa]lph)\{\\value\{page\}\}$/.exec(source.slice(body.from, body.to).trim())?.[1];
+    if (body && (alias === 'alph' || alias === 'Alph'))
+      return { kind: 'extended-letters' as const, value: alias, end: body.end };
+    return;
+  }
   if (name === '\\setcounter') {
     const counter = groupAt(source, whitespaceEnd(source, end));
     if (!counter || source.slice(counter.from, counter.to).trim() !== 'page') return;
@@ -148,6 +169,7 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
   let titlePrinted = false;
   let numbering: LatexPageNumberFormat | undefined;
   let startAt: number | undefined;
+  let extendedLetters: FolioEffect['extendedLetters'];
   let pageStyle: string | undefined;
   let documentStyle: string | undefined;
   let activeDocumentStyle: string | undefined = name === 'book' ? 'headings' : undefined;
@@ -160,8 +182,10 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
     if (directive?.kind === 'numbering') {
       numbering = directive.value;
       startAt = 1;
+      extendedLetters = undefined;
     }
     if (directive?.kind === 'counter') startAt = directive.value;
+    if (directive?.kind === 'extended-letters') extendedLetters = directive.value;
   }
   let pageHasContent = false;
   function setDocumentState(source: string) {
@@ -170,8 +194,10 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
       if (directive?.kind === 'numbering') {
         numbering = directive.value;
         startAt = 1;
+        extendedLetters = undefined;
       }
       if (directive?.kind === 'counter') startAt = directive.value;
+      if (directive?.kind === 'extended-letters') extendedLetters = directive.value;
       if (directive?.kind === 'document-style') setDocumentStyle(directive.value);
     }
   }
@@ -209,6 +235,7 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
       if (matter !== 'back') {
         numbering = matter === 'front' ? 'roman' : 'arabic';
         startAt = 1;
+        extendedLetters = undefined;
       }
       return false;
     }
@@ -224,7 +251,7 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
     const directive = readLatexPageDirective(
       node.type.name === 'latex_inline' ? String(node.attrs.source).trim() : source,
     );
-    if (directive?.kind === 'numbering' || directive?.kind === 'counter' || directive?.kind === 'hide' ||
+    if (directive?.kind === 'numbering' || directive?.kind === 'counter' || directive?.kind === 'extended-letters' || directive?.kind === 'hide' ||
         directive?.kind === 'page-style' || directive?.kind === 'document-style' || source.startsWith('%')) {
       const change: FolioEffect = {};
       if (directive?.kind === 'numbering') {
@@ -232,11 +259,16 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
         else {
           numbering = directive.value;
           startAt = 1;
+          extendedLetters = undefined;
         }
       }
       if (directive?.kind === 'counter') {
         if (pageHasContent) change.startAt = directive.value;
         else startAt = directive.value;
+      }
+      if (directive?.kind === 'extended-letters') {
+        if (pageHasContent) change.extendedLetters = directive.value;
+        else extendedLetters = directive.value;
       }
       if (directive?.kind === 'document-style') {
         activeDocumentStyle = directive.value;
@@ -260,11 +292,13 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
     if (node.isBlock && (node.isAtom || node.isTextblock || explicitTitle)) {
       if (numbering) effect({ numbering });
       if (startAt !== undefined) effect({ startAt });
+      if (extendedLetters) effect({ extendedLetters });
       if (pageStyle) effect({ pageStyle });
       if (documentStyle) effect({ documentStyle });
       documentStyle = undefined;
       numbering = undefined;
       startAt = undefined;
+      extendedLetters = undefined;
       pageStyle = undefined;
       pageHasContent = true;
     }
@@ -368,6 +402,7 @@ export function latexPageNumbers(
   const overrides = new Map<number, { visible: false; restartAfter: boolean }>();
   const resets = new Map<number, number>();
   const formats = new Map<number, LatexPageNumberFormat>();
+  const extensions = new Map<number, boolean>();
   const pageStyles = new Map<number, string>();
   const documentStyles = new Map<number, string>();
   for (const [position, effect] of [...flow].sort(([a], [b]) => a - b)) {
@@ -377,6 +412,11 @@ export function latexPageNumbers(
     if (effect.numbering) {
       formats.set(page, effect.numbering);
       resets.set(page, 1);
+      extensions.set(page, false);
+    }
+    if (effect.extendedLetters) {
+      extensions.set(page, true);
+      formats.set(page, effect.extendedLetters);
     }
     if (effect.startAt !== undefined) resets.set(page, effect.startAt);
     if (effect.pageStyle) pageStyles.set(page, effect.pageStyle);
@@ -385,16 +425,19 @@ export function latexPageNumbers(
   let number = 1;
   let style: LatexPageNumberFormat = 'arabic';
   let currentStyle: string | undefined;
+  let extendedLetters = false;
   return Array.from({ length: pageStarts.length + 1 }, (_, page) => {
     const override = overrides.get(page);
     style = formats.get(page) ?? style;
     number = resets.get(page) ?? number;
+    extendedLetters = extensions.get(page) ?? extendedLetters;
     currentStyle = documentStyles.get(page) ?? currentStyle;
     const pageStyle = pageStyles.get(page) ?? currentStyle;
     const folio: LatexPageNumber = {
       number,
       visible: pageStyle !== 'empty' && (override?.visible ?? true),
       ...(style !== 'arabic' ? { style } : {}),
+      ...(extendedLetters && { extendedLetters: true }),
       ...(pageStyle && pageStyle !== 'empty' && { pageStyle }),
     };
     number = override?.restartAfter ? 1 : number + 1;

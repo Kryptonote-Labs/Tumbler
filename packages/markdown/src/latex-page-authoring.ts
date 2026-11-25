@@ -1,4 +1,5 @@
 import { latexBreakCommand, readLatexBookMatter, readLatexClass, readLatexPageDirective, type LatexPageNumberFormat } from './latex-flow';
+import { updateLatexBoundary } from './latex-boundary-step';
 import { latexEffectivePrefix } from './latex-project';
 import { latexCommands } from './latex-syntax';
 import type { Node } from 'prosemirror-model';
@@ -20,7 +21,7 @@ function sectionStart(document: Node, position: number) {
   for (;;) {
     const prior = previous(document, position);
     const directive = readLatexPageDirective(prior.source);
-    if (directive?.kind !== 'numbering' && directive?.kind !== 'counter') return position;
+    if (directive?.kind !== 'numbering' && directive?.kind !== 'counter' && directive?.kind !== 'extended-letters') return position;
     position = prior.position;
   }
 }
@@ -67,8 +68,8 @@ export function setLatexPageNumberSection(tr: Transform, position: number, secti
   const { format, startAt } = section;
   if (!Number.isInteger(startAt) || startAt < -2147483647 || startAt > 2147483647)
     throw new RangeError('Enter a whole page number between −2147483647 and 2147483647.');
-  if ((format === 'alph' || format === 'Alph') && (startAt < 1 || startAt > 26))
-    throw new RangeError('LaTeX letter numbering starts from 1 to 26.');
+  const letters = format === 'alph' || format === 'Alph';
+  if (letters && startAt < 1) throw new RangeError('Start letter numbering at 1 or higher.');
   const start = sectionStart(tr.doc, position);
   const prior = previous(tr.doc, start).source;
   const commands: string[] = [];
@@ -80,6 +81,22 @@ export function setLatexPageNumberSection(tr: Transform, position: number, secti
       ? '\\cleardoublepage' : '\\clearpage');
   }
   commands.push('\\pagenumbering{' + format + '}');
+  if (letters) {
+    const prefix = String(tr.doc.attrs.prefix);
+    const begin = /\\begin\s*\{document\}\s*$/.exec(prefix);
+    if (!begin) throw new Error('Set up a document preamble before using letter numbering.');
+    if (!prefix.includes('\\cs_new_eq:NN \\tumblerPagealph')) {
+      const newline = prefix.includes('\r\n') ? '\r\n' : '\n';
+      const alphabet = [
+        '\\ExplSyntaxOn',
+        '\\cs_new_eq:NN \\tumblerPagealph \\int_to_alph:n',
+        '\\cs_new_eq:NN \\tumblerPageAlph \\int_to_Alph:n',
+        '\\ExplSyntaxOff',
+      ].join(newline);
+      updateLatexBoundary(tr, 'prefix', prefix.slice(0, begin.index) + alphabet + newline + prefix.slice(begin.index));
+    }
+    commands.push('\\renewcommand{\\thepage}{\\tumblerPage' + format + '{\\value{page}}}');
+  }
   if (startAt !== 1) commands.push('\\setcounter{page}{' + startAt + '}');
   insertCommands(tr, start, position, commands);
 }

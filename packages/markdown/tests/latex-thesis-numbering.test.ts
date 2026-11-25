@@ -82,11 +82,13 @@ Text.
   setLatexPageNumberSection(tr, 0, { format: 'Roman', startAt: 7 });
   const offset = tr.doc.children.slice(0, -1).reduce((sum, node) => sum + node.nodeSize, 0);
   expect(readLatexPageNumberSection(tr.doc, offset)).toEqual({ format: 'Roman', startAt: 7 });
-  setLatexPageNumberSection(tr, offset, { format: 'Alph', startAt: 3 });
+  setLatexPageNumberSection(tr, offset, { format: 'Alph', startAt: 27 });
   const updated = serializeLatex(tr.doc);
   expect(updated).not.toContain('Roman');
-  expect(measuredPages(parseLatex(updated)).labels).toEqual(['C']);
-  expect(measuredPages(parseLatex(updated.replace('{Alph}', '{alph}'))).labels).toEqual(['c']);
+  expect(measuredPages(parseLatex(updated)).labels).toEqual(['AA']);
+  const after = tr.doc.children.slice(0, -1).reduce((sum, node) => sum + node.nodeSize, 0);
+  setLatexPageNumberSection(tr, after, { format: 'alph', startAt: 28 });
+  expect(measuredPages(parseLatex(serializeLatex(tr.doc))).labels).toEqual(['ab']);
 });
 
 test('book matter preserves the front and back contents while chapters open on odd folios', () => {
