@@ -232,6 +232,17 @@ and \null\textbf{after}.
   expect(serializeLatex(document)).toBe(source);
 });
 
+test('the last page style directive determines the visible folio', () => {
+  const empty = '\\thispagestyle{empty}';
+  const plain = '\\thispagestyle{plain}';
+  const page = (body: string[]) => {
+    const source = ['\\begin{document}', ...body, '\\end{document}'].join('\n');
+    return latexPageNumbers(latexFlow(parseLatex(source)), []);
+  };
+  expect(page([empty, plain, 'A page.'])).toEqual([{ number: 1, visible: true, pageStyle: 'plain' }]);
+  expect(page(['A page.', plain, empty])).toEqual([{ number: 1, visible: false }]);
+});
+
 test('section depth follows the active preamble and begin-document hook', () => {
   const source = String.raw`\documentclass{article}
 \iffalse\setcounter{secnumdepth}{0}\fi

@@ -1,6 +1,6 @@
 import type { Node } from 'prosemirror-model';
 import { latexLength } from './latex-lengths';
-import { commandEnd } from './latex-syntax';
+import { commandEnd, groupAt, whitespaceEnd } from './latex-syntax';
 
 export const latexTextEnvironments = new Set(['titlepage', 'center', 'flushleft', 'flushright', 'minipage']);
 
@@ -23,11 +23,23 @@ export function isLatexTitlePage(node: Node | null | undefined) {
   return typeof source === 'string' && /^\s*\\begin\s*\{titlepage\}/.test(source);
 }
 
+/** A coefficient of the surrounding horizontal measure. */
+export function latexMeasureFraction(source: string) {
+  const fraction = /^(\d*(?:\.\d+)?)[ \t]*\\(?:textwidth|linewidth|columnwidth)$/.exec(source.trim());
+  if (fraction) return Number(fraction[1] || 1);
+}
+
+export function latexMinipageArgument(open: string) {
+  const environment = /^\\begin\s*\{minipage\}/.exec(open);
+  if (environment) return groupAt(open, whitespaceEnd(open, environment[0].length));
+}
+
 /** Resolve a minipage's mandatory width against the surrounding measure. */
 export function latexMinipageWidth(open: string, measure: number, em: number) {
-  const width = /^\\begin\s*\{minipage\}\s*\{([^{}]+)\}$/.exec(open)?.[1]?.trim();
-  if (!width) return;
-  const fraction = /^(\d*(?:\.\d+)?)[ \t]*\\(?:textwidth|linewidth|columnwidth)$/.exec(width);
-  const value = fraction ? Number(fraction[1] || 1) * measure : latexLength(width, em);
+  const group = latexMinipageArgument(open);
+  if (!group) return;
+  const width = open.slice(group.from, group.to);
+  const fraction = latexMeasureFraction(width);
+  const value = fraction !== undefined ? fraction * measure : latexLength(width, em);
   if (value !== undefined && value > 0) return value;
 }

@@ -1,11 +1,13 @@
 import { latexContentsLineAt } from './latex-contents-line';
 export { latexContentsLineStyle } from './latex-contents-line';
+export { readLatexHyperref } from './latex-links';
 import { latexBlockDeclaration, latexMinipageWidth, latexTextEnvironments } from './latex-text-layout';
-export { latexBlockDeclaration, latexMinipageWidth, isLatexTitlePage } from './latex-text-layout';
+export { latexBlockDeclaration, latexMinipageArgument, latexMinipageWidth, isLatexTitlePage } from './latex-text-layout';
 export { latexMathMacros, interpretLatexParagraphMacro, interpretLatexText, interpretLatexTextFragment, readLatexTextMacros, type LatexPrintedText } from './latex-macros';
 import { latexDeclarations, latexTikzFragment, latexVerticalSpace } from './latex-presentation';
-export { latexDeclarations, latexVerticalSpace, latexSectionPresentation, latexPresentationColour, latexRunningFields, latexTikzFragment, latexColumnAliasWidths } from './latex-presentation';
+export { latexDeclarations, latexVerticalSpace, latexSectionPresentation, latexPresentationColour, latexRunningFields, latexRunningStyles, latexTikzFragment, latexColumnAliasWidths } from './latex-presentation';
 export { readLatexColours } from './latex-colour';
+export { latexPageMarks } from './latex-running-marks';
 import { readLatexEnumitem } from './latex-list';
 import { readLatexBookMatter, readLatexClass, readLatexPageDirective } from './latex-flow';
 import { latexColourDefinition, readLatexColours } from './latex-colour';
@@ -42,11 +44,12 @@ export { latexEnvironmentName, latexEnvironmentOption } from './latex-environmen
 export { latexItemLabel, latexListOptions } from './latex-list';
 export { composeLatexParagraph, latexInterwordGlue, type LatexLine, type LatexTextMetrics } from './latex-lines';
 export { latexInlineFlow, latexInlineRule, latexLineBreakSkip, latexParagraphText, type LatexParagraphSegment } from './latex-paragraph';
-export { measureLatexRoman, type LatexRomanFont } from './latex-font-metrics';
+export { latexRomanGlue, measureLatexRoman, type LatexRomanFont } from './latex-font-metrics';
 export { layoutLatexDrawing, readLatexDrawing } from './latex-drawings';
 export { readLatexCodeBlock } from './latex-code';
+export { readLatexAlgorithm } from './latex-algorithm';
 export { latexLength } from './latex-lengths';
-export { latexTableGrid } from './latex-table-grid';
+export { latexColumnLength, latexTableGrid } from './latex-table-grid';
 export { latexHorizontalRule, latexNaturalColumns, latexNaturalTableWidths } from './latex-tables';
 export { hyphenateLatexEnglish } from './latex-hyphenation';
 export { latexBeamerLayout, readLatexBeamerFrame } from './latex-beamer';
@@ -310,15 +313,19 @@ function declarationScope(source: string, position: number) {
   if (bodyStart === position + 1) return;
   const scope = groupAt(source, position);
   if (!scope || bodyStart >= scope.to) return;
-  const following = source.slice(scope.end);
+  const afterGroup = source.slice(scope.end);
+  const paragraphEnd = /^[^\S\r\n]*\\par(?![A-Za-z@])/.exec(afterGroup);
+  const end = scope.end + (paragraphEnd?.[0].length ?? 0);
+  const following = source.slice(end);
   if (!/^[^\S\r\n]*(?:\r?\n|$)/.test(following)) return;
-  if (/^\s*$|^[^\S\r\n]*\r?\n[^\S\r\n]*\r?\n/.test(following) ||
+  if (paragraphEnd || /^\s*$|^[^\S\r\n]*\r?\n[^\S\r\n]*\r?\n/.test(following) ||
       /\\par\s*$/.test(source.slice(bodyStart, scope.to)))
-    return { scope, bodyStart };
+    return { scope, bodyStart, end };
 }
 
 function blockStart(source: string, position: number, context: SourceContext) {
   if (source.startsWith('$$', position) || source.startsWith('\\[', position)) return true;
+  if (source[position] === '{') return !!declarationScope(source, position);
   if (source[position] !== '\\') return false;
   const command = source.slice(position, commandEnd(source, position));
   return (
@@ -492,7 +499,7 @@ function environmentBlock(source: string, position: number, before: string, cont
   if (latexTextEnvironments.has(name) && depth < 64 &&
       (name !== 'center' || !latexTikzFragment(source.slice(position, end)))) {
     const width = name === 'minipage' && groupAt(source, whitespaceEnd(source, from));
-    const bodyStart = width ? width.end : from;
+    const bodyStart = width ? latexDeclarations(source, width.end).end : from;
     if (name !== 'minipage' || (width && bodyStart <= to && latexMinipageWidth(source.slice(position, bodyStart), 1, 1) !== undefined)) {
       const body = blocks(source.slice(bodyStart, to), { ...context, colours: new Map(context.colours) }, depth + 1);
       if (!body.nodes.length) body.nodes.push(schema.nodes.paragraph!.create({ before: '' }));
@@ -563,7 +570,7 @@ function blocks(source: string, context: SourceContext, depth = 0): { nodes: Nod
     }
     const group = depth < 64 && declarationScope(source, start);
     if (group) {
-      const { scope, bodyStart } = group;
+      const { scope, bodyStart, end } = group;
       const body = source.slice(bodyStart, scope.to);
       const paragraph = /\\par\s*$/.exec(body);
       const content = blocks(paragraph ? body.slice(0, paragraph.index) : body, {
@@ -571,9 +578,10 @@ function blocks(source: string, context: SourceContext, depth = 0): { nodes: Nod
       }, depth + 1);
       if (content.nodes.length) {
         nodes.push(schema.nodes.latex_container!.create({
-          before, open: source.slice(start, bodyStart), close: content.tail + (paragraph?.[0] ?? '') + '}',
+          before, open: source.slice(start, bodyStart),
+          close: content.tail + (paragraph?.[0] ?? '') + source.slice(scope.to, end),
         }, content.nodes));
-        position = scope.end;
+        position = end;
         continue;
       }
     }
@@ -843,6 +851,10 @@ export function materializeLatexStructures(document: Node): Transform {
       (context.letter && environment === 'letter') || (context.boxes && environment === 'tcolorbox') ||
       (context.proof && environment === 'proof') || context.theorems.has(environment) || latexTextEnvironments.has(environment)
     )));
+    const minipage = node.type.name === 'latex_container' &&
+      latexEnvironmentName(node.attrs.open) === 'minipage' &&
+      node.firstChild?.firstChild?.type.name === 'latex_inline' &&
+      latexDeclarations(String(node.firstChild.firstChild.attrs.source)).end > 0;
     const matter = node.type.name === 'paragraph' && node.children.some(child =>
       child.type.name === 'latex_inline' && readLatexBookMatter(child.attrs.source));
     const paragraphMacro = node.type.name === 'paragraph' && node.children.some(child =>
@@ -863,7 +875,7 @@ export function materializeLatexStructures(document: Node): Transform {
         !!latexVerticalSpace(child.attrs.source) || !!readLatexPageDirective(child.attrs.source) ||
         String(child.attrs.source).startsWith('%') || !!declarationScope(child.attrs.source, 0)
       ));
-    if (!raw && !matter && !letter && !styled && !paragraphMacro && !presentation) return;
+    if (!raw && !minipage && !matter && !letter && !styled && !paragraphMacro && !presentation) return;
     const source = blockSource(node);
     const parsed = blocks(source, context);
     if (!parsed.nodes.length || (raw && parsed.nodes.every(block => block.type.name === 'latex_raw'))) return;
@@ -877,6 +889,7 @@ export function materializeLatexStructures(document: Node): Transform {
     }, first.content);
     const start = transform.mapping.map(position);
     transform.replaceWith(start, start + node.nodeSize, parsed.nodes);
+    return false;
   });
   return transform;
 }

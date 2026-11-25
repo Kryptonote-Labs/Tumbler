@@ -37,10 +37,13 @@ const englishExceptions = new Map(
 
 /** Plain TeX's default US English patterns with two left and three right characters kept. */
 export function hyphenateLatexEnglish(word: string) {
-  if (!/^[A-Za-z]{5,}$/.test(word) || /^[A-Z]/.test(word)) return [];
-  const lower = word.toLowerCase();
+  // Punctuation retains its width on the line but is outside the hyphenation word.
+  const match = /^([("'‘“]*)([a-z][A-Za-z]{4,})[)"'’”.,;:!?]*$/.exec(word);
+  if (!match) return [];
+  const prefixLength = match[1]!.length;
+  const lower = match[2]!.toLowerCase();
   const exception = englishExceptions.get(lower);
-  if (exception) return exception;
+  if (exception) return exception.map((offset) => offset + prefixLength);
   if (!english) {
     english = { children: new Map() };
     for (const token of patterns.trim().split(/\s+/)) addPattern(english, token);
@@ -58,6 +61,7 @@ export function hyphenateLatexEnglish(word: string) {
     }
   }
   const breaks: number[] = [];
-  for (let at = 2; at <= word.length - 3; at++) if (scores[at + 1]! % 2) breaks.push(at);
+  for (let at = 2; at <= lower.length - 3; at++)
+    if (scores[at + 1]! % 2) breaks.push(at + prefixLength);
   return breaks;
 }

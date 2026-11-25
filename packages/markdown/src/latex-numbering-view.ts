@@ -5,6 +5,7 @@ import { Decoration, DecorationSet } from 'prosemirror-view';
 import { readLatexClass } from './latex-flow';
 import { readLatexLetterParts, type LatexLetterPart } from './latex-letter';
 import { latexNumbering } from './latex-numbering';
+import { latexPrintedReference, readLatexReferenceNames } from './latex-cleveref';
 
 /**
  * Decoration specs that tell LaTeX node views what to print. Equations carry one number per row
@@ -14,12 +15,12 @@ import { latexNumbering } from './latex-numbering';
 export type LatexNumberSpec =
   | { latexEquation: (string | null)[] }
   | { latexFloat: string }
+  | { latexAlgorithm: string }
   | { latexReference: string | undefined }
   | { latexFootnote: string }
   | { latexListing: string };
 
 const key = new PluginKey<DecorationSet>('latex-numbering');
-const reference = /^\\(eq)?ref\s*\{([^{}]+)\}$/;
 const label = /^\\label\s*\{[^{}]+\}$/;
 
 function isLabelParagraph(node: Node) {
@@ -79,10 +80,12 @@ function decorate(document: Node) {
     for (const [position, rows] of numbers.equations) around(position, { latexEquation: rows });
     for (const [position, { kind, number }] of numbers.floats)
       around(position, { latexFloat: (kind === 'figure' ? 'Figure ' : 'Table ') + number });
+    for (const [position, number] of numbers.algorithms) around(position, { latexAlgorithm: number });
     for (const [position, number] of numbers.listings) around(position, { latexListing: number });
     for (const [position, number] of numbers.footnotes) around(position, { latexFootnote: number });
   }
   const latexPreviewPrefix = latexEffectivePrefix(document);
+  const referenceNames = readLatexReferenceNames(latexPreviewPrefix);
   document.descendants((node, position) => {
     if (
       node.type.name === 'latex_math' ||
@@ -96,11 +99,8 @@ function decorate(document: Node) {
         Decoration.node(position, position + node.nodeSize, { 'data-latex-label-only': '' }),
       );
     if (node.type.name !== 'latex_inline') return true;
-    const match = reference.exec(String(node.attrs.source).trim());
-    if (match) {
-      const number = numbers?.labels.get(match[2]!.trim());
-      around(position, { latexReference: number && (match[1] ? '(' + number + ')' : number) });
-    }
+    const reference = latexPrintedReference(String(node.attrs.source), numbers, referenceNames);
+    if (reference) around(position, { latexReference: reference.text });
     return false;
   });
   return DecorationSet.create(document, decorations);
@@ -125,6 +125,7 @@ export function latexNumberSpec(decorations: readonly Decoration[]) {
     if (
       'latexEquation' in spec ||
       'latexFloat' in spec ||
+      'latexAlgorithm' in spec ||
       'latexReference' in spec ||
       'latexFootnote' in spec || 'latexListing' in spec
     )

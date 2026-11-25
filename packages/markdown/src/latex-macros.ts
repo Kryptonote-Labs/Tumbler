@@ -119,6 +119,7 @@ export function latexFormattingAlias(command: string, macros: Macros) {
 
 export type LatexPrintedText = string |
   { style: LatexTextStyle; content: LatexPrintedText[] } |
+  { link: true; content: LatexPrintedText[] } |
   { colour: string; content: LatexPrintedText[] };
 
 const symbols = new Map([
@@ -135,6 +136,7 @@ const symbols = new Map([
   [" ", "\u00a0"],
   ["quad", "\u2003"],
   ["qquad", "\u2003\u2003"],
+  ["newblock", " "],
 ]);
 
 /** Expand a source-backed inline command into text and native formatting. */
@@ -145,7 +147,7 @@ export function interpretLatexText(
 ): LatexPrintedText[] | undefined {
   if (!source.startsWith("\\")) return;
   const command = source.slice(1, commandEnd(source, 0));
-  if (!macros.has(command) && !styles.has(command) && !symbols.has(command) && command !== 'textcolor') return;
+  if (!macros.has(command) && !styles.has(command) && !symbols.has(command) && !['textcolor', 'href'].includes(command)) return;
   return interpretLatexTextFragment(source, macros, colours);
 }
 
@@ -235,7 +237,7 @@ export function interpretLatexTextFragment(
       } else if (link) {
         const content = read(args[1]!, depth + 1);
         if (!content) return;
-        result.push(...content);
+        result.push({ link: true, content });
       } else if (textColour) {
         const colour = resolveLatexColour(args[0]!, colours);
         const content = read(args[1]!, depth + 1);

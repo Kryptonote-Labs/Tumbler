@@ -17,6 +17,8 @@ export type LatexNumbering = {
   floats: Map<number, { kind: 'figure' | 'table'; number: string }>;
   /** Label keys and the text `\ref` prints for them. */
   labels: Map<string, string>;
+  labelTypes: Map<string, string>;
+  algorithms: Map<number, string>;
   listings: Map<number, string>;
   containers: Map<number, { title: string; kind: 'theorem' | 'proof' | 'box'; style?: LatexTheoremStyle }>;
   /** Inline `\footnote` positions and the mark LaTeX prints, while the count is known. */
@@ -127,15 +129,18 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
   const floatCount = { figure: 0, table: 0 };
   let appendix = false;
   let mainMatter = true;
-  let current = '';
+  let current: { number: string; type: string } | undefined;
+  let algorithm = 0;
   const theoremCounts = new Map<string, number>();
-  const labelScopes: { end: number; previous: string }[] = [];
+  const labelScopes: { end: number; previous: typeof current }[] = [];
   let opaque = false;
   const result: LatexNumbering = {
     headings: new Map(),
     equations: new Map(),
     floats: new Map(),
     labels: new Map(),
+    labelTypes: new Map(),
+    algorithms: new Map(),
     containers: new Map(),
     listings: new Map(),
     footnotes: new Map(),
@@ -153,8 +158,12 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
     return value(parent) + '.' + count;
   };
   const within = (count: number) => (chapters ? value('chapter') + '.' + count : String(count));
-  const labelsIn = (source: string, text: string) => {
-    for (const match of source.matchAll(labelCommand)) result.labels.set(match[1]!.trim(), text);
+  const labelsIn = (source: string, text: string, kind: string) => {
+    for (const match of source.matchAll(labelCommand)) {
+      const key = match[1]!.trim();
+      result.labels.set(key, text);
+      result.labelTypes.set(key, kind);
+    }
   };
 
   document.descendants((node, position) => {
@@ -179,7 +188,7 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
           theoremCounts.set(key, next);
           number = scope ? scope + '.' + next : String(next);
           labelScopes.push({ end: position + node.nodeSize, previous: current });
-          current = number;
+          current = { number, type: name };
         }
         result.containers.set(position, {
           title: theorem.title + (number ? ' ' + number : '') + (option ? ' (' + option + ')' : '') + '.',
@@ -209,8 +218,8 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
         footnote = 0;
         floatCount.figure = floatCount.table = 0;
       }
-      current = value(name);
-      result.headings.set(position, { number: current, command: name, ...(appendix && name === 'chapter' ? { appendix: true } : {}) });
+      current = { number: value(name), type: appendix && name === (chapters ? 'chapter' : 'section') ? 'appendix' : name };
+      result.headings.set(position, { number: current.number, command: name, ...(appendix && name === 'chapter' ? { appendix: true } : {}) });
       return true;
     }
     if (type === 'latex_display_math') {
@@ -229,7 +238,7 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
         result.equations.set(position, numbers);
       rows.forEach((row, index) => {
         const number = numbers[index];
-        if (number != null) labelsIn(row, number);
+        if (number != null) labelsIn(row, number, 'equation');
       });
       return false;
     }
@@ -260,7 +269,19 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
         if (code?.caption) {
           const number = within(++listing);
           result.listings.set(position, number);
-          if (code.label) result.labels.set(code.label, number);
+          if (code.label) {
+            result.labels.set(code.label, number);
+            result.labelTypes.set(code.label, 'listing');
+          }
+        }
+        return false;
+      }
+      if (type === 'latex_raw' && /^\\begin\s*\{algorithm\*?\}/.test(source.trim())) {
+        const caption = /\\caption\b/.exec(source);
+        if (caption) {
+          const number = String(++algorithm);
+          result.algorithms.set(position, number);
+          labelsIn(source.slice(caption.index), number, 'algorithm');
         }
         return false;
       }
@@ -280,7 +301,7 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
             });
           }
           const next = captions[index + 1]?.index ?? body.length;
-          labelsIn(body.slice(match.index, next), number);
+          labelsIn(body.slice(match.index, next), number, kind);
         }
         return false;
       }
@@ -289,7 +310,7 @@ export function latexNumbering(document: Node): LatexNumbering | undefined {
         return false;
       }
       // A label in plain text refers to the most recent numbered heading.
-      if (type === 'latex_inline' && current) labelsIn(source, current);
+      if (type === 'latex_inline' && current) labelsIn(source, current.number, current.type);
       return false;
     }
     return true;

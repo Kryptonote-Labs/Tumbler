@@ -80,8 +80,9 @@ export function latexVerticalSpace(source: string, start = 0) {
   if (source.slice(start, end) !== '\\vspace') return;
   const group = groupAt(source, whitespaceEnd(source, end + Number(source[end] === '*')));
   if (!group) return;
-  const height = latexLength(source.slice(group.from, group.to));
-  if (height !== undefined) return { height, end: group.end };
+  const length = source.slice(group.from, group.to).trim();
+  const height = latexLength(length, 1);
+  if (height !== undefined) return { height, unit: length.endsWith('em') ? 'em' : 'px', end: group.end };
 }
 
 /** Read simple titlesec formatting and leave complex styles to the TeX compiler. */
@@ -111,46 +112,84 @@ export function latexPresentationColour(name: string | undefined, colours: Reado
   return name ? resolveLatexColour(name, colours) : undefined;
 }
 
-/** Running fields for the common fancy page style with literal left, centre and right slots. */
-export function latexRunningFields(prefix: string) {
-  const fields: { area: 'head' | 'foot'; slot: 'L' | 'C' | 'R'; source: string }[] = [];
-  let fancy = false;
-  let cleared = false;
-  let headRule = latexLength('0.4pt') ?? 0;
-  for (const { name, end } of latexCommands(prefix)) {
-    const at = whitespaceEnd(prefix, end);
-    if (name === 'pagestyle' || name === 'fancyhf' || name === 'renewcommand') {
-      const group = groupAt(prefix, at);
+type RunningSlot = 'L' | 'C' | 'R';
+type RunningField = { area: 'head' | 'foot'; slot: RunningSlot; source: string };
+
+function fancyRunningStyle(source: string) {
+  const fields: RunningField[] = [];
+  let clearDefault = false;
+  let headRule = 0.4 * texPoint;
+  let footRule = 0;
+  for (const { name, end } of latexCommands(source)) {
+    const at = whitespaceEnd(source, end);
+    if (name === 'fancyhf' || name === 'renewcommand') {
+      const star = Number(source[at] === '*');
+      const group = groupAt(source, whitespaceEnd(source, at + star));
       if (!group) continue;
-      const value = prefix.slice(group.from, group.to).trim();
-      if (name === 'pagestyle') fancy = value === 'fancy';
-      else if (name === 'fancyhf' && !value) {
+      const value = source.slice(group.from, group.to).trim();
+      if (name === 'fancyhf' && !value) {
         fields.length = 0;
-        cleared = true;
-      } else if (name === 'renewcommand' && value === '\\headrulewidth') {
-        const length = groupAt(prefix, whitespaceEnd(prefix, group.end));
-        if (length) headRule = latexLength(prefix.slice(length.from, length.to)) ?? headRule;
+        clearDefault = true;
+      } else if (name === 'renewcommand') {
+        const length = groupAt(source, whitespaceEnd(source, group.end));
+        const pixels = length && latexLength(source.slice(length.from, length.to));
+        if (pixels === undefined) continue;
+        if (value === '\\headrulewidth') headRule = pixels;
+        if (value === '\\footrulewidth') footRule = pixels;
       }
       continue;
     }
     if (name !== 'fancyhead' && name !== 'fancyfoot') continue;
-    const option = groupAt(prefix, at, '[', ']');
+    const option = groupAt(source, at, '[', ']');
     if (!option) continue;
-    const slot = prefix.slice(option.from, option.to).trim();
-    if (slot !== 'L' && slot !== 'C' && slot !== 'R') continue;
-    const group = groupAt(prefix, whitespaceEnd(prefix, option.end));
+    const group = groupAt(source, whitespaceEnd(source, option.end));
     if (!group) continue;
     const area = name === 'fancyhead' ? 'head' : 'foot';
-    const index = fields.findIndex((field) => field.area === area && field.slot === slot);
-    if (index >= 0) fields.splice(index, 1);
-    fields.push({ area, slot, source: prefix.slice(group.from, group.to) });
+    for (const slot of source.slice(option.from, option.to).split(',').map((part) => part.trim())) {
+      if (slot !== 'L' && slot !== 'C' && slot !== 'R') continue;
+      const index = fields.findIndex((field) => field.area === area && field.slot === slot);
+      if (index >= 0) fields.splice(index, 1);
+      fields.push({ area, slot, source: source.slice(group.from, group.to) });
+    }
   }
-  if (!fancy) return;
   return {
     fields,
     headRule,
-    clearDefault: cleared || fields.some(({ area, slot }) => area === 'foot' && slot === 'C'),
+    footRule,
+    clearDefault: clearDefault || fields.some(({ area, slot }) => area === 'foot' && slot === 'C'),
   };
+}
+
+/** Read fancyhdr's main style and named styles without executing their TeX. */
+export function latexRunningStyles(prefix: string) {
+  let defaultStyle: string | undefined;
+  const styles = new Map<string, ReturnType<typeof fancyRunningStyle>>();
+  for (const { name, end } of latexCommands(prefix)) {
+    if (name !== 'pagestyle' && name !== 'fancypagestyle') continue;
+    const group = groupAt(prefix, whitespaceEnd(prefix, end));
+    if (!group) continue;
+    const style = prefix.slice(group.from, group.to).trim();
+    if (name === 'pagestyle') {
+      defaultStyle = style;
+    } else {
+      const position = whitespaceEnd(prefix, group.end);
+      const base = groupAt(prefix, position, '[', ']');
+      const body = groupAt(prefix, whitespaceEnd(prefix, base?.end ?? position));
+      if (body) styles.set(style, fancyRunningStyle(prefix.slice(body.from, body.to)));
+    }
+  }
+  if (!styles.has('fancy')) styles.set('fancy', fancyRunningStyle(prefix));
+  return { defaultStyle, styles };
+}
+
+/** Running fields for documents whose main page style is fancy. */
+export function latexRunningFields(prefix: string) {
+  const { defaultStyle, styles } = latexRunningStyles(prefix);
+  const style = defaultStyle === 'fancy' ? styles.get('fancy') : undefined;
+  if (style) {
+    const { fields, headRule, clearDefault } = style;
+    return { fields, headRule, clearDefault };
+  }
 }
 
 /** A complete inline TikZ picture can be compiled to a tight box with its own preamble. */

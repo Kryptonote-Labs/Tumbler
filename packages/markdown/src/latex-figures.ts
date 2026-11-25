@@ -87,7 +87,23 @@ export function setLatexCaption(source: string, value: string, tex: boolean, aft
   return splice(source, at, at, '\n\\caption{' + body + '}');
 }
 
-/** The picture in a figure: its file and its width as a share of the text width. */
+function figureTikzPicture(source: string, body: number) {
+  let covered = 0;
+  let tikz: { source: string; end: number } | undefined;
+  for (const { name, start } of latexCommands(source.slice(body))) {
+    const position = body + start;
+    if (position < covered || name !== 'begin') continue;
+    const environment = environmentAt(source, position);
+    if (!environment) continue;
+    covered = environment.end;
+    if (environment.name !== 'tikzpicture') continue;
+    if (tikz) return;
+    tikz = { source: source.slice(position, covered), end: covered };
+  }
+  return tikz;
+}
+
+/** The picture in a figure: its file or TikZ source and its width as a share of the text width. */
 export function readLatexFigure(source: string) {
   const environment = /^\s*\\begin\s*\{(figure\*?)\}/.exec(source);
   if (!environment) return;
@@ -104,6 +120,7 @@ export function readLatexFigure(source: string) {
     panels: readLatexSubfigures(source),
     path: graphic?.body.text.trim(),
     page: page ? Number(page[1]) : 1,
+    tikz: graphic ? undefined : figureTikzPicture(source, environment[0].length),
     /** Undefined when the width is not a share of the line, such as `5cm`. */
     width: width ? Number(width[1] || 1) : graphic?.option ? undefined : 1,
     caption: readLatexCaption(source),
