@@ -11,7 +11,14 @@ import {
   toggleLatexStyle,
   undo,
 } from '../src/editor';
-import { latexSourceMap, parseLatex, serializeLatex } from '../src/latex';
+import {
+  latexFontSizePointSizes,
+  latexFontSizes,
+  latexSourceMap,
+  parseLatex,
+  serializeLatex,
+} from '../src/latex';
+import { texPoint } from '../src/latex-typography';
 
 const wrap = (body: string, preamble = '') =>
   '\\documentclass{article}\n' + preamble + '\\begin{document}\n' + body + '\n\\end{document}\n';
@@ -170,4 +177,12 @@ test('source carets follow escaped text inside aligned highlights', () => {
   expect(position).toBe(9);
   expect(map.sourceAt(position!)?.offset).toBe(offset);
   expect(serializeLatex(doc)).toBe(source);
+});
+
+test('size commands report the point sizes of the document body size', () => {
+  const sizes = (points: number) => latexFontSizePointSizes(points * texPoint);
+  expect(sizes(10).get('normalsize')).toBe(10);
+  expect(sizes(11).get('small')).toBe(10);
+  expect(sizes(12).get('Large')).toBe(17.28);
+  expect([...sizes(12).keys()]).toEqual([...latexFontSizes]);
 });

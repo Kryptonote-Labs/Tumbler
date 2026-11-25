@@ -53,11 +53,16 @@ export type LatexStyle =
   | { style: 'size'; size: LatexFontSize }
   | { style: 'link'; href: string };
 
-export function latexFontSizeProperties(normalSize: number) {
+/** The point size of each size command for a body size in pixels, per the standard classes. */
+export function latexFontSizePointSizes(normalSize: number) {
   const points = normalSize / texPoint;
   const index = points >= 11.5 ? 2 : points >= 10.5 ? 1 : 0;
-  return Object.fromEntries(Array.from(latexFontSizePoints, ([size, sizes]) =>
-    ['--latex-size-' + size, sizes[index] * texPoint + 'px'],
+  return new Map(Array.from(latexFontSizePoints, ([size, sizes]) => [size, sizes[index]]));
+}
+
+export function latexFontSizeProperties(normalSize: number) {
+  return Object.fromEntries(Array.from(latexFontSizePointSizes(normalSize), ([size, points]) =>
+    ['--latex-size-' + size, points * texPoint + 'px'],
   ));
 }
 
