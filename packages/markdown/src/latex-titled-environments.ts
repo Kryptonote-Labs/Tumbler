@@ -5,6 +5,7 @@ import { environmentAt, groupAt, latexCommands, whitespaceEnd } from './latex-sy
 type Boundary = 'page' | 'recto';
 type TitledEnvironment = {
   heading: string;
+  bodySetup: string;
   before?: Boundary | undefined;
   after?: Boundary | undefined;
 };
@@ -36,7 +37,12 @@ export function readLatexTitledEnvironments(
     const scope = groupAt(heading, 0);
     if (scope?.end === heading.length) heading = heading.slice(scope.from, scope.to).trim();
     if (heading && !heading.includes('#'))
-      environments.set(name, { heading, before: boundary(ahead), after: boundary(close) });
+      environments.set(name, {
+        heading,
+        bodySetup: afterHeading,
+        before: boundary(ahead),
+        after: boundary(close),
+      });
   }
   for (const [name, macro] of macros) {
     const close = macros.get('end' + name);

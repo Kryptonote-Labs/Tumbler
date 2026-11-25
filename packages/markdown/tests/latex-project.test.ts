@@ -223,3 +223,19 @@ test('a counter definition only affects numbering when its macro executes', () =
     .toEqual([{ command: 'chapter', number: '1' }]);
   expect(latexNumbering(document('\\jump\\chapter{First}'))).toBeUndefined();
 });
+
+test('a list item retains its authored vertical adjustment after the final text line', () => {
+  const source = String.raw`\documentclass{report}
+\begin{document}
+\begin{itemize}
+\item First line
+\vspace*{3mm}
+\item Next
+\end{itemize}
+\end{document}`;
+  const document = parseLatexProject('main.tex', new Map([['main.tex', source]]));
+  const first = document.firstChild?.firstChild;
+  expect(first?.firstChild?.textContent).toBe('First line');
+  expect(first?.lastChild?.attrs.source).toBe('\\vspace*{3mm}');
+  expect(serializeLatexProject(document)?.files.get('main.tex')).toBe(source);
+});

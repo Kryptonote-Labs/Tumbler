@@ -348,6 +348,10 @@ function blockStart(source: string, position: number, context: SourceContext) {
   if (source[position] === '{') return !!(latexAlignedParagraph(source, position) ?? declarationScope(source, position));
   if (source[position] !== '\\') return false;
   const command = source.slice(position, commandEnd(source, position));
+  const space = latexVerticalSpace(source, position);
+  // At a paragraph's end the adjustment ships after its final line. Preserve it as a separate
+  // vertical block without changing the authored whitespace or breaking mid-paragraph prose.
+  if (space && /^(?:\s*$|[^\S\r\n]*\r?\n[^\S\r\n]*\r?\n)/.test(source.slice(space.end))) return true;
   return (
     command === '\\begin' ||
     !!readLatexTitleSetter(source, position) ||
