@@ -328,6 +328,8 @@ export type PageLine = {
   top: number;
   bottom: number;
   notes?: number[];
+  /** An internal fragment can carry a source-authored boundary. */
+  before?: LatexBreak;
   /** Content repeated at the start of a continuation, and at its preceding boundary. */
   continuation?: { fragment: number; startHeight: number };
   /** Space needed after placing this line if another fragment follows on a new page. */
@@ -342,6 +344,8 @@ export type PageBlock = PageLine & {
   split?: () => PageLine[];
   /** A display alignment can break at a row before compressing the whole display onto a page. */
   preferFragments?: boolean;
+  /** Measure internal fragments even when the entire block fits. */
+  forceFragments?: boolean;
   /** Prefer to break before a section and its opening lines over shrinking the previous page. */
   keepHeadingWithNext?: boolean;
   flow?: LatexBlockFlow;
@@ -501,12 +505,14 @@ export function paginateLatex(
     const before = strongerBreak(pending, flow?.before);
     if (occupied && before) advance(block, before);
     pending = flow?.after;
-    if (fits(block, !block.preferFragments && !block.keepHeadingWithNext) || (!occupied && !block.split)) {
+    const internal = block.forceFragments ? block.split?.() : undefined;
+    const forced = internal?.some(line => line.before);
+    if (!forced && (fits(block, !block.preferFragments && !block.keepHeadingWithNext) || (!occupied && !block.split))) {
       occupied = true;
       place(block);
       continue;
     }
-    const lines = block.split?.() ?? [];
+    const lines = internal ?? block.split?.() ?? [];
     if (lines.length < 2) {
       if (occupied) advance(block);
       occupied = true;
@@ -516,7 +522,8 @@ export function paginateLatex(
     for (const [index, line] of lines.entries()) {
       const next = lines[index + 1];
       const orphans = !block.preferFragments && index === 0 && next && !fits({ ...next, notes: [...(line.notes ?? []), ...(next.notes ?? [])] });
-      if (occupied && (!fits(line, !block.preferFragments || index === 0) || orphans)) advance(line);
+      if (occupied && (line.before || !fits(line, !block.preferFragments || index === 0) || orphans))
+        advance(line, line.before);
       occupied = true;
       place(line);
     }

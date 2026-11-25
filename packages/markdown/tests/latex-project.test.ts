@@ -179,3 +179,35 @@ Body
   expect(flow.get(front + document.child(2).nodeSize)).toMatchObject({ numbering: 'roman' });
   expect(materializeLatexStructures(document).docChanged).toBe(false);
 });
+
+test('a local titled environment keeps prose editable and preserves its opening page break', () => {
+  const source = String.raw`\documentclass[twoside]{report}
+\newenvironment{credits}{\cleardoublepage\begin{center}{\large\bf Credits}\end{center}}{\par}
+\begin{document}
+Earlier text.
+
+\begin{credits}
+Thanks to the team.
+\end{credits}
+\end{document}`;
+  const document = parseLatexProject('main.tex', new Map([['main.tex', source]]));
+  const environment = document.child(1);
+  expect(environment.type.name).toBe('blockquote');
+  expect(environment.textContent).toBe('Thanks to the team.');
+  expect(latexFlow(document).get(document.child(0).nodeSize + 1)).toMatchObject({ before: 'recto' });
+  expect(serializeLatexProject(document)?.files.get('main.tex')).toBe(source);
+});
+
+test('list fragments honor authored recto breaks even if both lists could fit on one page', () => {
+  const result = paginateLatex([{
+    position: 0, top: 0, bottom: 55, forceFragments: true, preferFragments: true,
+    split: () => [
+      { position: 0, top: 0, bottom: 30 },
+      { position: 0, top: 30, bottom: 55, before: 'recto',
+        continuation: { fragment: 1, startHeight: 0 } },
+    ],
+  }], 100, 20);
+  expect(result.pages).toBe(3);
+  expect(result.breakSlots).toEqual([2]);
+  expect(result.breaks[0]?.fragment).toBe(1);
+});

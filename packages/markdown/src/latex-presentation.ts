@@ -41,8 +41,8 @@ export function latexDeclarations(source: string, start = 0, normalSize = 10 * t
       leading = baseline === undefined ? undefined : baseline * texPoint;
     } else if (command === 'sffamily' || command === 'rmfamily' || command === 'ttfamily') {
       family = command === 'sffamily' ? 'sans' : command === 'ttfamily' ? 'mono' : 'roman';
-    } else if (command === 'bfseries' || command === 'mdseries') {
-      bold = command === 'bfseries';
+    } else if (command === 'bfseries' || command === 'bf' || command === 'mdseries') {
+      bold = command !== 'mdseries';
     } else if (command === 'itshape' || command === 'slshape' || command === 'upshape') {
       italic = command !== 'upshape';
     } else if (command === 'color' || command === 'fontsize' || command === 'rowcolors') {

@@ -12,8 +12,10 @@ export { latexDeclarations, latexVerticalSpace, latexSectionPresentation, latexP
 export { readLatexColours } from './latex-colour';
 export { latexPageMarks } from './latex-running-marks';
 import { plainLatexItemLabel, readLatexEnumitem } from './latex-list';
-import { readLatexContentsEntry, readLatexStateMacro } from './latex-state-command';
-export { latexCustomTitlePage, readLatexContentsEntry, readLatexStateMacro } from './latex-state-command';
+import { readLatexContentsEntry, readLatexListSequence, readLatexStateMacro } from './latex-state-command';
+export { latexCustomTitlePage, readLatexContentsEntry, readLatexListSequence, readLatexStateMacro } from './latex-state-command';
+import { readLatexTitledEnvironments } from './latex-titled-environments';
+export { readLatexTitledEnvironments } from './latex-titled-environments';
 import { readLatexTitleSetter } from './latex-metadata';
 import { readLatexBookMatter, readLatexClass, readLatexPageDirective } from './latex-flow';
 import { latexColourDefinition, readLatexColours } from './latex-colour';
@@ -350,6 +352,7 @@ function blockStart(source: string, position: number, context: SourceContext) {
     !!readLatexTitleSetter(source, position) ||
     !!readLatexContentsEntry(source, position) ||
     !!readLatexStateMacro(source, context.macros, position) ||
+    !!readLatexListSequence(source, context.macros, position) ||
     (!!context.include && !!readLatexInclude(source, position)) ||
     !!readLatexParagraphMacro(source, context.macros, position) ||
     !!latexContentsLineAt(source, context.macros, position) ||
@@ -392,13 +395,15 @@ type SourceContext = {
   letter: boolean;
   colours: ReturnType<typeof readLatexColours>;
   theorems: ReturnType<typeof readLatexTheorems>;
+  titled: ReturnType<typeof readLatexTitledEnvironments>;
   proof: boolean;
   boxes: boolean;
   include?: (name: string, depth: number) => { path: string; nodes: Node[]; tail: string } | undefined;
 };
 
 function sourceContext(prefix: string): SourceContext {
-  return { macros: readLatexTextMacros(prefix), enumitem: usesLatexPackage(prefix, 'enumitem'), letter: readLatexClass(prefix).name === 'letter', colours: readLatexColours(prefix), theorems: readLatexTheorems(prefix),
+  const macros = readLatexTextMacros(prefix);
+  return { macros, titled: readLatexTitledEnvironments(prefix, macros), enumitem: usesLatexPackage(prefix, 'enumitem'), letter: readLatexClass(prefix).name === 'letter', colours: readLatexColours(prefix), theorems: readLatexTheorems(prefix),
     proof: usesLatexPackage(prefix, 'amsthm'), boxes: usesLatexPackage(prefix, 'tcolorbox') };
 }
 
@@ -535,7 +540,7 @@ function environmentBlock(source: string, position: number, before: string, cont
   }
   // Text environments edit as native blocks. The open and close source keep the environment, and
   // an empty one, such as a new abstract, gets an empty paragraph to type into.
-  if (textEnvironments.has(name) && depth < 64) {
+  if ((textEnvironments.has(name) || context.titled.has(name)) && depth < 64) {
     const quote = blocks(content, { ...context, colours: new Map(context.colours) }, depth + 1);
     if (!quote.nodes.length) quote.nodes.push(schema.nodes.paragraph!.create({ before: '' }));
     return {
@@ -577,7 +582,7 @@ function blocks(source: string, context: SourceContext, depth = 0): { nodes: Nod
     }
     const directive = readLatexPageDirective(source, start);
     const titleSetter = readLatexTitleSetter(source, start);
-    const state = readLatexContentsEntry(source, start) ?? readLatexStateMacro(source, context.macros, start);
+    const state = readLatexContentsEntry(source, start) ?? readLatexStateMacro(source, context.macros, start) ?? readLatexListSequence(source, context.macros, start);
     if (directive || titleSetter || state || source[start] === '%') {
       const end = directive?.end ?? titleSetter?.argument.end ?? state?.end ?? lineEnd(source, start);
       nodes.push(schema.nodes.latex_raw!.create({ before, source: source.slice(start, end) }));
@@ -1075,7 +1080,7 @@ export function materializeLatexStructures(document: Node): Transform {
       !!latexContentsLineAt(node.attrs.source, context.macros) || (!!environment && (
       ['landscape', 'itemize', 'enumerate', 'description'].includes(environment) ||
       (context.letter && environment === 'letter') || (context.boxes && environment === 'tcolorbox') ||
-      (context.proof && environment === 'proof') || context.theorems.has(environment) || latexTextEnvironments.has(environment)
+      (context.proof && environment === 'proof') || context.theorems.has(environment) || latexTextEnvironments.has(environment) || context.titled.has(environment)
     )));
     const minipage = node.type.name === 'latex_container' &&
       latexEnvironmentName(node.attrs.open) === 'minipage' &&
@@ -1101,6 +1106,7 @@ export function materializeLatexStructures(document: Node): Transform {
         !!latexVerticalSpace(child.attrs.source) || !!readLatexPageDirective(child.attrs.source) ||
         !!readLatexTitleSetter(child.attrs.source) || !!readLatexContentsEntry(child.attrs.source) ||
         !!readLatexStateMacro(child.attrs.source, context.macros) ||
+        !!readLatexListSequence(child.attrs.source, context.macros) ||
         String(child.attrs.source).startsWith('%') || !!declarationScope(child.attrs.source, 0)
       ));
     if (!raw && !minipage && !matter && !letter && !styled && !paragraphMacro && !presentation) return;
