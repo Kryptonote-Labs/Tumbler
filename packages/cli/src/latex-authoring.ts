@@ -32,6 +32,7 @@ export const latexOperation = z.discriminatedUnion('kind', [
     kind: z.literal('thesis'),
     title: z.string().optional(),
     author: z.string().optional(),
+    date: z.string().optional(),
   }),
   z.strictObject({
     kind: z.literal('insert-page'),

@@ -1,4 +1,4 @@
-export { composeLatexPage, latexThesis, thesisAuthor, thesisDate, thesisTitle } from './latex-thesis';
+export { composeLatexPage, latexThesis, thesisTitle } from './latex-thesis';
 import { latexHeadingLevel, latexHeadings } from './latex-headings';
 export { createLatexHeading, latexHeadings, setLatexHeadingLevel, type LatexHeadingCommand } from './latex-headings';
 import { latexSpacingRegion } from './latex-spacing';
