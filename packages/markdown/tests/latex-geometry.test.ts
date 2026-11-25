@@ -37,3 +37,20 @@ test('effective paper follows the output driver and explicit geometry', () => {
   expect(latexPaperSettings(String.raw`\usepackage[letterpaper,landscape]{geometry}`, options).paperSize).toBe('letterpaper');
   expect(latexPaperSettings(String.raw`\usepackage{graphicx}`, options).paperSize).toBe('letterpaper');
 });
+
+test('geometry keeps overrides that depend on authored lengths at their original position', () => {
+  const source = String.raw`\documentclass{article}
+\usepackage[a4paper]{geometry}
+\newlength{\mytop}
+\setlength{\mytop}{1in}
+\geometry{top=\mytop}
+\geometry{paper=legalpaper,bottom=2in}
+\begin{document}`;
+  expect(setLatexGeometry(source, { paperSize: 'a5paper' })).toBe(String.raw`\documentclass{article}
+\usepackage[a4paper]{geometry}
+\newlength{\mytop}
+\setlength{\mytop}{1in}
+\geometry{top=\mytop}
+\geometry{a5paper,bottom=2in}
+\begin{document}`);
+});
