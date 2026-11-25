@@ -291,3 +291,27 @@ tumbler paper.tex latex write --revision '<read revision>' --input edited.tex
 Read returns the source and revision, with a continuation offset for longer files. Replacement
 requires an exact, unique source match. Source writes accept a file or stdin with `--input -`.
 Edits require the read revision and preserve the rest of a file during replacement.
+
+`latex inspect` returns the revision and top-level blocks in document order. Use `--offset`
+with `nextOffset` to continue. Each block has an `at` position for editing that revision.
+Inspect also reports the numbering at each block and the page start setting of front matter.
+
+```sh
+tumbler paper.tex latex inspect
+tumbler paper.tex latex apply --revision '<inspect revision>' --input - <<'JSON'
+{"kind":"front-matter","block":"tableofcontents","startsRight":true}
+JSON
+```
+
+`apply` takes one JSON operation. Inspect again after an edit or revision conflict.
+
+| Kind | Fields |
+| --- | --- |
+| `thesis` | Optional `title` and `author`. Seeds a standard blank LaTeX document with the Thesis starter. |
+| `insert-page` | `at`, `page` (`title` or `page`), and `lines` (one or more plain-text strings). Set `contentsTitle` to include the page in the table of contents. |
+| `front-matter` | `block` (`abstract`, `tableofcontents`, `listoffigures`, or `listoftables`). Adds the block if missing. Optional `startsRight` selects a right-hand start when true or the next page when false. |
+| `page-numbering` | `at`, `format` (`arabic`, `roman`, `Roman`, `alph`, `Alph`, or `gobble`), and optional `startAt` (default 1). |
+
+For `at`, use a position from inspect to act before that block, or `"end"` to act at the end
+of the body. Hosts can use `@tumblerjs/cli/latex` to inspect the current editor document
+and apply the same operations as document steps.
