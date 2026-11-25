@@ -38,6 +38,7 @@ import {
   documentBody,
   environmentAt,
   groupAt,
+  latexCommands,
   latexUrlArgument,
   lineEnd,
   mathEnd,
@@ -735,27 +736,84 @@ export function parseLatexProject(entry: string, files: ReadonlyMap<string, stri
   const body = documentBody(source);
   const prefix = body ? source.slice(0, body.from) : '';
   const used = new Set([entry]);
-  const context = sourceContext(resolveLatexProjectPrefix(prefix, entry, files));
-  let from = entry;
-  context.include = (name, depth) => {
-    const path = latexProjectFile(files, entry, from, name, '.tex');
-    if (!path || used.has(path) || depth >= 64) return;
-    const text = files.get(path)!;
-    if (documentBody(text)) return;
-    used.add(path);
-    const parent = from;
-    from = path;
-    const parsed = blocks(text, context, depth + 1);
-    from = parent;
-    if (!parsed.nodes.length) parsed.nodes.push(schema.nodes.paragraph!.create({ before: '' }));
-    return { path, ...parsed };
-  };
+  const context = projectSourceContext(prefix, entry, files, entry, used);
   const parsed = parseDocument(source, body, prefix, context);
   const latexProject: LatexProject = {
     entry,
     files: Object.fromEntries([...files].filter(([path]) => !used.has(path))),
   };
   return parsed.type.create({ ...parsed.attrs, latexProject }, parsed.content);
+}
+
+function projectSourceContext(
+  prefix: string, entry: string, files: ReadonlyMap<string, string>, initialFile: string,
+  used = new Set<string>(), onCycle?: (path: string) => void,
+) {
+  const context = sourceContext(resolveLatexProjectPrefix(prefix, entry, files));
+  const ancestors = new Set([entry, initialFile]);
+  let from = initialFile;
+  context.include = (name, depth) => {
+    const path = latexProjectFile(files, entry, from, name, '.tex');
+    if (!path || depth >= 64) return;
+    if (ancestors.has(path)) {
+      onCycle?.(path);
+      return;
+    }
+    const text = files.get(path)!;
+    if (documentBody(text)) return;
+    used.add(path);
+    ancestors.add(path);
+    const parent = from;
+    from = path;
+    const parsed = blocks(text, context, depth + 1);
+    from = parent;
+    ancestors.delete(path);
+    if (!parsed.nodes.length) parsed.nodes.push(schema.nodes.paragraph!.create({ before: '' }));
+    return { path, ...parsed };
+  };
+  return context;
+}
+
+/** Read a literal include using the project's current files and the containing file. */
+function projectInclude(
+  document: Node, project: NonNullable<ReturnType<typeof serializeLatexProject>>,
+  call: string, position: number, before: string | null,
+) {
+  const reference = readLatexInclude(call, 0);
+  if (!reference || reference.end !== call.length) return;
+  const { entry, files } = project;
+  const $position = document.resolve(position);
+  const ancestors = new Set<string>();
+  let from = entry;
+  for (let depth = 1; depth <= $position.depth; depth++) {
+    const node = $position.node(depth);
+    if (node.type.name === 'latex_include') {
+      from = node.attrs.path;
+      ancestors.add(from);
+    }
+  }
+  let recursive = false;
+  const context = projectSourceContext(
+    document.attrs.prefix, entry, files, from, new Set(), path => {
+      if (ancestors.has(path)) recursive = true;
+    },
+  );
+  const fragment = context.include?.(reference.name, 0);
+  if (!fragment || recursive || ancestors.has(fragment.path)) return;
+  const include = schema.nodes.latex_include!.create({
+    before, open: call, close: fragment.tail, path: fragment.path,
+  }, fragment.nodes);
+  include.descendants(node => {
+    if (node.type.name === 'latex_include' && ancestors.has(node.attrs.path)) recursive = true;
+    return !recursive && !node.isTextblock;
+  });
+  if (!recursive) return include;
+}
+
+/** Create an editable reference to a project file at a document position. */
+export function createLatexInclude(document: Node, name: string, position: number) {
+  const project = serializeLatexProject(document);
+  if (project) return projectInclude(document, project, '\\input{' + name + '}', position, null);
 }
 
 function escapedText(text: string) {
@@ -935,6 +993,26 @@ function flattenSelectedIncludes(content: Fragment): Fragment {
   return Fragment.fromArray(nodes);
 }
 
+/** Replace an include instance with independent copies of its expanded blocks. */
+export function detachLatexInclude(transform: Transform, position: number) {
+  const node = transform.doc.nodeAt(position);
+  if (node?.type.name !== 'latex_include') return;
+  const $position = transform.doc.resolve(position);
+  const index = $position.index();
+  const before = node.attrs.before ?? (index ? '\n\n' : '');
+  const copy = flattenSelectedIncludes(Fragment.from(node.type.create({
+    ...node.attrs, before,
+  }, node.content)));
+  if (!$position.parent.canReplace(index, index + 1, copy)) return;
+  transform.replaceWith(position, position + node.nodeSize, copy);
+  const end = position + copy.size;
+  const next = transform.doc.resolve(end).nodeAfter;
+  if (next?.type.name === 'paragraph') {
+    const separator = (node.attrs.close ?? '') + (next.attrs.before ?? '\n\n');
+    transform.setNodeAttribute(end, 'before', /\n[^\S\n]*\n/.test(separator) ? separator : '\n\n');
+  }
+}
+
 /** Serialize a selection using the same spelling and marks as the authored document. */
 export function serializeLatexSelection(document: Node, from: number, to: number) {
   const { content } = document.slice(from, to);
@@ -970,7 +1048,17 @@ export function parseLatexFragment(document: Node, source: string) {
 export function materializeLatexStructures(document: Node): Transform {
   const transform = new Transform(document);
   const context = sourceContext(latexEffectivePrefix(document));
+  let project: ReturnType<typeof serializeLatexProject>;
   document.descendants((node, position) => {
+    if (node.type.name === 'latex_raw' && document.attrs.latexProject && readLatexInclude(node.attrs.source, 0)) {
+      project ??= serializeLatexProject(document);
+      const include = project && projectInclude(document, project, node.attrs.source, position, node.attrs.before);
+      if (include) {
+        const start = transform.mapping.map(position);
+        transform.replaceWith(start, start + node.nodeSize, include);
+        return false;
+      }
+    }
     const environment = node.type.name === 'latex_raw' ? latexEnvironmentName(node.attrs.source) : undefined;
     const raw = node.type.name === 'latex_raw' && (
       !!latexContentsLineAt(node.attrs.source, context.macros) || (!!environment && (
@@ -1021,17 +1109,55 @@ export function materializeLatexStructures(document: Node): Transform {
   return transform;
 }
 
+export function latexIncludeSource(node: Node) {
+  return childrenSource(node) + (node.attrs.close ?? '');
+}
+
 /** The authored files in one Notes revision, each at its original relative path. */
 export function serializeLatexProject(document: Node) {
   const project: LatexProject | null = document.attrs.latexProject ?? null;
   if (!project) return;
   const files = new Map(Object.entries(project.files));
   files.set(project.entry, serializeLatex(document));
+  const written = new Set([project.entry]);
   document.descendants(node => {
-    if (node.type.name === 'latex_include')
-      files.set(node.attrs.path, childrenSource(node) + (node.attrs.close ?? ''));
+    if (node.type.name === 'latex_include' && !written.has(node.attrs.path)) {
+      written.add(node.attrs.path);
+      files.set(node.attrs.path, latexIncludeSource(node));
+    }
+    return !node.isTextblock;
   });
   return { entry: project.entry, files };
+}
+
+/** Count literal references to a project file, including references outside the editable body. */
+export function latexProjectFileUsage(document: Node) {
+  const counts = new Map<string, number>();
+  const project = serializeLatexProject(document);
+  if (!project) return counts;
+  const { entry, files } = project;
+
+  // Count rendered instances first. A nested include can appear multiple times in Visual.
+  document.descendants(node => {
+    if (node.type.name === 'latex_include')
+      counts.set(node.attrs.path, (counts.get(node.attrs.path) ?? 0) + 1);
+    return !node.isTextblock;
+  });
+
+  // Also detect literal references in the preamble, unattached files and unsupported regions.
+  const referenced = new Map<string, number>();
+  for (const [from, source] of files) {
+    if (!/\.(?:tex|sty|cls)$/i.test(from)) continue;
+    for (const command of latexCommands(source)) {
+      if (command.name !== 'input' && command.name !== 'include') continue;
+      const include = readLatexInclude(source, command.start);
+      const path = include && latexProjectFile(files, entry, from, include.name, '.tex');
+      if (path) referenced.set(path, (referenced.get(path) ?? 0) + 1);
+    }
+  }
+  for (const [path, count] of referenced)
+    counts.set(path, Math.max(count, counts.get(path) ?? 0));
+  return counts;
 }
 
 function removedLatexIncludes(before: Node, after: Node) {
@@ -1061,7 +1187,7 @@ export function retainDetachedLatexFiles(transform: Transform, before: Node) {
   for (const node of removedLatexIncludes(before, transform.doc)) {
     const path: string = node.attrs.path;
     if (path !== project.entry && project.files[path] === original.files[path]) {
-      const source = childrenSource(node) + (node.attrs.close ?? '');
+      const source = latexIncludeSource(node);
       updateLatexProjectFile(transform, path, source, true);
     }
   }
@@ -1088,7 +1214,7 @@ export function refreshRebasedLatexFiles(transform: Transform, rebased: Transfor
   const project: LatexProject | null = transform.doc.attrs.latexProject;
   for (const [path, node] of recovered) {
     if (project?.files[path] === snapshots.get(path)?.after)
-      updateLatexProjectFile(transform, path, childrenSource(node) + (node.attrs.close ?? ''), true);
+      updateLatexProjectFile(transform, path, latexIncludeSource(node), true);
   }
 }
 

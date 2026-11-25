@@ -37,6 +37,13 @@ part of the document tree. `replaceLatexSource(document, source)` produces Prose
 source editing, undo and collaboration. The browser host can supply equation and raw source views
 through `NoteEditorOptions.latexNodeViews`. Parsing never executes TeX.
 
+`parseLatexProject(entry, files)` expands literal `\input` and `\include` references.
+The LaTeX editor mirrors changes across editable references to the same path in one
+undoable edit. `serializeLatexProject(document)` writes the entry and each included
+file once. Use `createLatexInclude(document, name, position)` to create a reference
+in a project, or `detachLatexInclude(transform, position)` to turn an instance
+into independent editable blocks.
+
 `latexFlow(document)` resolves standard class and command behavior into
 layout constraints at editor positions. `readLatexTableBlock(source)` exposes
 the first, repeated, body, and final row groups and retains their source offsets.
