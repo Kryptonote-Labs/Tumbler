@@ -4,7 +4,8 @@ import { latexTypography, texPoint, type LatexTypography } from './latex-typogra
 import { latexLength } from './latex-lengths';
 import { latexDriverUsesClassPaper } from './latex-preamble';
 import { commandEnd, groupAt } from './latex-syntax';
-import { latexPaperSizes as paperSizes, readGeometry } from './latex-geometry';
+import { geometryOption, geometrySides, hasExplicitMargins, latexPaperSizes as paperSizes, readGeometry, writeLatexGeometry, type GeometryChange } from './latex-geometry';
+import { geometryValues, marginValue, physicalGeometry } from './latex-geometry-layout';
 
 const inch = 96;
 const millimeter = inch / 25.4;
@@ -31,7 +32,7 @@ export type LatexPageLayout = {
   rotated?: true;
 };
 
-/** Resolve the binding margin for a physical sheet, preserving its text width. */
+/** Resolve the horizontal margins for a zero-based TeX page number, preserving text width. */
 export function latexSheetLayout(layout: LatexPageLayout, index: number): LatexPageLayout {
   if (index % 2 === 0 || layout.evenLeft === undefined) return layout;
   return { ...layout, left: layout.evenLeft, right: layout.left + layout.right - layout.evenLeft };
@@ -61,9 +62,13 @@ function readOptions(prefix: string) {
   let orientation: 'landscape' | 'portrait' | undefined;
   let fontSize = 10;
   for (const value of [...classOptions, ...geometryOptions]) {
-    const named = value.replace(/^paper\s*=\s*/, '');
-    if (paperSizes.has(named)) paperSize = named;
-    if (value === 'landscape' || value === 'portrait') orientation = value;
+    const [key, setting] = geometryOption(value);
+    const named = key === 'paper' ? setting : key;
+    if (paperSizes.has(named) && (key === 'paper' || setting === 'true')) paperSize = named;
+    if (key === 'landscape' || key === 'portrait')
+      orientation = (key === 'landscape') === (setting === 'true') ? 'landscape' : 'portrait';
+  }
+  for (const value of classOptions) {
     if (/^(10|11|12)pt$/.test(value)) fontSize = Number.parseFloat(value);
   }
   return {
@@ -165,11 +170,42 @@ function paragraphLengths(source: string, quad: number, xHeight: number, default
   return lengths;
 }
 
+type LatexOutputPaper = { defaultPaper?: 'a4paper' | 'letterpaper' };
+
+const hasRoom = (length: number) => Number.isFinite(length) && length > 0;
+
+/** Update the preamble and check the text area after applying all page settings together. */
+export function setLatexGeometry(prefix: string, change: GeometryChange, currentPaperSize?: string) {
+  const next = writeLatexGeometry(prefix, change, currentPaperSize);
+  if ((change.margin !== undefined || change.margins !== undefined ||
+    change.bindingOffset !== undefined || change.twoSided !== undefined) &&
+    !resolvePageLayout(next).hasTextArea)
+    throw new Error('The margins leave no room for text.');
+  return next;
+}
+
 /** Read the standard class and geometry options that determine the editable page. */
-export function latexPageLayout(
-  prefix: string,
-  output: { defaultPaper?: 'a4paper' | 'letterpaper' } = {},
-): LatexPageLayout {
+export function latexPageLayout(prefix: string, output?: LatexOutputPaper): LatexPageLayout {
+  const { layout, footSkip } = resolvePageLayout(prefix, output);
+  const { width, height, left, right, top, bottom, leading } = layout;
+  // Give imported geometry with no text area enough space to edit without changing the source.
+  if (!hasRoom(width - left - right)) {
+    layout.left = layout.right = Math.max(0, width - 24) / 2;
+    delete layout.evenLeft;
+  }
+  if (!hasRoom(height - top - bottom)) {
+    layout.top = layout.bottom = Math.max(0, height - 2 * leading) / 2;
+    layout.footerBaseline = height - layout.bottom + footSkip;
+  }
+  return layout;
+}
+
+/** Resolve the values shown when editing a document's margins, before adding its gutter. */
+export function latexMarginSettings(prefix: string, output?: LatexOutputPaper) {
+  return resolvePageLayout(prefix, output).marginSettings;
+}
+
+function resolvePageLayout(prefix: string, output: LatexOutputPaper = {}) {
   const { source, geometry, geometryOptions, paperSize, orientation, fontSize, classOptions, documentClass } =
     readOptions(prefix);
   const landscape = orientation === 'landscape';
@@ -186,10 +222,12 @@ export function latexPageLayout(
     width = size[0] * millimeter;
     height = size[1] * millimeter;
   }
-  const twoColumns = classOptions.includes('twocolumn');
-  const sides = (geometry ? [...classOptions, ...geometryOptions] : classOptions)
-    .findLast((option) => option === 'twoside' || option === 'oneside');
-  const twoSided = !slide && (sides ? sides === 'twoside' : documentClass === 'book');
+  const sizes = geometryValues(geometryOptions);
+  const activeGeometry = geometry && sizes.get('pass') !== 'true';
+  const sideOptions = activeGeometry ? geometryOptions : [];
+  const { twoSided, mirror } = geometrySides(documentClass, classOptions, sideOptions);
+  const twoColumns = sizes.has('twocolumn') ? sizes.get('twocolumn') === 'true' :
+    sizes.has('onecolumn') ? sizes.get('onecolumn') === 'false' : classOptions.includes('twocolumn');
   const textPoints = slide && !classOptions.includes('10pt') && !classOptions.includes('12pt') ? 11 : fontSize;
   const typography = latexTypography(textPoints, source, twoColumns);
   const { size: font, leading } = typography.text;
@@ -206,16 +244,12 @@ export function latexPageLayout(
     source, quad, xHeight, letter ? 0 : defaultIndent, leading, letter ? 0.7 * quad : 0,
   );
 
-  const sizes = new Map(
-    geometryOptions.map((option) => {
-      const [name, value] = option.split('=');
-      return [name?.trim(), value?.trim()] as const;
-    }),
-  );
-  const paperWidth = latexLength(sizes.get('paperwidth'));
-  const paperHeight = latexLength(sizes.get('paperheight'));
-  if (paperWidth && paperWidth > 0) width = paperWidth;
-  if (paperHeight && paperHeight > 0) height = paperHeight;
+  if (activeGeometry) {
+    const widthOption = latexLength(sizes.get('paperwidth'));
+    const heightOption = latexLength(sizes.get('paperheight'));
+    width = (landscape ? heightOption : widthOption) ?? width;
+    height = (landscape ? widthOption : heightOption) ?? height;
+  }
 
   const classWidth = (fontSize === 12 ? 390 : fontSize === 11 ? 360 : 345) * texPoint * (twoColumns ? 2 : 1);
   const classLeading = leading / latexLineSpacing(source, textPoints).stretch;
@@ -232,55 +266,29 @@ export function latexPageLayout(
   // The standard classes round their margin registers to whole TeX points after removing the origin.
   let left = inch + wholePoints((twoSided ? 0.8 : 1) * standardSide - inch);
   let right = 2 * standardSide - left;
-  let top = geometry ? height * 0.12 : classTop;
-  let bottom = geometry ? height * 0.18 : height - classTop - body;
-  // Geometry options are ordered. In particular, margin applies to all four sides.
-  const explicit = new Map<string, number>();
-  for (const option of geometryOptions) {
-    const [raw, value] = option.split('=');
-    const name = raw?.trim();
-    const length = latexLength(value?.trim());
-    if (length === undefined || length < 0) continue;
-    if (name === 'margin' || name === 'left' || name === 'inner') explicit.set('left', length);
-    if (name === 'margin' || name === 'right' || name === 'outer') explicit.set('right', length);
-    if (name === 'margin' || name === 'top') explicit.set('top', length);
-    if (name === 'margin' || name === 'bottom') explicit.set('bottom', length);
+  let top = classTop;
+  let bottom = height - classTop - body;
+  let evenLeft = twoSided ? inch + wholePoints(1.2 * standardSide - inch) : undefined;
+  let footSkip = (letter ? 25 : 30) * texPoint;
+  let bindingOffset = '0cm';
+  let margins = {
+    top: marginValue(undefined, top), bottom: marginValue(undefined, bottom),
+    left: marginValue(undefined, left), right: marginValue(undefined, right),
+  };
+  if (activeGeometry) {
+    const marginparWidth = wholePoints(Math.min(
+      (twoSided ? 0.8 : 1) * standardSide - (twoColumns ? 10 : 11) * texPoint,
+      (twoColumns ? 60 : 90) * texPoint,
+    ));
+    const result = physicalGeometry(sizes, {
+      width, height, twoSided, mirror, twoColumns, font: quad, xHeight, classLeading,
+      topSkip: fontSize * texPoint, marginparWidth, letter,
+    });
+    ({ left, right, top, bottom, evenLeft, footSkip, margins, binding: bindingOffset } = result);
   }
-  const horizontal =
-    latexLength(sizes.get('textwidth')) ?? latexLength(sizes.get('width')) ?? width * 0.7;
-  const vertical =
-    latexLength(sizes.get('textheight')) ?? latexLength(sizes.get('height')) ?? height * 0.7;
-  if (geometry) {
-    const remainder = Math.max(0, width - horizontal);
-    left = remainder * (twoSided ? 0.4 : 0.5);
-    right = remainder - left;
-    top = Math.max(0, (height - vertical) * 0.4);
-    bottom = Math.max(0, (height - vertical) * 0.6);
-  }
-  left =
-    explicit.get('left') ??
-    (explicit.has('right') ? Math.max(0, width - explicit.get('right')! - horizontal) : left);
-  right =
-    explicit.get('right') ??
-    (explicit.has('left') ? Math.max(0, width - left - horizontal) : right);
-  top =
-    explicit.get('top') ??
-    (explicit.has('bottom') ? Math.max(0, height - explicit.get('bottom')! - vertical) : top);
-  bottom =
-    explicit.get('bottom') ?? (explicit.has('top') ? Math.max(0, height - top - vertical) : bottom);
-
-  // Keep the editable area usable for unusual imported settings. PDF still uses the exact source.
-  if (left + right >= width - 24) left = right = width * 0.15;
-  if (top + bottom >= height - leading * 2) {
-    top = height * 0.12;
-    bottom = height * 0.18;
-  }
-  const evenLeft = twoSided
-    ? geometry ? right : inch + wholePoints(right - inch)
-    : undefined;
   // A driver can ship a physical sheet independently of the lengths set by the class.
   // Geometry uses the paper primitives and replaces that driver default.
-  if (!slide && !geometry && output.defaultPaper && !latexDriverUsesClassPaper(prefix, classOptions)) {
+  if (!slide && !activeGeometry && output.defaultPaper && !latexDriverUsesClassPaper(prefix, classOptions)) {
     const [sheetWidth, sheetHeight] = paperSizes.get(output.defaultPaper)!;
     right += sheetWidth! - width;
     bottom += sheetHeight! - height;
@@ -299,11 +307,11 @@ export function latexPageLayout(
     bottom += outputDimensions.height - height;
     height = outputDimensions.height;
   }
-  return {
+  const layout: LatexPageLayout = {
     width,
     height,
     left: slide ? 10 * millimeter : left,
-    ...(evenLeft !== undefined && evenLeft !== left ? { evenLeft } : {}),
+    ...(!slide && evenLeft !== undefined && evenLeft !== left ? { evenLeft } : {}),
     right: slide ? 10 * millimeter : right,
     top: slide ? 0 : top,
     bottom: slide ? 0 : bottom,
@@ -312,13 +320,19 @@ export function latexPageLayout(
     leading,
     ...(['article', 'report', 'book', 'letter'].includes(documentClass) && { typography }),
     firstBaseline: slide ? leading / 2 + font * 0.4 : fontSize * texPoint,
-    footerBaseline: height - bottom + (latexLength(sizes.get('footskip')) ?? (letter ? 25 : 30) * texPoint),
+    footerBaseline: height - bottom + footSkip,
     paragraphIndent: paragraphs.parindent,
     paragraphSpacing: paragraphs.parskip,
     paragraphShrink: Math.max(0, paragraphs.shrink),
     columns: twoColumns ? 2 : 1,
     columnGap: length(/\\setlength\s*\{\\columnsep\}\s*\{([^{}]*)\}/.exec(source)?.[1], quad, leading) ?? 10 * texPoint,
     numbered: !slide && !/\\(?:pagestyle\s*\{empty\}|pagenumbering\s*\{gobble\})/.test(source),
+  };
+  return {
+    layout,
+    footSkip,
+    hasTextArea: hasRoom(width - left - right) && hasRoom(height - top - bottom),
+    marginSettings: { margins, twoSided, bindingOffset, explicit: activeGeometry && hasExplicitMargins(geometryOptions) },
   };
 }
 
