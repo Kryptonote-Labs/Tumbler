@@ -30,7 +30,38 @@ jobs:
         working-directory: apps/docs
         run: bunx --no-install playwright install --with-deps --only-shell chromium
 
+      - name: Cache pdfLaTeX
+        id: latex-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/latex-ci
+          key: latex-2025-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.github/workflows/ci.yml') }}
+      - name: Install pdfLaTeX
+        if: steps.latex-cache.outputs.cache-hit != 'true'
+        run: |
+          texdir="$HOME/.cache/latex-ci"
+          repository=https://ftp.math.utah.edu/pub/tex/historic/systems/texlive/2025/tlnet-final
+          cd "$(mktemp -d)"
+          curl -fsSL --retry 3 "$repository/install-tl-unx.tar.gz" -o install-tl.tar.gz
+          tar -xzf install-tl.tar.gz --strip-components=1
+          cat > texlive.profile <<EOF
+          selected_scheme scheme-infraonly
+          TEXDIR $texdir
+          TEXMFSYSVAR $texdir/texmf-var
+          TEXMFSYSCONFIG $texdir/texmf-config
+          TEXMFLOCAL $texdir/texmf-local
+          EOF
+          perl install-tl --repository "$repository" --profile texlive.profile --no-doc-install --no-src-install --no-continue
+          "$texdir/bin/x86_64-linux/tlmgr" install latex-bin enumitem geometry setspace amsfonts ec cm-super emptypage fancyhdr
+      - name: Set up PDF compile tools
+        run: |
+          if ! command -v pdftotext >/dev/null; then
+            sudo apt-get install -y --no-install-recommends poppler-utils
+          fi
+          echo "$HOME/.cache/latex-ci/bin/x86_64-linux" >> "$GITHUB_PATH"
       - name: Test
+        env:
+          REQUIRE_LATEX_PDF: '1'
         run: bun test
 
   docs:
