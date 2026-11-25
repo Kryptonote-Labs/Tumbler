@@ -78,7 +78,7 @@ export function resolveLatexProjectPrefix(
       if (start < cursor) continue;
       const isClass = name === 'documentclass' || name === 'LoadClass' || name === 'LoadClassWithOptions';
       const isPackage = name === 'usepackage' || name === 'RequirePackage' || name === 'RequirePackageWithOptions';
-      if (!isClass && !isPackage && name !== 'input' && name !== 'endinput') continue;
+      if (!isClass && !isPackage && name !== 'input' && name !== 'include' && name !== 'endinput') continue;
       if (name === 'endinput') return output + source.slice(cursor, start);
       const first = whitespaceEnd(source, end);
       const option = groupAt(source, first, '[', ']');
@@ -91,13 +91,16 @@ export function resolveLatexProjectPrefix(
       const extension = isClass ? '.cls' : isPackage ? '.sty' : '.tex';
       const argument = source.slice(arg.from, arg.to);
       for (const specifier of isPackage ? argument.split(',') : [argument]) {
-        const path = latexProjectFile(files, entry, from, specifier.trim(), extension);
+        const filename = specifier.trim();
+        // A braced input may name a style or an extensionless file explicitly.
+        const path = latexProjectFile(files, entry, from, filename, extension) ??
+          (name === 'input' ? latexProjectFile(files, entry, from, filename, '') : undefined);
         if (path && !active.has(path)) {
           active.add(path);
-          output += '\n' + expand(files.get(path)!, path, name === 'input' ? inheritedOptions : settings) + '\n';
+          output += '\n' + expand(files.get(path)!, path, name === 'input' || name === 'include' ? inheritedOptions : settings) + '\n';
           active.delete(path);
         } else if (!path) {
-          const command = isClass ? 'documentclass' : isPackage ? 'usepackage' : 'input';
+          const command = isClass ? 'documentclass' : isPackage ? 'usepackage' : name;
           output += '\\' + command + (settings === undefined ? '' : '[' + settings + ']') + '{' + specifier + '}\n';
         }
       }

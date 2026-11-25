@@ -4,6 +4,9 @@ import { latexEffectivePrefix } from './latex-project';
 import { latexColourDefinition } from './latex-colour';
 import { latexLetterCommandAt } from './latex-letter';
 import { latexRomanNumber } from './latex-number-format';
+import { readLatexTextMacros } from './latex-macros';
+import { latexCustomTitlePage, readLatexContentsEntry, readLatexStateMacro } from './latex-state-command';
+import { readLatexTitleSetter } from './latex-metadata';
 import type { Node } from 'prosemirror-model';
 import { commandEnd, groupAt, latexCommands, whitespaceEnd } from './latex-syntax';
 
@@ -99,7 +102,10 @@ const chapterLists = new Set(['tableofcontents', 'listoffigures', 'listoftables'
 /** Resolve source directives into layout effects at editor positions. Unknown classes keep
  * explicit break commands. The measured layout and edit history remain independent. */
 export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
-  const { name, options } = readLatexClass(latexEffectivePrefix(document));
+  const prefix = latexEffectivePrefix(document);
+  const { name, options } = readLatexClass(prefix);
+  const macros = readLatexTextMacros(prefix);
+  const customTitle = latexCustomTitlePage(prefix, macros);
   const chapters = name === 'report' || name === 'book';
   const columns = options.includes('twocolumn');
   const standard = chapters || name === 'article';
@@ -123,8 +129,17 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
     if (node.type.name === 'latex_include' && /^\\include\b/.test(node.attrs.open ?? ''))
       included.push({ node, position });
     const source = node.type.name === 'latex_raw' ? String(node.attrs.source).trim() : '';
+    const state = source && readLatexStateMacro(source, macros);
+    if (state && state.end === source.length) {
+      for (const command of latexCommands(state.expansion)) {
+        const directive = readLatexPageDirective(state.expansion, command.start);
+        if (directive?.kind === 'numbering') numbering = directive.value;
+      }
+      flow.set(position, { kind: 'omit' });
+      return false;
+    }
     const letterCommand = name === 'letter' && latexLetterCommandAt(source, 0);
-    if ((standard && source === '\\appendix') || latexColourDefinition(source) || (letterCommand && ['address', 'signature', 'name', 'date'].includes(letterCommand.command))) {
+    if ((standard && (source === '\\appendix' || readLatexTitleSetter(source))) || readLatexContentsEntry(source) || latexColourDefinition(source) || (letterCommand && ['address', 'signature', 'name', 'date'].includes(letterCommand.command))) {
       flow.set(position, { kind: 'omit' });
       return false;
     }
@@ -199,12 +214,12 @@ export function latexFlow(document: Node): ReadonlyMap<number, LatexBlockFlow> {
       }
       const command = source.slice(1, commandEnd(source, 0));
       if (source !== '\\' + command) return;
-      if (command === 'maketitle' && titlePage && !titlePrinted) {
+      if (command === 'maketitle' && (titlePage || customTitle) && !titlePrinted) {
         titlePrinted = true;
         pageHasContent = false;
         effect({
           before: name === 'book' && recto ? 'recto' : 'page',
-          after: 'page',
+          after: recto ? customTitle?.boundary ?? 'page' : 'page',
           folio: { visible: false, restartAfter: !recto },
         });
       } else if (chapters && chapterLists.has(command)) {

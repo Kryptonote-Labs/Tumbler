@@ -16,6 +16,7 @@ const styles: ReadonlyMap<string, LatexTextStyle> = new Map([
   ["texttt", "mono"],
   ["textnormal", "normal"],
 ]);
+const primitiveDeclarations = new Set(['def', 'gdef']);
 const declarations = new Set([
   "newcommand",
   "renewcommand",
@@ -59,7 +60,8 @@ export function readLatexTextMacros(prefix: string) {
   let consumed = 0;
   for (const { name, start, end } of latexCommands(prefix)) {
     const documentCommand = documentDeclarations.has(name);
-    if (start < consumed || (!declarations.has(name) && !documentCommand)) continue;
+    const primitive = primitiveDeclarations.has(name);
+    if (start < consumed || (!declarations.has(name) && !documentCommand && !primitive)) continue;
     const declaration = whitespaceEnd(prefix, end + Number(prefix[end] === "*"));
     const group = groupAt(prefix, declaration);
     const from = group?.from ?? declaration;
@@ -67,6 +69,20 @@ export function readLatexTextMacros(prefix: string) {
     if (to === from || (group && to !== group.to)) continue;
     const command = prefix.slice(from + 1, to);
     const argumentStart = whitespaceEnd(prefix, group?.end ?? to);
+    if (primitive) {
+      // Delimited parameters require TeX's token matching. Only read positional arguments.
+      let argument = argumentStart;
+      let count = 0;
+      while (count < 9 && prefix.startsWith('#' + (count + 1), argument)) {
+        count++;
+        argument += 2;
+      }
+      const body = groupAt(prefix, whitespaceEnd(prefix, argument));
+      if (group || !body) continue;
+      consumed = body.end;
+      macros.set(command, { count, replacement: prefix.slice(body.from, body.to) });
+      continue;
+    }
     if (documentCommand) {
       const signature = groupAt(prefix, argumentStart);
       const body = signature && groupAt(prefix, whitespaceEnd(prefix, signature.end));

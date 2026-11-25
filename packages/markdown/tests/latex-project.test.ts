@@ -5,7 +5,7 @@ import { latexState } from '../src/latex-editor';
 import {
   latexEffectivePrefix, latexFlow, latexNumbering, latexPageLayout, layoutLatexDrawing,
   paginateLatex, parseLatexProject, readLatexDrawing, readLatexFigure, replaceLatexSource, serializeLatexProject,
-  setLatexCaption,
+  setLatexCaption, interpretLatexText, readLatexTextMacros, latexTitleArguments, materializeLatexStructures,
 } from '../src/latex';
 
 test('unlinking a chapter in Visual retains the most recent chapter file and can be undone', () => {
@@ -113,4 +113,69 @@ test('a wide figure moves to the next sheet while later paragraphs stay on the f
   expect(result.breaks).toEqual([]);
   expect(result.wideFloats).toEqual([{ position: 12, sheet: 1, offset: 30, height: 40 }]);
   expect(Math.ceil(result.pages / 2)).toBe(2);
+});
+
+test('project preamble includes load explicit style inputs without rewriting the sources', () => {
+  const files = new Map([
+    ['thesis.tex', String.raw`\documentclass{report}
+\include{thesis.preamble}
+\begin{document}
+\greeting{writer}
+\end{document}`],
+    ['thesis.preamble.tex', String.raw`\input{greetings.sty}`],
+    ['greetings.sty', String.raw`\def\greeting#1{Hello #1}
+\endinput
+\def\greeting#1{Goodbye #1}`],
+  ]);
+  const document = parseLatexProject('thesis.tex', files);
+  const macros = readLatexTextMacros(latexEffectivePrefix(document));
+  expect(interpretLatexText(String.raw`\greeting{writer}`, macros)).toEqual(['Hello writer']);
+  expect(serializeLatexProject(document)?.files).toEqual(files);
+});
+
+test('title setters from body includes take effect at the title without printing', () => {
+  const files = new Map([
+    ['main.tex', String.raw`\documentclass{report}
+\title{Preamble title}
+\begin{document}
+\input{metadata}
+\maketitle
+\title{Too late}
+\end{document}`],
+    ['metadata.tex', String.raw`\title{Body title}
+\author{Writer}`],
+  ]);
+  const doc = parseLatexProject('main.tex', files);
+  const titlePosition = doc.firstChild!.nodeSize;
+  const fields = latexTitleArguments(doc, titlePosition);
+  expect(fields.get('title')?.source).toBe('Body title');
+  const author = fields.get('author');
+  expect(author?.source).toBe('Writer');
+  expect(author && author.kind === 'body' && latexFlow(doc).get(author.position)).toEqual({ kind: 'omit' });
+  expect(serializeLatexProject(doc)?.files).toEqual(files);
+});
+
+
+test('state macros reserve no space and custom titles retain recto page boundaries', () => {
+  const prefix = String.raw`\documentclass[twoside]{report}
+\def\maketitle{\begin{titlepage}Example\end{titlepage}}
+\def\endtitlepage{\cleardoublepage}
+\def\setmeta#1{\gdef\@data{#1}}
+\newcommand{\front}{\pagenumbering{roman}\pagestyle{plain}\doublespacing}
+\begin{document}`;
+  const entry = 'main.tex';
+  const content = String.raw`\setmeta{Date}
+\maketitle
+\front
+Body
+\end{document}`;
+  const document = parseLatexProject(entry, new Map([[entry, prefix + content]]));
+  const flow = latexFlow(document);
+  expect(flow.get(0)?.kind).toBe('omit');
+  const title = document.child(0).nodeSize;
+  expect(flow.get(title)).toMatchObject({ after: 'recto' });
+  const front = title + document.child(1).nodeSize;
+  expect(flow.get(front)?.kind).toBe('omit');
+  expect(flow.get(front + document.child(2).nodeSize)).toMatchObject({ numbering: 'roman' });
+  expect(materializeLatexStructures(document).docChanged).toBe(false);
 });
