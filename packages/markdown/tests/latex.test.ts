@@ -8,6 +8,7 @@ import {
   latexBlockAtOffset,
   latexNumbering,
   latexRunningFields,
+  latexSourceMap,
   paginateLatex,
   parseLatex,
   replaceLatexSource,
@@ -73,14 +74,37 @@ test('LaTeX keeps original bytes around visual text, ribbon formatting and equat
   );
 });
 
-test('a paragraph inserted before one on the next line stays its own paragraph', () => {
-  const document = parseLatex('\\begin{center}\nBox\n\\end{center}\nTail.');
-  const tail = document.content.size - document.lastChild!.nodeSize;
-  const paragraph = noteSchema.nodes.paragraph!.create(null, noteSchema.text('New'));
-  const edited = document.replace(tail, tail, new Slice(Fragment.from(paragraph), 0, 0));
-  const source = serializeLatex(edited);
-  expect(source).toEndWith('\nNew\n\nTail.');
-  expect(parseLatex(source).childCount).toBe(edited.childCount);
+test('a paragraph inserted after a block stays apart from the paragraph that followed it', () => {
+  for (const separator of ['\n', '']) {
+    const document = parseLatex(`\\begin{center}\nBox\n\\end{center}${separator}Tail.`);
+    const tail = document.content.size - document.lastChild!.nodeSize;
+    const paragraph = noteSchema.nodes.paragraph!.create(null, noteSchema.text('New'));
+    const edited = document.replace(tail, tail, new Slice(Fragment.from(paragraph), 0, 0));
+    const source = serializeLatex(edited);
+    expect(source).toEndWith('New\n\nTail.');
+    expect(parseLatex(source).childCount).toBe(edited.childCount);
+    // Source navigation agrees with the serialized spacing.
+    const map = latexSourceMap(edited);
+    const position = tail + paragraph.nodeSize + 1;
+    expect(map.sourceAt(position)?.offset).toBe(source.indexOf('Tail.'));
+    expect(map.positionAt({ offset: source.indexOf('Tail.') })).toBe(position);
+  }
+});
+
+test('authored paragraph boundaries round-trip unchanged', () => {
+  for (const source of [
+    '{\\raggedleft First.\\par}\nSecond.',
+    'First % note\n\nSecond.',
+    String.raw`\documentclass{report}
+\makeatletter
+\newcommand{\chapentry}[2]{\@dottedtocline{0}{0em}{1em}{#1}{#2}}
+\makeatother
+\begin{document}
+\chapentry{Introduction}
+  {12}
+\end{document}`,
+  ]) expect(serializeLatex(parseLatex(source))).toBe(source);
+  expect(parseLatex('First % note\n\nSecond.').childCount).toBe(2);
 });
 
 test('source edits use the same undo history and leave the rest of the article intact', () => {

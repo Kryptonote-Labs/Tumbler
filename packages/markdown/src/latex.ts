@@ -410,7 +410,8 @@ function paragraphEnd(source: string, position: number, context: SourceContext) 
     if (blank.test(source)) return next;
     if (next > position && blockStart(source, next, context)) return next;
     const character = source[next];
-    if (character === '%') next = lineEnd(source, next);
+    // A comment runs to its line ending, which can still begin the blank line that ends the paragraph.
+    if (character === '%') next = lineEnd(source, next) - 1;
     else if (character === '$' || source.startsWith('\\(', next)) {
       const dollar = character === '$';
       const close = dollar ? '$' : '\\)';
@@ -1072,18 +1073,28 @@ function blockSource(node: Node): string {
   return result;
 }
 
+/**
+ * The source before a block. Adjacent body paragraphs need a blank line between them, so one
+ * inserted before a paragraph that began on the same or next line as an earlier block stays
+ * separate. Wrapped paragraphs and contents entries already mark their own boundaries.
+ */
+function separatorSource(parent: Node, index: number) {
+  const node = parent.child(index);
+  const before: string =
+    node.attrs.before ?? (index === 0 ? '' : node.type.name === 'list_item' ? '\n' : '\n\n');
+  if (index === 0 || node.type.name !== 'paragraph' || parent.type.name === 'latex_contents_line')
+    return before;
+  const previous = parent.child(index - 1);
+  if (previous.type.name !== 'paragraph' || previous.attrs.close != null || node.attrs.open != null)
+    return before;
+  if (!/^\s*$/.test(before) || /\n[^\S\n]*\n/.test(before)) return before;
+  return '\n\n' + before.slice(before.lastIndexOf('\n') + 1);
+}
+
 function childrenSource(parent: Node) {
   let result = '';
   parent.forEach((child, _offset, index) => {
-    let before: string =
-      child.attrs.before ?? (index === 0 ? '' : child.type.name === 'list_item' ? '\n' : '\n\n');
-    // Paragraphs on separate lines stay apart only across a blank line, such as when one is
-    // inserted before a paragraph that followed a block on the next line. Containers that place
-    // paragraphs on one line, such as contents entries, spell them with no line break.
-    if (index > 0 && child.type.name === 'paragraph' &&
-      parent.child(index - 1).type.name === 'paragraph' &&
-      before.includes('\n') && !/\n[^\S\n]*\n/.test(before)) before = '\n\n' + before.trimStart();
-    result += before + blockSource(child);
+    result += separatorSource(parent, index) + blockSource(child);
   });
   return result;
 }
@@ -1438,8 +1449,7 @@ export function latexSourceMap(document: Node) {
     const blocks = files.get(file)!;
     let offset = start;
     parent.forEach((node, childOffset, index) => {
-      const before = node.attrs.before ?? (index === 0 ? '' : node.type.name === 'list_item' ? '\n' : '\n\n');
-      offset += before.length;
+      offset += separatorSource(parent, index).length;
       const end = offset + blockSource(node).length;
       const at = position + childOffset;
       blocks.push({ position: at, node, offset, end, depth });
