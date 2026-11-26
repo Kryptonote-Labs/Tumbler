@@ -5,7 +5,7 @@ import { noteSchema } from '../src';
 import { joinBackward } from 'prosemirror-commands';
 import { toggleMark, undo } from '../src/editor';
 import { latexHeading } from '../src/latex-editor';
-import { parseLatex, serializeLatex } from '../src/latex';
+import { parseLatex, parseLatexProject, serializeLatex, serializeLatexProject } from '../src/latex';
 import { withLatexEditor } from './latex-editor-fixture';
 import type { EditorView } from '../src/editor';
 
@@ -167,6 +167,7 @@ test('deleting an equation keeps blocks around it apart', async () => {
     '{\\sffamily A note.}\n\n\\[x\\]\nMain text.',
     '\\begin{itemize}\n\\item A note. % aside\n\\[x\\]\\item Main text.\n\\end{itemize}',
     '{\\sffamily A note.}\n\n\\[x\\]\n\\section{Main text.}',
+    '\\begin{quote}\nFirst.\n\\[x\\]\nSecond. % note\n\nThird.\\end{quote}',
   ])
     await withLatexEditor(source, (view) => {
       let at = 0;
@@ -188,3 +189,31 @@ function blocks(doc: EditorView['state']['doc']) {
   });
   return found;
 }
+
+/** Selects the first display equation. */
+function selectEquation(view: EditorView) {
+  let at = 0;
+  view.state.doc.descendants((node, position) => {
+    if (node.type.name === 'latex_display_math') at = position;
+  });
+  view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, at)));
+}
+
+test('text pasted over an equation stays apart from the blocks on both sides', async () => {
+  await withLatexEditor('Copied.\n\nBefore.\n\\[x\\]\nTail.', (view) => {
+    selectEquation(view);
+    view.dispatch(view.state.tr.replaceSelectionWith(parseLatex('Copied.').firstChild!));
+    const { shown, saved } = paragraphs(view);
+    expect(shown).toEqual(['Copied.', 'Before.', 'Copied.', 'Tail.']);
+    expect(saved).toEqual(shown);
+  });
+});
+
+test('deleting an equation in an included file keeps its paragraphs apart', async () => {
+  const files = new Map([['main.tex', '\\input{intro}\n'], ['intro.tex', 'First.\n\\[x\\]\nTail.\n']]);
+  await withLatexEditor(parseLatexProject('main.tex', files), (view) => {
+    selectEquation(view);
+    view.dispatch(view.state.tr.deleteSelection());
+    expect(serializeLatexProject(view.state.doc)?.files.get('intro.tex')).toBe('First.\n\nTail.\n');
+  });
+});

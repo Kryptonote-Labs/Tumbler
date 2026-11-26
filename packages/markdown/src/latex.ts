@@ -1151,7 +1151,7 @@ export function separateLatexParagraphs(transform: Transform, previous: Node, ma
   const to = Math.max(start, end);
   let context: SourceContext | undefined;
   const visit = (parent: Node, contentStart: number) => {
-    if (parent.type.name === 'latex_contents_line' || parent.type.name === 'latex_include') return;
+    if (parent.type.name === 'latex_contents_line') return;
     let neighbour = contentStart;
     parent.forEach((child, offset, index) => {
       const at = contentStart + offset;
@@ -1159,7 +1159,8 @@ export function separateLatexParagraphs(transform: Transform, previous: Node, ma
       if (index && at >= from && at <= to && typeof before === 'string' &&
         !existed(previous, mapping, back.map(at, -1), parent.child(index - 1), neighbour, child, at)) {
         context ??= sourceContext(latexEffectivePrefix(doc));
-        const $at = doc.resolve(at);
+        // Read the transform's current document, which holds earlier boundaries' repairs.
+        const $at = transform.doc.resolve(at);
         const separated = [before, withLineBreak(before), withBlankLine(before)]
           .find(candidate => reopensApart($at, index, candidate, context!));
         if (separated !== undefined && separated !== before)
@@ -1185,16 +1186,24 @@ function reopensApart($at: ResolvedPos, index: number, before: string, context: 
   let source = '';
   for (let at = first; at <= index; at++)
     source += separatorSource(parent, at, at === index ? before : undefined) + blockSource(parent.child(at));
-  for (let depth = $at.depth; depth > 0; depth--) {
+  // An included file is parsed on its own, so its blocks are wrapped only up to the include.
+  let root = 0;
+  for (let depth = $at.depth; depth > 0 && !root; depth--)
+    if ($at.node(depth).type.name === 'latex_include') root = depth;
+  for (let depth = $at.depth; depth > root; depth--) {
     const container = $at.node(depth);
     const whole = blockSource(container);
     const open: string = container.attrs.open ?? containerDefaults[container.type.name] ?? '';
     const inner = childrenSource(container);
     if (!whole.startsWith(open + inner)) return true;
-    source = open + source + whole.slice(open.length + inner.length);
+    let close = whole.slice(open.length + inner.length);
+    // The checked block's comment would otherwise hide the close, which other blocks follow.
+    if (depth === $at.depth && endsInComment(parent.child(index)) && !/^\r?\n/.test(close))
+      close = '\n' + close;
+    source = open + source + close;
   }
   let parsed = Fragment.fromArray(blocks(source, context).nodes);
-  for (let depth = 1; depth <= $at.depth; depth++) {
+  for (let depth = root + 1; depth <= $at.depth; depth++) {
     if (parsed.childCount !== 1 || parsed.firstChild!.type !== $at.node(depth).type) return false;
     parsed = parsed.firstChild!.content;
   }
