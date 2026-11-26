@@ -1140,32 +1140,53 @@ export function separateLatexParagraphs(transform: Transform, previous: Node, ma
   const to = Math.max(start, end);
   const visit = (parent: Node, contentStart: number) => {
     if (parent.type.name === 'latex_contents_line') return;
+    let neighbour = contentStart;
     parent.forEach((child, offset, index) => {
       const at = contentStart + offset;
       const before: unknown = child.attrs.before;
-      const paragraph = index ? parent.child(index - 1) : undefined;
       if (at >= from && at <= to && typeof before === 'string' && !blankLine(before) &&
-        joinsParagraph(child) && paragraph?.type.name === 'paragraph' &&
-        paragraph.attrs.close == null && !existed(previous, mapping, back.map(at, -1), at, child))
+        joinsParagraph(child) && leadingParagraph(parent, index)?.attrs.close === null &&
+        !existed(previous, mapping, back.map(at, -1), parent.child(index - 1), neighbour, child, at))
         transform.setNodeAttribute(at, 'before', withBlankLine(before));
       if (!child.isTextblock && !child.isAtom && at <= to && at + child.nodeSize >= from)
         visit(child, at + 1);
+      neighbour = at;
     });
   };
   visit(doc, 0);
 }
 
 /**
- * Whether `previous` already had an unwrapped paragraph run into `block` at `position`, which
- * `mapping` carries to `at`: the same paragraph, perhaps edited since, or the same raw line.
+ * The paragraph that the block at `index` would continue, past any raw lines that follow it
+ * without a blank line, such as a spacing command.
  */
-function existed(previous: Node, mapping: Mapping, position: number, at: number, block: Node) {
+function leadingParagraph(parent: Node, index: number) {
+  for (let at = index - 1; at >= 0; at--) {
+    const node = parent.child(at);
+    if (node.type.name === 'paragraph') return node;
+    if (node.type.name !== 'latex_raw' || blankLine(node.attrs.before ?? '\n\n')) return undefined;
+  }
+  return undefined;
+}
+
+/**
+ * Whether the boundary between `before` and `after` existed in `previous` at `position`, with
+ * both blocks there before the edit: the same blocks, perhaps edited since, or the same raw lines.
+ */
+function existed(previous: Node, mapping: Mapping, position: number,
+  before: Node, beforeAt: number, after: Node, afterAt: number) {
   const $position = previous.resolve(position);
-  const after = $position.nodeAfter;
-  const paragraph = $position.nodeBefore;
-  if (paragraph?.type.name !== 'paragraph' || paragraph.attrs.close != null ||
-    after?.type !== block.type || after.attrs.before !== block.attrs.before) return false;
-  if (!after.isTextblock) return after.eq(block);
+  const oldBefore = $position.nodeBefore;
+  const oldAfter = $position.nodeAfter;
+  return oldBefore != null && oldAfter != null && oldAfter.attrs.before === after.attrs.before &&
+    same(mapping, oldBefore, position - oldBefore.nodeSize, before, beforeAt) &&
+    same(mapping, oldAfter, position, after, afterAt);
+}
+
+/** Whether `node` at `at` is `old` at `position` carried through `mapping`. */
+function same(mapping: Mapping, old: Node, position: number, node: Node, at: number) {
+  if (old.type !== node.type) return false;
+  if (!node.isTextblock) return old.eq(node);
   const start = mapping.mapResult(position + 1, -1);
   return !start.deleted && start.pos === at + 1;
 }

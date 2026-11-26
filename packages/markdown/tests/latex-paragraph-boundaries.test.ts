@@ -122,3 +122,12 @@ test('joining a wrapped paragraph into the one before keeps the next paragraph a
     expect(saved).toEqual(shown);
   });
 });
+
+test('deleting an equation after a spacing line keeps the paragraphs around it apart', async () => {
+  await withLatexEditor('First.\n\\vspace{1em}\n\n\\[x\\]\nTail.', (view) => {
+    const at = view.state.doc.child(0).nodeSize + view.state.doc.child(1).nodeSize;
+    view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, at)));
+    view.dispatch(view.state.tr.deleteSelection());
+    expect(serializeLatex(view.state.doc)).toBe('First.\n\\vspace{1em}\n\nTail.');
+  });
+});
