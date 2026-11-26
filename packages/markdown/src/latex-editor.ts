@@ -9,7 +9,7 @@ import {
 import { refreshLatexHeadingContents } from './latex-contents';
 import { Mapping } from 'prosemirror-transform';
 import { collab } from 'prosemirror-collab';
-import { history, redo, undo } from 'prosemirror-history';
+import { history, isHistoryTransaction, redo, undo } from 'prosemirror-history';
 import { InputRule, inputRules, undoInputRule, wrappingInputRule } from 'prosemirror-inputrules';
 import { keymap } from 'prosemirror-keymap';
 import {
@@ -431,10 +431,11 @@ export function latexState(
             refreshLatexHeadingContents(transaction, previous.doc, position,
               mapping.map(position, -1), mapping.map($from.after(), 1));
           }
-          // Remote steps arrive already separated, and source edits keep the spacing typed there.
+          // Remote steps arrive already separated, source edits keep the spacing typed there, and
+          // undo and redo bring back spacing exactly as it was.
           if (transactions.some(item => item.docChanged) &&
-              !transactions.some(item =>
-                item.getMeta('rebased') !== undefined || item.getMeta('latexSourceEdit')))
+              !transactions.some(item => item.getMeta('rebased') !== undefined ||
+                item.getMeta('latexSourceEdit') || isHistoryTransaction(item)))
           {
             const mapping = new Mapping();
             for (const item of transactions) mapping.appendMapping(item.mapping);

@@ -1097,16 +1097,19 @@ function withBlankLine(before: string) {
  * The source before a block. Parsed blocks keep the spacing they were authored with. A block the
  * editor created has none, so the block after it may hold spacing written for a different
  * neighbour, such as a single line break after a table. After a new paragraph, that spacing
- * gains a blank line so the two do not run together. Contents entries spell their parts inline.
+ * gains a blank line before another paragraph so the two do not run together, and a line break
+ * before any other block. Contents entries spell their parts inline.
  */
 function separatorSource(parent: Node, index: number) {
   const node = parent.child(index);
   const before: string =
     node.attrs.before ?? (index === 0 ? '' : node.type.name === 'list_item' ? '\n' : '\n\n');
   const previous = index ? parent.child(index - 1) : undefined;
-  if (previous?.type.name !== 'paragraph' || previous.attrs.before != null || !joinsParagraph(node) ||
-    parent.type.name === 'latex_contents_line' || blankLine(before)) return before;
-  return withBlankLine(before);
+  if (previous?.type.name !== 'paragraph' || previous.attrs.before != null ||
+    parent.type.name === 'latex_contents_line') return before;
+  // Other blocks still need their own line, since the paragraph may end in a comment.
+  if (!joinsParagraph(node)) return before.includes('\n') ? before : '\n' + before;
+  return blankLine(before) ? before : withBlankLine(before);
 }
 
 /**
@@ -1143,8 +1146,9 @@ export function separateLatexParagraphs(transform: Transform, previous: Node, ma
 /** Whether `previous` already had a paragraph run into a block with this spacing at `position`. */
 function existed(previous: Node, position: number, before: string) {
   const $position = previous.resolve(position);
-  return $position.nodeBefore?.type.name === 'paragraph' &&
-    $position.nodeAfter?.attrs.before === before;
+  const after = $position.nodeAfter;
+  return $position.nodeBefore?.type.name === 'paragraph' && after != null && joinsParagraph(after) &&
+    after.attrs.before === before;
 }
 
 function childrenSource(parent: Node) {

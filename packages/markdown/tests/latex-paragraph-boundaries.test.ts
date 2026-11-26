@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import { liftListItem } from 'prosemirror-schema-list';
-import { TextSelection } from 'prosemirror-state';
+import { NodeSelection, TextSelection } from 'prosemirror-state';
 import { noteSchema } from '../src';
 import { toggleMark, undo } from '../src/editor';
 import { latexHeading } from '../src/latex-editor';
@@ -75,6 +75,27 @@ test('formatting across display math keeps its spacing, and undo restores it', a
     view.dispatch(view.state.tr.setSelection(TextSelection.create(doc, 1, doc.content.size - 1)));
     toggleMark(noteSchema.marks.strong!)(view.state, view.dispatch);
     expect(serializeLatex(view.state.doc)).toBe('\\textbf{First.}\n\\[x\\]\n\\textbf{Second.}');
+    undo(view.state, view.dispatch);
+    expect(serializeLatex(view.state.doc)).toBe(source);
+  });
+});
+
+test('deleting display math between paragraphs keeps them apart', async () => {
+  await withLatexEditor('First.\n\\[x\\]\nSecond.', (view) => {
+    const at = view.state.doc.firstChild!.nodeSize;
+    view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, at)));
+    view.dispatch(view.state.tr.deleteSelection());
+    const { shown, saved } = paragraphs(view);
+    expect(shown).toEqual(['First.', 'Second.']);
+    expect(saved).toEqual(shown);
+  });
+});
+
+test('undoing a deletion restores authored spacing exactly', async () => {
+  const source = 'First.\n\\newpage\nSecond.';
+  await withLatexEditor(source, (view) => {
+    const { doc } = view.state;
+    view.dispatch(view.state.tr.delete(0, doc.content.size));
     undo(view.state, view.dispatch);
     expect(serializeLatex(view.state.doc)).toBe(source);
   });

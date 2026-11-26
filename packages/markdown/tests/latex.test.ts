@@ -130,6 +130,14 @@ test('a paragraph inserted with a trailing comment ends its line before a same-l
   expect(parseLatex(serializeLatex(edited)).childCount).toBe(edited.childCount);
 });
 
+test('a paragraph inserted with a trailing comment ends its line before display math', () => {
+  const document = parseLatex('\\section{Intro}\\[x\\]');
+  const at = document.firstChild!.nodeSize;
+  const paragraph = noteSchema.nodes.paragraph!.create(null, parseLatex('New % note').firstChild!.content);
+  const edited = document.replace(at, at, new Slice(Fragment.from(paragraph), 0, 0));
+  expect(parseLatex(serializeLatex(edited)).childCount).toBe(edited.childCount);
+});
+
 test('source edits use the same undo history and leave the rest of the article intact', () => {
   let state = noteState('', 0, 'test', parseLatex(article));
   const rewritten = article.replace('First', 'Edited');
