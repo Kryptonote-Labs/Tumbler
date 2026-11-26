@@ -125,7 +125,7 @@ test('a paragraph inserted after a heading stays apart across a comment or spaci
 test('a paragraph inserted with a trailing comment ends its line before a same-line block', () => {
   const document = parseLatex('\\begin{center}\nBox\n\\end{center}{\\raggedleft Tail.\\par}');
   const tail = document.content.size - document.lastChild!.nodeSize;
-  const paragraph = parseLatex('New % note').firstChild!;
+  const paragraph = noteSchema.nodes.paragraph!.create(null, parseLatex('New % note').firstChild!.content);
   const edited = document.replace(tail, tail, new Slice(Fragment.from(paragraph), 0, 0));
   expect(parseLatex(serializeLatex(edited)).childCount).toBe(edited.childCount);
 });

@@ -1015,7 +1015,7 @@ function mathSource(node: Node) {
 
 const serialized = new WeakMap<Node, string>();
 
-function blockSource(node: Node, context?: ContextSource): string {
+function blockSource(node: Node): string {
   const cached = serialized.get(node);
   if (cached !== undefined) return cached;
   const { open, close } = node.attrs;
@@ -1044,7 +1044,7 @@ function blockSource(node: Node, context?: ContextSource): string {
       break;
     }
     case 'latex_contents_line':
-      result = (open ?? '') + childrenSource(node, context) + (close ?? '');
+      result = (open ?? '') + childrenSource(node) + (close ?? '');
       break;
     case 'bullet_list':
     case 'ordered_list':
@@ -1059,73 +1059,48 @@ function blockSource(node: Node, context?: ContextSource): string {
             : node.type.name === 'latex_landscape' ? 'landscape' : 'quote';
       result =
         (open ?? '\\begin{' + environment + '}\n') +
-        childrenSource(node, context) +
+        childrenSource(node) +
         (close ?? '\n\\end{' + environment + '}');
       break;
     }
     case 'list_item':
-      result = (open ?? '\\item ') + childrenSource(node, context);
+      result = (open ?? '\\item ') + childrenSource(node);
       break;
     default:
-      result = node.isTextblock ? inlineSource(node) : childrenSource(node, context);
+      result = node.isTextblock ? inlineSource(node) : childrenSource(node);
   }
   serialized.set(node, result);
   return result;
 }
 
 /**
- * The preamble context a separator checks against. Serialized blocks are cached per node, so a
- * container keeps the separators chosen under the preamble it was first written with.
+ * The source before a block. Parsed blocks keep the spacing they were authored with. A block the
+ * editor created has none, so the block after it may hold spacing written for a different
+ * neighbour, such as a single line break after a table. After a new paragraph, that spacing
+ * gains a blank line so the two do not run together. Contents entries spell their parts inline.
  */
-type ContextSource = () => SourceContext;
-let plainContext: SourceContext | undefined;
-const defaultContext: ContextSource = () => (plainContext ??= sourceContext(''));
-
-/**
- * The source before a block. A block after a paragraph is spelled so that the paragraph still
- * ends there: a paragraph ending in a comment gets a line break, and one that would otherwise run
- * on gets a blank line, such as a paragraph inserted before a paragraph, comment or spacing line
- * that followed an earlier block. Authored boundaries keep their bytes, and wrapped paragraphs
- * and contents entries already mark their own boundaries.
- */
-function separatorSource(parent: Node, index: number, context?: ContextSource) {
+function separatorSource(parent: Node, index: number) {
   const node = parent.child(index);
-  let before: string =
+  const before: string =
     node.attrs.before ?? (index === 0 ? '' : node.type.name === 'list_item' ? '\n' : '\n\n');
-  if (index === 0 || parent.type.name === 'latex_contents_line') return before;
-  const previous = parent.child(index - 1);
-  if (previous.type.name !== 'paragraph' || previous.attrs.close != null) return before;
-  const comment = previous.lastChild?.type.name === 'latex_inline' &&
-    /^%[^\n]*$/.test(previous.lastChild.attrs.source);
-  if (comment && !before.includes('\n')) before = '\n' + before;
-  if ((node.type.name === 'paragraph' && node.attrs.open != null) || /\n[^\S\n]*\n/.test(before))
-    return before;
-  const head = blockSource(previous, context);
-  const next = parent.maybeChild(index + 1);
-  const text = head + before + blockSource(node, context) +
-    (next ? (next.attrs.before ?? '\n\n') + blockSource(next, context) : '');
-  if (paragraphEnd(text, 0, (context ?? defaultContext)()) <= head.length + before.length) return before;
+  const previous = index ? parent.child(index - 1) : undefined;
+  if (previous?.type.name !== 'paragraph' || previous.attrs.before != null ||
+    parent.type.name === 'latex_contents_line' || /\n[^\S\n]*\n/.test(before)) return before;
   return /^\s*$/.test(before)
     ? '\n\n' + before.slice(before.lastIndexOf('\n') + 1)
     : '\n\n' + before.trimStart();
 }
 
-function childrenSource(parent: Node, context?: ContextSource) {
+function childrenSource(parent: Node) {
   let result = '';
   parent.forEach((child, _offset, index) => {
-    result += separatorSource(parent, index, context) + blockSource(child, context);
+    result += separatorSource(parent, index) + blockSource(child);
   });
   return result;
 }
 
-/** The document's own context, read only when a separator needs it. */
-function documentContext(document: Node): ContextSource {
-  let context: SourceContext | undefined;
-  return () => (context ??= sourceContext(latexEffectivePrefix(document)));
-}
-
 export function serializeLatex(document: Node) {
-  return document.attrs.prefix + childrenSource(document, documentContext(document)) + document.attrs.suffix;
+  return document.attrs.prefix + childrenSource(document) + document.attrs.suffix;
 }
 
 function flattenSelectedIncludes(content: Fragment): Fragment {
@@ -1474,7 +1449,7 @@ export function latexSourceMap(document: Node) {
     const blocks = files.get(file)!;
     let offset = start;
     parent.forEach((node, childOffset, index) => {
-      offset += separatorSource(parent, index, context).length;
+      offset += separatorSource(parent, index).length;
       const end = offset + blockSource(node).length;
       const at = position + childOffset;
       blocks.push({ position: at, node, offset, end, depth });
@@ -1492,7 +1467,6 @@ export function latexSourceMap(document: Node) {
       offset = end;
     });
   }
-  const context = documentContext(document);
   visit(document, 0, String(document.attrs.prefix).length, 0, entry);
 
   function blockAt({ file = entry, offset }: LatexSourcePoint) {
