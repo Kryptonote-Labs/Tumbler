@@ -440,7 +440,7 @@ export function latexState(
             const mapping = new Mapping();
             for (const item of transactions) mapping.appendMapping(item.mapping);
             mapping.appendMapping(transaction.mapping);
-            separateLatexParagraphs(transaction, previous.doc, mapping.invert());
+            separateLatexParagraphs(transaction, previous.doc, mapping);
           }
           syncLatexIncludes(transaction, previous.doc);
           retainDetachedLatexFiles(transaction, previous.doc);

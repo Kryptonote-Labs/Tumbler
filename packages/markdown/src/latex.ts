@@ -49,7 +49,7 @@ import { usesLatexPackage } from './latex-preamble';
 export { withLatexPackage } from './latex-preamble';
 import { latexFormattingAlias, readLatexParagraphMacro, readLatexTextMacros } from './latex-macros';
 import { Fragment, type Mark, type Node } from 'prosemirror-model';
-import { Transform, type Mappable } from 'prosemirror-transform';
+import { Transform, type Mapping } from 'prosemirror-transform';
 import { updateLatexBoundary, updateLatexNodeSource } from './latex-boundary-step';
 import { LatexProjectFileStep, updateLatexProjectFile } from './latex-project-step';
 export { updateLatexBoundary, updateLatexNodeSource } from './latex-boundary-step';
@@ -1130,7 +1130,8 @@ function separatorSource(parent: Node, index: number) {
  * `previous` to the transform's document. Only boundaries the edit created are changed, so
  * untouched source and boundaries that merely moved keep their bytes.
  */
-export function separateLatexParagraphs(transform: Transform, previous: Node, mapping: Mappable) {
+export function separateLatexParagraphs(transform: Transform, previous: Node, mapping: Mapping) {
+  const back = mapping.invert();
   const { doc } = transform;
   const start = doc.content.findDiffStart(previous.content);
   const end = doc.content.findDiffEnd(previous.content)?.a;
@@ -1145,7 +1146,7 @@ export function separateLatexParagraphs(transform: Transform, previous: Node, ma
       const paragraph = index ? parent.child(index - 1) : undefined;
       if (at >= from && at <= to && typeof before === 'string' && !blankLine(before) &&
         joinsParagraph(child) && paragraph?.type.name === 'paragraph' &&
-        paragraph.attrs.close == null && !existed(previous, mapping.map(at, -1), child))
+        paragraph.attrs.close == null && !existed(previous, mapping, back.map(at, -1), at, child))
         transform.setNodeAttribute(at, 'before', withBlankLine(before));
       if (!child.isTextblock && !child.isAtom && at <= to && at + child.nodeSize >= from)
         visit(child, at + 1);
@@ -1155,15 +1156,18 @@ export function separateLatexParagraphs(transform: Transform, previous: Node, ma
 }
 
 /**
- * Whether `previous` already had an unwrapped paragraph run into `block` at `position`: the same
- * paragraph, perhaps edited since, or the same raw line.
+ * Whether `previous` already had an unwrapped paragraph run into `block` at `position`, which
+ * `mapping` carries to `at`: the same paragraph, perhaps edited since, or the same raw line.
  */
-function existed(previous: Node, position: number, block: Node) {
+function existed(previous: Node, mapping: Mapping, position: number, at: number, block: Node) {
   const $position = previous.resolve(position);
   const after = $position.nodeAfter;
   const paragraph = $position.nodeBefore;
-  return paragraph?.type.name === 'paragraph' && paragraph.attrs.close == null && after?.type === block.type &&
-    after.attrs.before === block.attrs.before && (after.isTextblock || after.eq(block));
+  if (paragraph?.type.name !== 'paragraph' || paragraph.attrs.close != null ||
+    after?.type !== block.type || after.attrs.before !== block.attrs.before) return false;
+  if (!after.isTextblock) return after.eq(block);
+  const start = mapping.mapResult(position + 1, -1);
+  return !start.deleted && start.pos === at + 1;
 }
 
 function childrenSource(parent: Node) {

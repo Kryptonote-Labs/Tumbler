@@ -82,7 +82,7 @@ test('formatting across display math keeps its spacing, and undo restores it', a
 });
 
 test('deleting a block between paragraphs keeps them apart', async () => {
-  for (const block of ['\\[x\\]', '\\newpage'])
+  for (const block of ['\\[x\\]', '\\newpage', '{\\raggedleft Aside.\\par}'])
     await withLatexEditor(`First.\n${block}\nSecond.`, (view) => {
       const at = view.state.doc.firstChild!.nodeSize;
       view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, at)));
