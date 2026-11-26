@@ -96,6 +96,7 @@ test('authored paragraph boundaries round-trip unchanged', () => {
     '{\\raggedleft First.\\par}\nSecond.',
     'First % note\n\nSecond.',
     'Use \\verb|100%|\\begin{math}x\\end{math}',
+    '\\begin{quote}\nBox % note\n\\end{quote}{\\sffamily Tail.\\par}',
     String.raw`\documentclass{report}
 \makeatletter
 \newcommand{\chapentry}[2]{\@dottedtocline{0}{0em}{1em}{#1}{#2}}

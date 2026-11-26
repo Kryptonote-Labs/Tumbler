@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import { liftListItem } from 'prosemirror-schema-list';
 import { NodeSelection, TextSelection } from 'prosemirror-state';
 import { noteSchema } from '../src';
+import { joinBackward } from 'prosemirror-commands';
 import { toggleMark, undo } from '../src/editor';
 import { latexHeading } from '../src/latex-editor';
 import { parseLatex, serializeLatex } from '../src/latex';
@@ -108,6 +109,16 @@ test('deleting a raw line before a comment keeps the paragraphs around them apar
     view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, at)));
     view.dispatch(view.state.tr.deleteSelection());
     const { shown, saved } = paragraphs(view);
+    expect(saved).toEqual(shown);
+  });
+});
+
+test('joining a wrapped paragraph into the one before keeps the next paragraph apart', async () => {
+  await withLatexEditor('First.\n{\\raggedleft Second.\\par}\nTail.', (view) => {
+    caretIn(view, 'Second.');
+    joinBackward(view.state, view.dispatch);
+    const { shown, saved } = paragraphs(view);
+    expect(shown).toEqual(['First.Second.', 'Tail.']);
     expect(saved).toEqual(shown);
   });
 });

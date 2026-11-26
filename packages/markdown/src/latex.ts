@@ -1086,14 +1086,16 @@ function joinsParagraph(node: Node) {
   return node.type.name === 'paragraph' || node.type.name === 'latex_raw';
 }
 
-/** Whether a block's source ends in a comment: an inline comment, or a raw line that ends in one. */
+/**
+ * Whether a block's source ends in a comment: an unwrapped paragraph whose last inline is one, or
+ * a raw line that ends in one. Containers end in their own closing source.
+ */
 function endsInComment(node: Node) {
-  let last = node;
-  while (last.lastChild) last = last.lastChild;
-  const source: unknown = last.attrs.source;
+  const source: unknown = node.isTextblock ? node.lastChild?.attrs.source : node.attrs.source;
   if (typeof source !== 'string') return false;
-  if (last.type.name === 'latex_inline') return source.startsWith('%');
-  return last.type.name === 'latex_raw' && /(?:^|[^\\])(?:\\\\)*%[^\n]*$/.test(source);
+  if (node.isTextblock)
+    return node.attrs.close == null && node.lastChild?.type.name === 'latex_inline' && source.startsWith('%');
+  return node.type.name === 'latex_raw' && /(?:^|[^\\])(?:\\\\)*%[^\n]*$/.test(source);
 }
 
 /** `before` with a blank line ahead of it, keeping any indentation, comment or spacing command. */
@@ -1153,13 +1155,14 @@ export function separateLatexParagraphs(transform: Transform, previous: Node, ma
 }
 
 /**
- * Whether `previous` already had a paragraph run into `block` at `position`: the same paragraph,
- * perhaps edited since, or the same raw line.
+ * Whether `previous` already had an unwrapped paragraph run into `block` at `position`: the same
+ * paragraph, perhaps edited since, or the same raw line.
  */
 function existed(previous: Node, position: number, block: Node) {
   const $position = previous.resolve(position);
   const after = $position.nodeAfter;
-  return $position.nodeBefore?.type.name === 'paragraph' && after?.type === block.type &&
+  const paragraph = $position.nodeBefore;
+  return paragraph?.type.name === 'paragraph' && paragraph.attrs.close == null && after?.type === block.type &&
     after.attrs.before === block.attrs.before && (after.isTextblock || after.eq(block));
 }
 
