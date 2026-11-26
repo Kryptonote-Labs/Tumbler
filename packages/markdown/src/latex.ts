@@ -1182,15 +1182,12 @@ export function separateLatexParagraphs(transform: Transform, previous: Node, ma
  */
 function reopensApart($at: ResolvedPos, index: number, before: string, context: SourceContext) {
   const parent = $at.parent;
-  // Includes load another file, so the window stops short of them.
-  const joined = (at: number) => parent.child(at).type.name !== 'latex_include' &&
+  const joined = (at: number) =>
     !blankLine(separatorSource(parent, at + 1, at + 1 === index ? before : undefined));
-  if (parent.child(index).type.name === 'latex_include') return true;
   let first = index;
   while (first > 0 && index - first < 8 && joined(first - 1)) first--;
   let last = index;
-  while (last + 1 < parent.childCount && last - index < 8 && parent.child(last + 1).type.name !== 'latex_include' &&
-    joined(last)) last++;
+  while (last + 1 < parent.childCount && last - index < 8 && joined(last)) last++;
   let source = '';
   for (let at = first; at <= last; at++)
     source += separatorSource(parent, at, at === index ? before : undefined) + blockSource(parent.child(at));
@@ -1216,8 +1213,12 @@ function reopensApart($at: ResolvedPos, index: number, before: string, context: 
     parsed = parsed.firstChild!.content;
   }
   if (parsed.childCount !== last - first + 1) return false;
-  for (let at = first; at <= last; at++)
-    if (parsed.child(at - first).type !== parent.child(at).type) return false;
+  for (let at = first; at <= last; at++) {
+    const shown = parent.child(at).type.name;
+    const reopened = parsed.child(at - first).type.name;
+    // Without the project's files, an include reparses as its raw command.
+    if (reopened !== shown && !(shown === 'latex_include' && reopened === 'latex_raw')) return false;
+  }
   return true;
 }
 

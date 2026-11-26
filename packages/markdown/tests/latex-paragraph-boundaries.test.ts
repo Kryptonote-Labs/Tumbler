@@ -235,3 +235,18 @@ test('deleting an equation after a font scope ends the paragraph before the next
     expect(serializeLatex(view.state.doc)).toBe('{\\sffamily First.}\n\nTail.');
   });
 });
+
+test('blocks beside an include stay apart after an equation is replaced or deleted', async () => {
+  const project = (main: string) => parseLatexProject('main.tex', new Map([['main.tex', main], ['intro.tex', 'Intro.']]));
+  await withLatexEditor(project('\\input{intro}\n\\[x\\]\nTail.'), (view) => {
+    selectEquation(view);
+    view.dispatch(view.state.tr.replaceSelectionWith(parseLatex('{\\sffamily Aside.\\par}').firstChild!));
+    const reopened = parseLatexProject('main.tex', serializeLatexProject(view.state.doc)!.files);
+    expect(blocks(reopened)).toEqual(blocks(view.state.doc));
+  });
+  await withLatexEditor(project('First.\n\\[x\\]\n\\vspace{1em}\n\\input{intro}'), (view) => {
+    selectEquation(view);
+    view.dispatch(view.state.tr.deleteSelection());
+    expect(serializeLatexProject(view.state.doc)!.files.get('main.tex')).toBe('First.\n\n\\vspace{1em}\n\\input{intro}');
+  });
+});
