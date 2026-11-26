@@ -106,6 +106,20 @@ test('authored paragraph boundaries round-trip unchanged', () => {
   ]) expect(serializeLatex(parseLatex(source))).toBe(source);
   expect(parseLatex('First % note\n\nSecond.').childCount).toBe(2);
   expect(serializeLatex(parseLatex('First. \\section X'))).toBe('First. \\section X');
+  const macro = '\\documentclass{article}\n\\newcommand{\\bibfiles}{references}\n\\begin{document}\nFirst. \\bibliography\\bibfiles\n\\end{document}';
+  expect(serializeLatex(parseLatex(macro))).toBe(macro);
+});
+
+test('a paragraph inserted after a heading stays apart across a comment or spacing line', () => {
+  for (const between of ['% Note\n', '\n\\vspace{1em}\n']) {
+    const document = parseLatex(`\\section{Intro}${between}Tail.`);
+    const after = document.firstChild!.nodeSize;
+    const paragraph = noteSchema.nodes.paragraph!.create(null, noteSchema.text('New.'));
+    const edited = document.replace(after, after, new Slice(Fragment.from(paragraph), 0, 0));
+    const reparsed = parseLatex(serializeLatex(edited));
+    expect(reparsed.childCount).toBe(edited.childCount);
+    expect(reparsed.lastChild!.textContent).toBe('Tail.');
+  }
 });
 
 test('a paragraph inserted with a trailing comment ends its line before a same-line block', () => {
