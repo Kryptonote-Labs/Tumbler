@@ -154,6 +154,13 @@ test('a comment ending the document body leaves its closing source visible', () 
   expect(serializeLatex(edited)).toEndWith('A note. % aside\n\\end{document}\n');
 });
 
+test('a heading ending in a comment keeps its closing brace', () => {
+  const document = parseLatex('Introduction % keep this note\n\nBody text.');
+  const edited = document.copy(document.content.replaceChild(0,
+    noteSchema.nodes.heading!.create({ level: 1 }, document.firstChild!.content)));
+  expect(parseLatex(serializeLatex(edited)).childCount).toBe(2);
+});
+
 test('source edits use the same undo history and leave the rest of the article intact', () => {
   let state = noteState('', 0, 'test', parseLatex(article));
   const rewritten = article.replace('First', 'Edited');

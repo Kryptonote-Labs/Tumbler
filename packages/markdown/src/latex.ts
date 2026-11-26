@@ -1015,6 +1015,35 @@ function mathSource(node: Node) {
 
 const serialized = new WeakMap<Node, string>();
 
+const environments: Record<string, string> = {
+  bullet_list: 'itemize', ordered_list: 'enumerate', latex_landscape: 'landscape',
+};
+
+/** The source a container begins with, before its children. */
+function containerOpen(node: Node): string {
+  if (node.attrs.open != null) return node.attrs.open;
+  if (node.type.name === 'list_item') return '\\item ';
+  return '\\begin{' + (environments[node.type.name] ?? 'quote') + '}\n';
+}
+
+/** The source a container ends with, after its children. */
+function containerClose(node: Node): string {
+  if (node.type.name === 'list_item') return '';
+  const ending: string = node.attrs.close ?? '\n\\end{' + (environments[node.type.name] ?? 'quote') + '}';
+  // A comment ending the last block would hide the closing source on its line.
+  const endComment = node.lastChild && endsInComment(node.lastChild) && !/^\r?\n/.test(ending) ? '\n' : '';
+  return endComment + ending;
+}
+
+/** Container types whose source is their opening, children and closing source. */
+const wrappers = new Set(['bullet_list', 'ordered_list', 'latex_landscape', 'latex_container', 'blockquote', 'list_item']);
+
+/** A line break before `close` when the textblock ends in a comment that would otherwise hide it. */
+function inlineEndComment(node: Node, close: string | null) {
+  const source = node.lastChild?.type.name === 'latex_inline' ? String(node.lastChild.attrs.source) : '';
+  return close && source.startsWith('%') && !source.endsWith('\n') ? '\n' : '';
+}
+
 function blockSource(node: Node): string {
   const cached = serialized.get(node);
   if (cached !== undefined) return cached;
@@ -1033,16 +1062,13 @@ function blockSource(node: Node): string {
     case 'heading':
     case 'latex_heading': {
       const command = latexHeadings[node.attrs.level - 1] ?? latexHeadings[0];
-      result = (open ?? '\\' + command + '{') + inlineSource(node) + (close ?? '}');
+      const ending = close ?? '}';
+      result = (open ?? '\\' + command + '{') + inlineSource(node) + inlineEndComment(node, ending) + ending;
       break;
     }
-    case 'paragraph': {
-      const last = node.lastChild;
-      const comment = last?.type.name === 'latex_inline' && String(last.attrs.source).startsWith('%');
-      const endComment = close && comment && !String(last.attrs.source).endsWith('\n') ? '\n' : '';
-      result = (open ?? '') + inlineSource(node) + endComment + (close ?? '');
+    case 'paragraph':
+      result = (open ?? '') + inlineSource(node) + inlineEndComment(node, close) + (close ?? '');
       break;
-    }
     case 'latex_contents_line':
       result = (open ?? '') + childrenSource(node) + (close ?? '');
       break;
@@ -1050,22 +1076,9 @@ function blockSource(node: Node): string {
     case 'ordered_list':
     case 'latex_landscape':
     case 'latex_container':
-    case 'blockquote': {
-      const environment =
-        node.type.name === 'bullet_list'
-          ? 'itemize'
-          : node.type.name === 'ordered_list'
-            ? 'enumerate'
-            : node.type.name === 'latex_landscape' ? 'landscape' : 'quote';
-      const ending = close ?? '\n\\end{' + environment + '}';
-      // A comment ending the last block would hide the closing source on its line.
-      const endComment = node.lastChild && endsInComment(node.lastChild) && !/^\r?\n/.test(ending) ? '\n' : '';
-      result =
-        (open ?? '\\begin{' + environment + '}\n') + childrenSource(node) + endComment + ending;
-      break;
-    }
+    case 'blockquote':
     case 'list_item':
-      result = (open ?? '\\item ') + childrenSource(node);
+      result = containerOpen(node) + childrenSource(node) + containerClose(node);
       break;
     default:
       result = node.isTextblock ? inlineSource(node) : childrenSource(node);
@@ -1197,11 +1210,9 @@ function reopensApart($at: ResolvedPos, index: number, before: string, context: 
     if ($at.node(depth).type.name === 'latex_include') root = depth;
   for (let depth = $at.depth; depth > root; depth--) {
     const container = $at.node(depth);
-    const whole = blockSource(container);
-    const open: string = container.attrs.open ?? containerDefaults[container.type.name] ?? '';
-    const inner = childrenSource(container);
-    if (!whole.startsWith(open + inner)) return true;
-    let close = whole.slice(open.length + inner.length);
+    if (!wrappers.has(container.type.name)) return true;
+    const open = containerOpen(container);
+    let close = containerClose(container);
     // The checked block's comment would otherwise hide the close, which other blocks follow.
     if (depth === $at.depth && endsInComment(parent.child(last)) && !/^\r?\n/.test(close))
       close = '\n' + close;
