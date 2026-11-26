@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { Fragment, Slice } from 'prosemirror-model';
 import { TextSelection } from 'prosemirror-state';
 import { Step } from 'prosemirror-transform';
 import { noteSchema } from '../src';
@@ -70,6 +71,16 @@ test('LaTeX keeps original bytes around visual text, ribbon formatting and equat
       .replace('Ordinary', '\\textbf{Ordinary}')
       .replace('\\frac{1}{2}', '\\frac{2}{3}'),
   );
+});
+
+test('a paragraph inserted before one on the next line stays its own paragraph', () => {
+  const document = parseLatex('\\begin{center}\nBox\n\\end{center}\nTail.');
+  const tail = document.content.size - document.lastChild!.nodeSize;
+  const paragraph = noteSchema.nodes.paragraph!.create(null, noteSchema.text('New'));
+  const edited = document.replace(tail, tail, new Slice(Fragment.from(paragraph), 0, 0));
+  const source = serializeLatex(edited);
+  expect(source).toEndWith('\nNew\n\nTail.');
+  expect(parseLatex(source).childCount).toBe(edited.childCount);
 });
 
 test('source edits use the same undo history and leave the rest of the article intact', () => {

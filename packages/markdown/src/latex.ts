@@ -1075,9 +1075,15 @@ function blockSource(node: Node): string {
 function childrenSource(parent: Node) {
   let result = '';
   parent.forEach((child, _offset, index) => {
-    result +=
-      (child.attrs.before ?? (index === 0 ? '' : child.type.name === 'list_item' ? '\n' : '\n\n')) +
-      blockSource(child);
+    let before: string =
+      child.attrs.before ?? (index === 0 ? '' : child.type.name === 'list_item' ? '\n' : '\n\n');
+    // Paragraphs on separate lines stay apart only across a blank line, such as when one is
+    // inserted before a paragraph that followed a block on the next line. Containers that place
+    // paragraphs on one line, such as contents entries, spell them with no line break.
+    if (index > 0 && child.type.name === 'paragraph' &&
+      parent.child(index - 1).type.name === 'paragraph' &&
+      before.includes('\n') && !/\n[^\S\n]*\n/.test(before)) before = '\n\n' + before.trimStart();
+    result += before + blockSource(child);
   });
   return result;
 }
