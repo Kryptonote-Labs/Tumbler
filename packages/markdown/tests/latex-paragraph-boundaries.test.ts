@@ -101,3 +101,13 @@ test('undoing a deletion restores authored spacing exactly', async () => {
     expect(serializeLatex(view.state.doc)).toBe(source);
   });
 });
+
+test('deleting a raw line before a comment keeps the paragraphs around them apart', async () => {
+  await withLatexEditor('First.\n\\newpage\n% Note\nSecond.', (view) => {
+    const at = view.state.doc.firstChild!.nodeSize;
+    view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, at)));
+    view.dispatch(view.state.tr.deleteSelection());
+    const { shown, saved } = paragraphs(view);
+    expect(saved).toEqual(shown);
+  });
+});

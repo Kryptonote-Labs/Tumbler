@@ -1086,9 +1086,14 @@ function joinsParagraph(node: Node) {
   return node.type.name === 'paragraph' || node.type.name === 'latex_raw';
 }
 
-/** Whether the last line of `source` ends in a comment. */
-function endsInComment(source: string) {
-  return /(?:^|[^\\])(?:\\\\)*%[^\n]*$/.test(source);
+/** Whether a block's source ends in a comment: an inline comment, or a raw line that ends in one. */
+function endsInComment(node: Node) {
+  let last = node;
+  while (last.lastChild) last = last.lastChild;
+  const source: unknown = last.attrs.source;
+  if (typeof source !== 'string') return false;
+  if (last.type.name === 'latex_inline') return source.startsWith('%');
+  return last.type.name === 'latex_raw' && /(?:^|[^\\])(?:\\\\)*%[^\n]*$/.test(source);
 }
 
 /** `before` with a blank line ahead of it, keeping any indentation, comment or spacing command. */
@@ -1113,7 +1118,7 @@ function separatorSource(parent: Node, index: number) {
   if (previous.type.name === 'paragraph' && previous.attrs.before == null && joinsParagraph(node) &&
     !blankLine(before)) return withBlankLine(before);
   // A block placed after a comment needs its own line, or the comment would hide it.
-  return before.includes('\n') || !endsInComment(blockSource(previous)) ? before : '\n' + before;
+  return before.includes('\n') || !endsInComment(previous) ? before : '\n' + before;
 }
 
 /**
@@ -1147,12 +1152,15 @@ export function separateLatexParagraphs(transform: Transform, previous: Node, ma
   visit(doc, 0);
 }
 
-/** Whether `previous` already had a paragraph run into a block like `block` at `position`. */
+/**
+ * Whether `previous` already had a paragraph run into `block` at `position`: the same paragraph,
+ * perhaps edited since, or the same raw line.
+ */
 function existed(previous: Node, position: number, block: Node) {
   const $position = previous.resolve(position);
   const after = $position.nodeAfter;
   return $position.nodeBefore?.type.name === 'paragraph' && after?.type === block.type &&
-    after.attrs.before === block.attrs.before;
+    after.attrs.before === block.attrs.before && (after.isTextblock || after.eq(block));
 }
 
 function childrenSource(parent: Node) {
