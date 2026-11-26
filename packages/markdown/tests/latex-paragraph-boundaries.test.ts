@@ -131,3 +131,13 @@ test('deleting an equation after a spacing line keeps the paragraphs around it a
     expect(serializeLatex(view.state.doc)).toBe('First.\n\\vspace{1em}\n\nTail.');
   });
 });
+
+test('paragraphs pasted after a scoped paragraph start on their own line', async () => {
+  await withLatexEditor('{\\sffamily First.\\par}\nTail.', (view) => {
+    const pasted = parseLatex('One.\n\nTwo.').content;
+    view.dispatch(view.state.tr.insert(view.state.doc.firstChild!.nodeSize, pasted));
+    const { shown, saved } = paragraphs(view);
+    expect(shown).toEqual(['First.', 'One.', 'Two.', 'Tail.']);
+    expect(saved).toEqual(shown);
+  });
+});

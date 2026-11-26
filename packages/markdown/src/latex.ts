@@ -1098,8 +1098,14 @@ function endsInComment(node: Node) {
   return node.type.name === 'latex_raw' && /(?:^|[^\\])(?:\\\\)*%[^\n]*$/.test(source);
 }
 
+/** `before` beginning on a new line, so the block does not join the end of the one before. */
+function withLineBreak(before: string) {
+  return before.includes('\n') ? before : '\n' + before;
+}
+
 /** `before` with a blank line ahead of it, keeping any indentation, comment or spacing command. */
 function withBlankLine(before: string) {
+  if (blankLine(before)) return before;
   return /^\s*$/.test(before)
     ? '\n\n' + before.slice(before.lastIndexOf('\n') + 1)
     : '\n\n' + before.trimStart();
@@ -1117,16 +1123,17 @@ function separatorSource(parent: Node, index: number) {
     node.attrs.before ?? (index === 0 ? '' : node.type.name === 'list_item' ? '\n' : '\n\n');
   const previous = index ? parent.child(index - 1) : undefined;
   if (!previous || parent.type.name === 'latex_contents_line') return before;
-  if (previous.type.name === 'paragraph' && previous.attrs.before == null && joinsParagraph(node) &&
-    !blankLine(before)) return withBlankLine(before);
+  if (previous.type.name === 'paragraph' && previous.attrs.before == null && joinsParagraph(node))
+    return withBlankLine(before);
   // A block placed after a comment needs its own line, or the comment would hide it.
-  return before.includes('\n') || !endsInComment(previous) ? before : '\n' + before;
+  return endsInComment(previous) ? withLineBreak(before) : before;
 }
 
 /**
- * Give a blank line to blocks that an edit placed after a paragraph, when their authored spacing
- * would let the paragraph run on into them, such as text pasted, lifted out of a list or turned
- * from a heading before a paragraph that followed on the next line. `mapping` leads from
+ * Separate paragraphs and raw lines that an edit placed where their authored spacing would let
+ * them join what comes before, such as text pasted, lifted out of a list or turned from a heading
+ * before a paragraph that followed on the next line. After a paragraph they gain a blank line,
+ * and after any other block a line break. `mapping` leads from
  * `previous` to the transform's document. Only boundaries the edit created are changed, so
  * untouched source and boundaries that merely moved keep their bytes.
  */
@@ -1144,10 +1151,12 @@ export function separateLatexParagraphs(transform: Transform, previous: Node, ma
     parent.forEach((child, offset, index) => {
       const at = contentStart + offset;
       const before: unknown = child.attrs.before;
-      if (at >= from && at <= to && typeof before === 'string' && !blankLine(before) &&
-        joinsParagraph(child) && leadingParagraph(parent, index)?.attrs.close === null &&
+      const separated = typeof before === 'string' ?
+        (leadingParagraph(parent, index)?.attrs.close === null ? withBlankLine : withLineBreak)(before) :
+        before;
+      if (index && at >= from && at <= to && joinsParagraph(child) && separated !== before &&
         !existed(previous, mapping, back.map(at, -1), parent.child(index - 1), neighbour, child, at))
-        transform.setNodeAttribute(at, 'before', withBlankLine(before));
+        transform.setNodeAttribute(at, 'before', separated);
       if (!child.isTextblock && !child.isAtom && at <= to && at + child.nodeSize >= from)
         visit(child, at + 1);
       neighbour = at;
