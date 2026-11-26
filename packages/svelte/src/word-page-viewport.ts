@@ -9,6 +9,18 @@ export interface WordPageViewport {
   readonly totalWidth: number;
 }
 
+/** Return the zero-based page at a vertical offset, or zero when no pages are laid out. */
+export function wordPageAtOffset(offsets: readonly number[], y: number): number {
+  let first = 0;
+  let end = offsets.length;
+  while (first + 1 < end) {
+    const middle = Math.floor((first + end) / 2);
+    if (offsets[middle]! <= y) first = middle;
+    else end = middle;
+  }
+  return first;
+}
+
 /** Projects a page layout into a small overscanned mounted window. */
 export function calculateWordPageViewport(
   layout: WordLayout,
