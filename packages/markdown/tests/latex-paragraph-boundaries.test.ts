@@ -166,6 +166,7 @@ test('deleting an equation keeps blocks around it apart', async () => {
   for (const source of [
     '{\\sffamily A note.}\n\n\\[x\\]\nMain text.',
     '\\begin{itemize}\n\\item A note. % aside\n\\[x\\]\\item Main text.\n\\end{itemize}',
+    '{\\sffamily A note.}\n\n\\[x\\]\n\\section{Main text.}',
   ])
     await withLatexEditor(source, (view) => {
       let at = 0;
@@ -174,8 +175,16 @@ test('deleting an equation keeps blocks around it apart', async () => {
       });
       view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, at)));
       view.dispatch(view.state.tr.deleteSelection());
-      const { shown, saved } = paragraphs(view);
-      expect(shown).toHaveLength(2);
-      expect(saved).toEqual(shown);
+      const reopened = parseLatex(serializeLatex(view.state.doc));
+      expect(blocks(reopened)).toEqual(blocks(view.state.doc));
     });
 });
+
+/** The block types and text of a document, outermost first. */
+function blocks(doc: EditorView['state']['doc']) {
+  const found: string[] = [];
+  doc.descendants((node) => {
+    if (node.isBlock) found.push(`${node.type.name}: ${node.textContent}`);
+  });
+  return found;
+}

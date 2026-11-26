@@ -97,6 +97,7 @@ test('authored paragraph boundaries round-trip unchanged', () => {
     'First % note\n\nSecond.',
     'Use \\verb|100%|\\begin{math}x\\end{math}',
     '\\begin{quote}\nBox % note\n\\end{quote}{\\sffamily Tail.\\par}',
+    '\\begin{quote}\r\nA note. % aside\r\n\\end{quote}',
     String.raw`\documentclass{report}
 \makeatletter
 \newcommand{\chapentry}[2]{\@dottedtocline{0}{0em}{1em}{#1}{#2}}
@@ -145,6 +146,12 @@ test('a pasted paragraph ending in a comment keeps a following equation visible'
   const pasted = parseLatex('New % note').firstChild!;
   const edited = document.replace(0, document.firstChild!.nodeSize, new Slice(Fragment.from(pasted), 0, 0));
   expect(serializeLatex(edited)).toBe('New % note\n\\[x\\]');
+});
+
+test('a comment ending the document body leaves its closing source visible', () => {
+  const document = parseLatex('\\documentclass{article}\n\\begin{document}\nA note. % aside\n\\[x\\]\\end{document}\n');
+  const edited = document.replace(document.content.size - document.lastChild!.nodeSize, document.content.size, Slice.empty);
+  expect(serializeLatex(edited)).toEndWith('A note. % aside\n\\end{document}\n');
 });
 
 test('source edits use the same undo history and leave the rest of the article intact', () => {

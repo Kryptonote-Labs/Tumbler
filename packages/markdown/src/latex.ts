@@ -48,7 +48,7 @@ export type { LatexLetterPart } from './latex-letter';
 import { usesLatexPackage } from './latex-preamble';
 export { withLatexPackage } from './latex-preamble';
 import { latexFormattingAlias, readLatexParagraphMacro, readLatexTextMacros } from './latex-macros';
-import { Fragment, type Mark, type Node } from 'prosemirror-model';
+import { Fragment, type Mark, type Node, type ResolvedPos } from 'prosemirror-model';
 import { Transform, type Mapping } from 'prosemirror-transform';
 import { updateLatexBoundary, updateLatexNodeSource } from './latex-boundary-step';
 import { LatexProjectFileStep, updateLatexProjectFile } from './latex-project-step';
@@ -1059,7 +1059,7 @@ function blockSource(node: Node): string {
             : node.type.name === 'latex_landscape' ? 'landscape' : 'quote';
       const ending = close ?? '\n\\end{' + environment + '}';
       // A comment ending the last block would hide the closing source on its line.
-      const endComment = node.lastChild && endsInComment(node.lastChild) && !ending.startsWith('\n') ? '\n' : '';
+      const endComment = node.lastChild && endsInComment(node.lastChild) && !/^\r?\n/.test(ending) ? '\n' : '';
       result =
         (open ?? '\\begin{' + environment + '}\n') + childrenSource(node) + endComment + ending;
       break;
@@ -1123,10 +1123,9 @@ function withBlankLine(before: string) {
  * neighbour, such as a single line break after a table. After a new paragraph, that spacing
  * gains a blank line before another paragraph so the two do not run together. Contents entries spell their parts inline.
  */
-function separatorSource(parent: Node, index: number) {
+function separatorSource(parent: Node, index: number, authored: string | null = parent.child(index).attrs.before) {
   const node = parent.child(index);
-  const before: string =
-    node.attrs.before ?? (index === 0 ? '' : node.type.name === 'list_item' ? '\n' : '\n\n');
+  const before = authored ?? (index === 0 ? '' : node.type.name === 'list_item' ? '\n' : '\n\n');
   const previous = index ? parent.child(index - 1) : undefined;
   if (!previous || parent.type.name === 'latex_contents_line') return before;
   if (previous.type.name === 'paragraph' && previous.attrs.before == null && joinsParagraph(node))
@@ -1136,12 +1135,11 @@ function separatorSource(parent: Node, index: number) {
 }
 
 /**
- * Separate paragraphs and raw lines that an edit placed where their authored spacing would let
- * them join what comes before, such as text pasted, lifted out of a list or turned from a heading
- * before a paragraph that followed on the next line. After a paragraph they gain a blank line,
- * and after any other block a line break. `mapping` leads from
- * `previous` to the transform's document. Only boundaries the edit created are changed, so
- * untouched source and boundaries that merely moved keep their bytes.
+ * Separate blocks that an edit placed where their authored spacing would let them join what comes
+ * before, such as text pasted, lifted out of a list or left beside a paragraph by a deleted
+ * equation. Each boundary the edit created is parsed again with the blocks around it, and gains
+ * a line break, then a blank line, until the blocks reopen as they are shown. `mapping` leads
+ * from `previous` to the transform's document. Boundaries the edit did not create keep their bytes.
  */
 export function separateLatexParagraphs(transform: Transform, previous: Node, mapping: Mapping) {
   const back = mapping.invert();
@@ -1151,18 +1149,22 @@ export function separateLatexParagraphs(transform: Transform, previous: Node, ma
   if (start == null || end == null) return;
   const from = Math.min(start, end);
   const to = Math.max(start, end);
+  let context: SourceContext | undefined;
   const visit = (parent: Node, contentStart: number) => {
-    if (parent.type.name === 'latex_contents_line') return;
+    if (parent.type.name === 'latex_contents_line' || parent.type.name === 'latex_include') return;
     let neighbour = contentStart;
     parent.forEach((child, offset, index) => {
       const at = contentStart + offset;
       const before: unknown = child.attrs.before;
-      const separated = typeof before === 'string' ?
-        (leadingParagraph(parent, index) ? withBlankLine : withLineBreak)(before) :
-        before;
-      if (index && at >= from && at <= to && joinsParagraph(child) && separated !== before &&
-        !existed(previous, mapping, back.map(at, -1), parent.child(index - 1), neighbour, child, at))
-        transform.setNodeAttribute(at, 'before', separated);
+      if (index && at >= from && at <= to && typeof before === 'string' &&
+        !existed(previous, mapping, back.map(at, -1), parent.child(index - 1), neighbour, child, at)) {
+        context ??= sourceContext(latexEffectivePrefix(doc));
+        const $at = doc.resolve(at);
+        const separated = [before, withLineBreak(before), withBlankLine(before)]
+          .find(candidate => reopensApart($at, index, candidate, context!));
+        if (separated !== undefined && separated !== before)
+          transform.setNodeAttribute(at, 'before', separated);
+      }
       if (!child.isTextblock && !child.isAtom && at <= to && at + child.nodeSize >= from)
         visit(child, at + 1);
       neighbour = at;
@@ -1172,20 +1174,34 @@ export function separateLatexParagraphs(transform: Transform, previous: Node, ma
 }
 
 /**
- * The paragraph that the block at `index` would continue, past any raw lines that follow it
- * without a blank line, such as a spacing command. A group such as `{\sffamily …}` continues its
- * paragraph unless it ends it with `\par`.
+ * Whether the block at `index` of `$at`'s parent, given `before`, reopens as the same blocks as
+ * the ones it follows up to the last blank line. They are parsed inside their enclosing
+ * containers, with the document's macros.
  */
-function leadingParagraph(parent: Node, index: number) {
-  for (let at = index - 1; at >= 0; at--) {
-    const node = parent.child(at);
-    if (node.type.name === 'paragraph') return node.attrs.close == null ? node : undefined;
-    if (node.type.name === 'latex_container')
-      return String(node.attrs.open).startsWith('{') && !String(node.attrs.close).includes('\\par')
-        ? node : undefined;
-    if (node.type.name !== 'latex_raw' || blankLine(node.attrs.before ?? '\n\n')) return undefined;
+function reopensApart($at: ResolvedPos, index: number, before: string, context: SourceContext) {
+  const parent = $at.parent;
+  let first = index - 1;
+  while (first > 0 && index - first < 8 && !blankLine(separatorSource(parent, first + 1))) first--;
+  let source = '';
+  for (let at = first; at <= index; at++)
+    source += separatorSource(parent, at, at === index ? before : undefined) + blockSource(parent.child(at));
+  for (let depth = $at.depth; depth > 0; depth--) {
+    const container = $at.node(depth);
+    const whole = blockSource(container);
+    const open: string = container.attrs.open ?? containerDefaults[container.type.name] ?? '';
+    const inner = childrenSource(container);
+    if (!whole.startsWith(open + inner)) return true;
+    source = open + source + whole.slice(open.length + inner.length);
   }
-  return undefined;
+  let parsed = Fragment.fromArray(blocks(source, context).nodes);
+  for (let depth = 1; depth <= $at.depth; depth++) {
+    if (parsed.childCount !== 1 || parsed.firstChild!.type !== $at.node(depth).type) return false;
+    parsed = parsed.firstChild!.content;
+  }
+  if (parsed.childCount !== index - first + 1) return false;
+  for (let at = first; at <= index; at++)
+    if (parsed.child(at - first).type !== parent.child(at).type) return false;
+  return true;
 }
 
 /**
@@ -1219,7 +1235,11 @@ function childrenSource(parent: Node) {
 }
 
 export function serializeLatex(document: Node) {
-  return document.attrs.prefix + childrenSource(document) + document.attrs.suffix;
+  const suffix: string = document.attrs.suffix;
+  // A comment ending the last block would hide the document's closing source on its line.
+  const last = document.lastChild;
+  const endComment = last && suffix && endsInComment(last) && !/^\r?\n/.test(suffix) ? '\n' : '';
+  return document.attrs.prefix + childrenSource(document) + endComment + suffix;
 }
 
 function flattenSelectedIncludes(content: Fragment): Fragment {
