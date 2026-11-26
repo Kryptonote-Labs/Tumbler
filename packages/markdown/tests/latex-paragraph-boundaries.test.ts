@@ -141,3 +141,23 @@ test('paragraphs pasted after a scoped paragraph start on their own line', async
     expect(saved).toEqual(shown);
   });
 });
+
+test('a scoped paragraph pasted after body text stays apart from it', async () => {
+  await withLatexEditor('Before.\n\nTail.', (view) => {
+    const pasted = parseLatex('{\\sffamily Scoped.\\par}').content;
+    view.dispatch(view.state.tr.insert(view.state.doc.firstChild!.nodeSize, pasted));
+    const { shown, saved } = paragraphs(view);
+    expect(shown).toEqual(['Before.', 'Scoped.', 'Tail.']);
+    expect(saved).toEqual(shown);
+  });
+});
+
+test('a pasted comment inside a scope leaves the scope closed', async () => {
+  await withLatexEditor('{\\sffamily First.\\par}\nTail.', (view) => {
+    const pasted = parseLatex('Pasted. % note').content;
+    view.dispatch(view.state.tr.insert(view.state.doc.firstChild!.nodeSize - 1, pasted));
+    const { shown, saved } = paragraphs(view);
+    expect(shown).toEqual(['First.', 'Pasted. % note', 'Tail.']);
+    expect(saved).toEqual(shown);
+  });
+});

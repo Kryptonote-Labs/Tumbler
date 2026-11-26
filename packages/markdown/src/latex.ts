@@ -1057,10 +1057,11 @@ function blockSource(node: Node): string {
           : node.type.name === 'ordered_list'
             ? 'enumerate'
             : node.type.name === 'latex_landscape' ? 'landscape' : 'quote';
+      const ending = close ?? '\n\\end{' + environment + '}';
+      // A comment ending the last block would hide the closing source on its line.
+      const endComment = node.lastChild && endsInComment(node.lastChild) && !ending.startsWith('\n') ? '\n' : '';
       result =
-        (open ?? '\\begin{' + environment + '}\n') +
-        childrenSource(node) +
-        (close ?? '\n\\end{' + environment + '}');
+        (open ?? '\\begin{' + environment + '}\n') + childrenSource(node) + endComment + ending;
       break;
     }
     case 'list_item':
@@ -1079,11 +1080,13 @@ function blankLine(before: string) {
 }
 
 /**
- * Blocks a paragraph can run on into without a blank line: another paragraph, or raw lines such
- * as a comment or spacing command. Display math, headings and environments start their own block.
+ * Blocks a paragraph can run on into without a blank line: another paragraph, raw lines such as a
+ * comment or spacing command, or a group such as `{\sffamily …\par}`. Display math, headings
+ * and environments start their own block.
  */
 function joinsParagraph(node: Node) {
-  return node.type.name === 'paragraph' || node.type.name === 'latex_raw';
+  return node.type.name === 'paragraph' || node.type.name === 'latex_raw' ||
+    node.type.name === 'latex_container' && String(node.attrs.open).startsWith('{');
 }
 
 /**
