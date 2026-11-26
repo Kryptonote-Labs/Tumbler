@@ -435,7 +435,12 @@ export function latexState(
           if (transactions.some(item => item.docChanged) &&
               !transactions.some(item =>
                 item.getMeta('rebased') !== undefined || item.getMeta('latexSourceEdit')))
-            separateLatexParagraphs(transaction, previous.doc);
+          {
+            const mapping = new Mapping();
+            for (const item of transactions) mapping.appendMapping(item.mapping);
+            mapping.appendMapping(transaction.mapping);
+            separateLatexParagraphs(transaction, previous.doc, mapping.invert());
+          }
           syncLatexIncludes(transaction, previous.doc);
           retainDetachedLatexFiles(transaction, previous.doc);
           for (const received of transactions)

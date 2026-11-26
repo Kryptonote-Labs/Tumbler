@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import { liftListItem } from 'prosemirror-schema-list';
 import { TextSelection } from 'prosemirror-state';
 import { noteSchema } from '../src';
+import { toggleMark, undo } from '../src/editor';
 import { latexHeading } from '../src/latex-editor';
 import { parseLatex, serializeLatex } from '../src/latex';
 import { withLatexEditor } from './latex-editor-fixture';
@@ -64,5 +65,17 @@ test('editing inside a paragraph leaves authored spacing alone', async () => {
     caretIn(view, 'Second.');
     view.dispatch(view.state.tr.insertText('Very '));
     expect(serializeLatex(view.state.doc)).toBe(source.replace('Second.', 'Very Second.'));
+  });
+});
+
+test('formatting across display math keeps its spacing, and undo restores it', async () => {
+  const source = 'First.\n\\[x\\]\nSecond.';
+  await withLatexEditor(source, (view) => {
+    const { doc } = view.state;
+    view.dispatch(view.state.tr.setSelection(TextSelection.create(doc, 1, doc.content.size - 1)));
+    toggleMark(noteSchema.marks.strong!)(view.state, view.dispatch);
+    expect(serializeLatex(view.state.doc)).toBe('\\textbf{First.}\n\\[x\\]\n\\textbf{Second.}');
+    undo(view.state, view.dispatch);
+    expect(serializeLatex(view.state.doc)).toBe(source);
   });
 });

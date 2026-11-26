@@ -49,7 +49,7 @@ import { usesLatexPackage } from './latex-preamble';
 export { withLatexPackage } from './latex-preamble';
 import { latexFormattingAlias, readLatexParagraphMacro, readLatexTextMacros } from './latex-macros';
 import { Fragment, type Mark, type Node } from 'prosemirror-model';
-import { Transform } from 'prosemirror-transform';
+import { Transform, type Mappable } from 'prosemirror-transform';
 import { updateLatexBoundary, updateLatexNodeSource } from './latex-boundary-step';
 import { LatexProjectFileStep, updateLatexProjectFile } from './latex-project-step';
 export { updateLatexBoundary, updateLatexNodeSource } from './latex-boundary-step';
@@ -1078,6 +1078,14 @@ function blankLine(before: string) {
   return /\n[^\S\n]*\n/.test(before);
 }
 
+/**
+ * Blocks a paragraph can run on into without a blank line: another paragraph, or raw lines such
+ * as a comment or spacing command. Display math, headings and environments start their own block.
+ */
+function joinsParagraph(node: Node) {
+  return node.type.name === 'paragraph' || node.type.name === 'latex_raw';
+}
+
 /** `before` with a blank line ahead of it, keeping any indentation, comment or spacing command. */
 function withBlankLine(before: string) {
   return /^\s*$/.test(before)
@@ -1096,7 +1104,7 @@ function separatorSource(parent: Node, index: number) {
   const before: string =
     node.attrs.before ?? (index === 0 ? '' : node.type.name === 'list_item' ? '\n' : '\n\n');
   const previous = index ? parent.child(index - 1) : undefined;
-  if (previous?.type.name !== 'paragraph' || previous.attrs.before != null ||
+  if (previous?.type.name !== 'paragraph' || previous.attrs.before != null || !joinsParagraph(node) ||
     parent.type.name === 'latex_contents_line' || blankLine(before)) return before;
   return withBlankLine(before);
 }
@@ -1104,10 +1112,11 @@ function separatorSource(parent: Node, index: number) {
 /**
  * Give a blank line to blocks that an edit placed after a paragraph, when their authored spacing
  * would let the paragraph run on into them, such as text pasted, lifted out of a list or turned
- * from a heading before a paragraph that followed on the next line. Only boundaries inside the
- * changed range are checked, so untouched source keeps its bytes.
+ * from a heading before a paragraph that followed on the next line. `mapping` leads from
+ * `previous` to the transform's document. Only boundaries the edit created are changed, so
+ * untouched source and boundaries that merely moved keep their bytes.
  */
-export function separateLatexParagraphs(transform: Transform, previous: Node) {
+export function separateLatexParagraphs(transform: Transform, previous: Node, mapping: Mappable) {
   const { doc } = transform;
   const start = doc.content.findDiffStart(previous.content);
   const end = doc.content.findDiffEnd(previous.content)?.a;
@@ -1118,18 +1127,24 @@ export function separateLatexParagraphs(transform: Transform, previous: Node) {
     if (parent.type.name === 'latex_contents_line') return;
     parent.forEach((child, offset, index) => {
       const at = contentStart + offset;
-      if (index && at >= from && at <= to) {
-        const before: unknown = child.attrs.before;
-        const paragraph = parent.child(index - 1);
-        if (typeof before === 'string' && !blankLine(before) &&
-          paragraph.type.name === 'paragraph' && paragraph.attrs.close == null)
-          transform.setNodeAttribute(at, 'before', withBlankLine(before));
-      }
+      const before: unknown = child.attrs.before;
+      const paragraph = index ? parent.child(index - 1) : undefined;
+      if (at >= from && at <= to && typeof before === 'string' && !blankLine(before) &&
+        joinsParagraph(child) && paragraph?.type.name === 'paragraph' &&
+        paragraph.attrs.close == null && !existed(previous, mapping.map(at, -1), before))
+        transform.setNodeAttribute(at, 'before', withBlankLine(before));
       if (!child.isTextblock && !child.isAtom && at <= to && at + child.nodeSize >= from)
         visit(child, at + 1);
     });
   };
   visit(doc, 0);
+}
+
+/** Whether `previous` already had a paragraph run into a block with this spacing at `position`. */
+function existed(previous: Node, position: number, before: string) {
+  const $position = previous.resolve(position);
+  return $position.nodeBefore?.type.name === 'paragraph' &&
+    $position.nodeAfter?.attrs.before === before;
 }
 
 function childrenSource(parent: Node) {
