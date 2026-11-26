@@ -168,6 +168,7 @@ test('deleting an equation keeps blocks around it apart', async () => {
     '\\begin{itemize}\n\\item A note. % aside\n\\[x\\]\\item Main text.\n\\end{itemize}',
     '{\\sffamily A note.}\n\n\\[x\\]\n\\section{Main text.}',
     '\\begin{quote}\nFirst.\n\\[x\\]\nSecond. % note\n\nThird.\\end{quote}',
+    'First.\n\\[x\\]\n\\vspace{1em}\nTail.',
   ])
     await withLatexEditor(source, (view) => {
       let at = 0;
@@ -215,5 +216,22 @@ test('deleting an equation in an included file keeps its paragraphs apart', asyn
     selectEquation(view);
     view.dispatch(view.state.tr.deleteSelection());
     expect(serializeLatexProject(view.state.doc)?.files.get('intro.tex')).toBe('First.\n\nTail.\n');
+  });
+});
+
+test('deleting an equation after an include keeps the paragraphs around it apart', async () => {
+  const files = new Map([['main.tex', '\\input{intro}\nFirst.\n\\[x\\]\nTail.'], ['intro.tex', 'Introduction.']]);
+  await withLatexEditor(parseLatexProject('main.tex', files), (view) => {
+    selectEquation(view);
+    view.dispatch(view.state.tr.deleteSelection());
+    expect(serializeLatexProject(view.state.doc)?.files.get('main.tex')).toBe('\\input{intro}\nFirst.\n\nTail.');
+  });
+});
+
+test('deleting an equation after a font scope ends the paragraph before the next one', async () => {
+  await withLatexEditor('{\\sffamily First.}\n\\[x\\]\nTail.', (view) => {
+    selectEquation(view);
+    view.dispatch(view.state.tr.deleteSelection());
+    expect(serializeLatex(view.state.doc)).toBe('{\\sffamily First.}\n\nTail.');
   });
 });

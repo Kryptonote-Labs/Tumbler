@@ -1161,9 +1161,10 @@ export function separateLatexParagraphs(transform: Transform, previous: Node, ma
         context ??= sourceContext(latexEffectivePrefix(doc));
         // Read the transform's current document, which holds earlier boundaries' repairs.
         const $at = transform.doc.resolve(at);
-        const separated = [before, withLineBreak(before), withBlankLine(before)]
-          .find(candidate => reopensApart($at, index, candidate, context!));
-        if (separated !== undefined && separated !== before)
+        // When no spacing reopens the same blocks, a blank line at least ends the paragraph.
+        const separated = [before, withLineBreak(before)]
+          .find(candidate => reopensApart($at, index, candidate, context!)) ?? withBlankLine(before);
+        if (separated !== before)
           transform.setNodeAttribute(at, 'before', separated);
       }
       if (!child.isTextblock && !child.isAtom && at <= to && at + child.nodeSize >= from)
@@ -1175,16 +1176,23 @@ export function separateLatexParagraphs(transform: Transform, previous: Node, ma
 }
 
 /**
- * Whether the block at `index` of `$at`'s parent, given `before`, reopens as the same blocks as
- * the ones it follows up to the last blank line. They are parsed inside their enclosing
+ * Whether the block at `index` of `$at`'s parent, given `before`, reopens as the same blocks
+ * together with its neighbours up to the nearest blank lines on either side. They are parsed inside their enclosing
  * containers, with the document's macros.
  */
 function reopensApart($at: ResolvedPos, index: number, before: string, context: SourceContext) {
   const parent = $at.parent;
-  let first = index - 1;
-  while (first > 0 && index - first < 8 && !blankLine(separatorSource(parent, first + 1))) first--;
+  // Includes load another file, so the window stops short of them.
+  const joined = (at: number) => parent.child(at).type.name !== 'latex_include' &&
+    !blankLine(separatorSource(parent, at + 1, at + 1 === index ? before : undefined));
+  if (parent.child(index).type.name === 'latex_include') return true;
+  let first = index;
+  while (first > 0 && index - first < 8 && joined(first - 1)) first--;
+  let last = index;
+  while (last + 1 < parent.childCount && last - index < 8 && parent.child(last + 1).type.name !== 'latex_include' &&
+    joined(last)) last++;
   let source = '';
-  for (let at = first; at <= index; at++)
+  for (let at = first; at <= last; at++)
     source += separatorSource(parent, at, at === index ? before : undefined) + blockSource(parent.child(at));
   // An included file is parsed on its own, so its blocks are wrapped only up to the include.
   let root = 0;
@@ -1198,7 +1206,7 @@ function reopensApart($at: ResolvedPos, index: number, before: string, context: 
     if (!whole.startsWith(open + inner)) return true;
     let close = whole.slice(open.length + inner.length);
     // The checked block's comment would otherwise hide the close, which other blocks follow.
-    if (depth === $at.depth && endsInComment(parent.child(index)) && !/^\r?\n/.test(close))
+    if (depth === $at.depth && endsInComment(parent.child(last)) && !/^\r?\n/.test(close))
       close = '\n' + close;
     source = open + source + close;
   }
@@ -1207,8 +1215,8 @@ function reopensApart($at: ResolvedPos, index: number, before: string, context: 
     if (parsed.childCount !== 1 || parsed.firstChild!.type !== $at.node(depth).type) return false;
     parsed = parsed.firstChild!.content;
   }
-  if (parsed.childCount !== index - first + 1) return false;
-  for (let at = first; at <= index; at++)
+  if (parsed.childCount !== last - first + 1) return false;
+  for (let at = first; at <= last; at++)
     if (parsed.child(at - first).type !== parent.child(at).type) return false;
   return true;
 }
