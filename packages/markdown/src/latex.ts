@@ -1086,6 +1086,11 @@ function joinsParagraph(node: Node) {
   return node.type.name === 'paragraph' || node.type.name === 'latex_raw';
 }
 
+/** Whether the last line of `source` ends in a comment. */
+function endsInComment(source: string) {
+  return /(?:^|[^\\])(?:\\\\)*%[^\n]*$/.test(source);
+}
+
 /** `before` with a blank line ahead of it, keeping any indentation, comment or spacing command. */
 function withBlankLine(before: string) {
   return /^\s*$/.test(before)
@@ -1097,19 +1102,18 @@ function withBlankLine(before: string) {
  * The source before a block. Parsed blocks keep the spacing they were authored with. A block the
  * editor created has none, so the block after it may hold spacing written for a different
  * neighbour, such as a single line break after a table. After a new paragraph, that spacing
- * gains a blank line before another paragraph so the two do not run together, and a line break
- * before any other block. Contents entries spell their parts inline.
+ * gains a blank line before another paragraph so the two do not run together. Contents entries spell their parts inline.
  */
 function separatorSource(parent: Node, index: number) {
   const node = parent.child(index);
   const before: string =
     node.attrs.before ?? (index === 0 ? '' : node.type.name === 'list_item' ? '\n' : '\n\n');
   const previous = index ? parent.child(index - 1) : undefined;
-  if (previous?.type.name !== 'paragraph' || previous.attrs.before != null ||
-    parent.type.name === 'latex_contents_line') return before;
-  // Other blocks still need their own line, since the paragraph may end in a comment.
-  if (!joinsParagraph(node)) return before.includes('\n') ? before : '\n' + before;
-  return blankLine(before) ? before : withBlankLine(before);
+  if (!previous || parent.type.name === 'latex_contents_line') return before;
+  if (previous.type.name === 'paragraph' && previous.attrs.before == null && joinsParagraph(node) &&
+    !blankLine(before)) return withBlankLine(before);
+  // A block placed after a comment needs its own line, or the comment would hide it.
+  return before.includes('\n') || !endsInComment(blockSource(previous)) ? before : '\n' + before;
 }
 
 /**
@@ -1134,7 +1138,7 @@ export function separateLatexParagraphs(transform: Transform, previous: Node, ma
       const paragraph = index ? parent.child(index - 1) : undefined;
       if (at >= from && at <= to && typeof before === 'string' && !blankLine(before) &&
         joinsParagraph(child) && paragraph?.type.name === 'paragraph' &&
-        paragraph.attrs.close == null && !existed(previous, mapping.map(at, -1), before))
+        paragraph.attrs.close == null && !existed(previous, mapping.map(at, -1), child))
         transform.setNodeAttribute(at, 'before', withBlankLine(before));
       if (!child.isTextblock && !child.isAtom && at <= to && at + child.nodeSize >= from)
         visit(child, at + 1);
@@ -1143,12 +1147,12 @@ export function separateLatexParagraphs(transform: Transform, previous: Node, ma
   visit(doc, 0);
 }
 
-/** Whether `previous` already had a paragraph run into a block with this spacing at `position`. */
-function existed(previous: Node, position: number, before: string) {
+/** Whether `previous` already had a paragraph run into a block like `block` at `position`. */
+function existed(previous: Node, position: number, block: Node) {
   const $position = previous.resolve(position);
   const after = $position.nodeAfter;
-  return $position.nodeBefore?.type.name === 'paragraph' && after != null && joinsParagraph(after) &&
-    after.attrs.before === before;
+  return $position.nodeBefore?.type.name === 'paragraph' && after?.type === block.type &&
+    after.attrs.before === block.attrs.before;
 }
 
 function childrenSource(parent: Node) {

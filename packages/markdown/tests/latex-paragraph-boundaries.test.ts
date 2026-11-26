@@ -80,15 +80,16 @@ test('formatting across display math keeps its spacing, and undo restores it', a
   });
 });
 
-test('deleting display math between paragraphs keeps them apart', async () => {
-  await withLatexEditor('First.\n\\[x\\]\nSecond.', (view) => {
-    const at = view.state.doc.firstChild!.nodeSize;
-    view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, at)));
-    view.dispatch(view.state.tr.deleteSelection());
-    const { shown, saved } = paragraphs(view);
-    expect(shown).toEqual(['First.', 'Second.']);
-    expect(saved).toEqual(shown);
-  });
+test('deleting a block between paragraphs keeps them apart', async () => {
+  for (const block of ['\\[x\\]', '\\newpage'])
+    await withLatexEditor(`First.\n${block}\nSecond.`, (view) => {
+      const at = view.state.doc.firstChild!.nodeSize;
+      view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, at)));
+      view.dispatch(view.state.tr.deleteSelection());
+      const { shown, saved } = paragraphs(view);
+      expect(shown).toEqual(['First.', 'Second.']);
+      expect(saved).toEqual(shown);
+    });
 });
 
 test('undoing a deletion restores authored spacing exactly', async () => {

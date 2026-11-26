@@ -138,6 +138,13 @@ test('a paragraph inserted with a trailing comment ends its line before display 
   expect(parseLatex(serializeLatex(edited)).childCount).toBe(edited.childCount);
 });
 
+test('a pasted paragraph ending in a comment keeps a following equation visible', () => {
+  const document = parseLatex('\\section{Intro}\\[x\\]');
+  const pasted = parseLatex('New % note').firstChild!;
+  const edited = document.replace(0, document.firstChild!.nodeSize, new Slice(Fragment.from(pasted), 0, 0));
+  expect(serializeLatex(edited)).toBe('New % note\n\\[x\\]');
+});
+
 test('source edits use the same undo history and leave the rest of the article intact', () => {
   let state = noteState('', 0, 'test', parseLatex(article));
   const rewritten = article.replace('First', 'Edited');
