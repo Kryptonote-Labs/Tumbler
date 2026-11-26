@@ -161,3 +161,21 @@ test('a pasted comment inside a scope leaves the scope closed', async () => {
     expect(saved).toEqual(shown);
   });
 });
+
+test('deleting an equation keeps blocks around it apart', async () => {
+  for (const source of [
+    '{\\sffamily A note.}\n\n\\[x\\]\nMain text.',
+    '\\begin{itemize}\n\\item A note. % aside\n\\[x\\]\\item Main text.\n\\end{itemize}',
+  ])
+    await withLatexEditor(source, (view) => {
+      let at = 0;
+      view.state.doc.descendants((node, position) => {
+        if (node.type.name === 'latex_display_math') at = position;
+      });
+      view.dispatch(view.state.tr.setSelection(NodeSelection.create(view.state.doc, at)));
+      view.dispatch(view.state.tr.deleteSelection());
+      const { shown, saved } = paragraphs(view);
+      expect(shown).toHaveLength(2);
+      expect(saved).toEqual(shown);
+    });
+});

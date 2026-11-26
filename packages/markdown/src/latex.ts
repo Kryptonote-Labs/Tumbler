@@ -1090,15 +1090,18 @@ function joinsParagraph(node: Node) {
 }
 
 /**
- * Whether a block's source ends in a comment: an unwrapped paragraph whose last inline is one, or
- * a raw line that ends in one. Containers end in their own closing source.
+ * Whether a block's source ends in a comment: an unwrapped paragraph whose last inline is one, a
+ * raw line that ends in one, or a container without closing source, such as a list item, whose
+ * last block does.
  */
-function endsInComment(node: Node) {
+function endsInComment(node: Node): boolean {
+  if (!node.isTextblock && node.type.name !== 'latex_raw')
+    return node.attrs.close == null && node.lastChild != null && endsInComment(node.lastChild);
   const source: unknown = node.isTextblock ? node.lastChild?.attrs.source : node.attrs.source;
   if (typeof source !== 'string') return false;
   if (node.isTextblock)
     return node.attrs.close == null && node.lastChild?.type.name === 'latex_inline' && source.startsWith('%');
-  return node.type.name === 'latex_raw' && /(?:^|[^\\])(?:\\\\)*%[^\n]*$/.test(source);
+  return /(?:^|[^\\])(?:\\\\)*%[^\n]*$/.test(source);
 }
 
 /** `before` beginning on a new line, so the block does not join the end of the one before. */
@@ -1155,7 +1158,7 @@ export function separateLatexParagraphs(transform: Transform, previous: Node, ma
       const at = contentStart + offset;
       const before: unknown = child.attrs.before;
       const separated = typeof before === 'string' ?
-        (leadingParagraph(parent, index)?.attrs.close === null ? withBlankLine : withLineBreak)(before) :
+        (leadingParagraph(parent, index) ? withBlankLine : withLineBreak)(before) :
         before;
       if (index && at >= from && at <= to && joinsParagraph(child) && separated !== before &&
         !existed(previous, mapping, back.map(at, -1), parent.child(index - 1), neighbour, child, at))
@@ -1170,12 +1173,16 @@ export function separateLatexParagraphs(transform: Transform, previous: Node, ma
 
 /**
  * The paragraph that the block at `index` would continue, past any raw lines that follow it
- * without a blank line, such as a spacing command.
+ * without a blank line, such as a spacing command. A group such as `{\sffamily …}` continues its
+ * paragraph unless it ends it with `\par`.
  */
 function leadingParagraph(parent: Node, index: number) {
   for (let at = index - 1; at >= 0; at--) {
     const node = parent.child(at);
-    if (node.type.name === 'paragraph') return node;
+    if (node.type.name === 'paragraph') return node.attrs.close == null ? node : undefined;
+    if (node.type.name === 'latex_container')
+      return String(node.attrs.open).startsWith('{') && !String(node.attrs.close).includes('\\par')
+        ? node : undefined;
     if (node.type.name !== 'latex_raw' || blankLine(node.attrs.before ?? '\n\n')) return undefined;
   }
   return undefined;
