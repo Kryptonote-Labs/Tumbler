@@ -105,6 +105,15 @@ test('authored paragraph boundaries round-trip unchanged', () => {
 \end{document}`,
   ]) expect(serializeLatex(parseLatex(source))).toBe(source);
   expect(parseLatex('First % note\n\nSecond.').childCount).toBe(2);
+  expect(serializeLatex(parseLatex('First. \\section X'))).toBe('First. \\section X');
+});
+
+test('a paragraph inserted with a trailing comment ends its line before a same-line block', () => {
+  const document = parseLatex('\\begin{center}\nBox\n\\end{center}{\\raggedleft Tail.\\par}');
+  const tail = document.content.size - document.lastChild!.nodeSize;
+  const paragraph = parseLatex('New % note').firstChild!;
+  const edited = document.replace(tail, tail, new Slice(Fragment.from(paragraph), 0, 0));
+  expect(parseLatex(serializeLatex(edited)).childCount).toBe(edited.childCount);
 });
 
 test('source edits use the same undo history and leave the rest of the article intact', () => {

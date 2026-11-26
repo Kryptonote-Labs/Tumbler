@@ -396,7 +396,7 @@ function blockStart(source: string, position: number, context: SourceContext) {
     blockCommands.has(command) ||
     !!readLatexSpacingCommand(source, position) ||
     bibliographyCommands.has(command) ||
-    latexHeadingLevel(command.slice(1)) > 0 ||
+    !!headingAt(source, position) ||
     (context.letter && !!latexLetterCommandAt(source, position)) ||
     (command === '\\definecolor' && !!latexColourDefinition(source, position))
   );
@@ -1074,19 +1074,22 @@ function blockSource(node: Node): string {
 }
 
 /**
- * The source before a block. Adjacent body paragraphs need a blank line between them, so one
- * inserted before a paragraph that began on the same or next line as an earlier block stays
- * separate. Wrapped paragraphs and contents entries already mark their own boundaries.
+ * The source before a block. A paragraph ending in a comment needs a line break after it, and
+ * adjacent body paragraphs need a blank line, so a paragraph inserted before one that began on the
+ * same or next line as an earlier block stays separate. Wrapped paragraphs and contents entries
+ * already mark their own boundaries.
  */
 function separatorSource(parent: Node, index: number) {
   const node = parent.child(index);
-  const before: string =
+  let before: string =
     node.attrs.before ?? (index === 0 ? '' : node.type.name === 'list_item' ? '\n' : '\n\n');
-  if (index === 0 || node.type.name !== 'paragraph' || parent.type.name === 'latex_contents_line')
-    return before;
+  if (index === 0 || parent.type.name === 'latex_contents_line') return before;
   const previous = parent.child(index - 1);
-  if (previous.type.name !== 'paragraph' || previous.attrs.close != null || node.attrs.open != null)
-    return before;
+  if (previous.type.name !== 'paragraph' || previous.attrs.close != null) return before;
+  const comment = previous.lastChild?.type.name === 'latex_inline' &&
+    /^%[^\n]*$/.test(previous.lastChild.attrs.source);
+  if (comment && !before.includes('\n')) before = '\n' + before;
+  if (node.type.name !== 'paragraph' || node.attrs.open != null) return before;
   if (!/^\s*$/.test(before) || /\n[^\S\n]*\n/.test(before)) return before;
   return '\n\n' + before.slice(before.lastIndexOf('\n') + 1);
 }
