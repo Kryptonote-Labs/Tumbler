@@ -48,7 +48,7 @@ export type { LatexLetterPart } from './latex-letter';
 import { usesLatexPackage } from './latex-preamble';
 export { withLatexPackage } from './latex-preamble';
 import { latexFormattingAlias, readLatexParagraphMacro, readLatexTextMacros } from './latex-macros';
-import { Fragment, type Mark, type Node, type ResolvedPos } from 'prosemirror-model';
+import { Fragment, type Mark, type Node } from 'prosemirror-model';
 import { Transform, type Mapping } from 'prosemirror-transform';
 import { updateLatexBoundary, updateLatexNodeSource } from './latex-boundary-step';
 import { LatexProjectFileStep, updateLatexProjectFile } from './latex-project-step';
@@ -1163,8 +1163,10 @@ export function separateLatexParagraphs(transform: Transform, previous: Node, ma
   const from = Math.min(start, end);
   const to = Math.max(start, end);
   let context: SourceContext | undefined;
-  const visit = (parent: Node, contentStart: number) => {
+  const visit = (parent: Node, contentStart: number, ancestors: readonly Node[]) => {
     if (parent.type.name === 'latex_contents_line') return;
+    // Separators repaired so far among these children, which later checks must see.
+    const repaired = new Map<number, string>();
     let neighbour = contentStart;
     parent.forEach((child, offset, index) => {
       const at = contentStart + offset;
@@ -1172,55 +1174,62 @@ export function separateLatexParagraphs(transform: Transform, previous: Node, ma
       if (index && at >= from && at <= to && typeof before === 'string' &&
         !existed(previous, mapping, back.map(at, -1), parent.child(index - 1), neighbour, child, at)) {
         context ??= sourceContext(latexEffectivePrefix(doc));
-        // Read the transform's current document, which holds earlier boundaries' repairs.
-        const $at = transform.doc.resolve(at);
+        const window = { parent, ancestors, index, repaired, context };
         // When no spacing reopens the same blocks, a blank line at least ends the paragraph.
         const separated = [before, withLineBreak(before)]
-          .find(candidate => reopensApart($at, index, candidate, context!)) ?? withBlankLine(before);
-        if (separated !== before)
+          .find(candidate => reopensApart(window, candidate)) ?? withBlankLine(before);
+        if (separated !== before) {
           transform.setNodeAttribute(at, 'before', separated);
+          repaired.set(index, separated);
+        }
       }
       if (!child.isTextblock && !child.isAtom && at <= to && at + child.nodeSize >= from)
-        visit(child, at + 1);
+        visit(child, at + 1, [...ancestors, child]);
       neighbour = at;
     });
   };
-  visit(doc, 0);
+  visit(doc, 0, []);
 }
 
+type ReparseWindow = {
+  parent: Node;
+  /** The containers from the document down to `parent`, outermost first. */
+  ancestors: readonly Node[];
+  index: number;
+  repaired: ReadonlyMap<number, string>;
+  context: SourceContext;
+};
+
 /**
- * Whether the block at `index` of `$at`'s parent, given `before`, reopens as the same blocks
- * together with its neighbours up to the nearest blank lines on either side. They are parsed inside their enclosing
- * containers, with the document's macros.
+ * Whether the block at `index` of `parent`, given `before`, reopens as the same blocks together
+ * with its neighbours up to the nearest blank lines on either side. They are parsed inside their
+ * enclosing containers, with the document's macros.
  */
-function reopensApart($at: ResolvedPos, index: number, before: string, context: SourceContext) {
-  const parent = $at.parent;
-  const joined = (at: number) =>
-    !blankLine(separatorSource(parent, at + 1, at + 1 === index ? before : undefined));
+function reopensApart({ parent, ancestors, index, repaired, context }: ReparseWindow, before: string) {
+  const separator = (at: number) =>
+    separatorSource(parent, at, at === index ? before : repaired.get(at));
+  const joined = (at: number) => !blankLine(separator(at + 1));
   let first = index;
   while (first > 0 && index - first < 8 && joined(first - 1)) first--;
   let last = index;
   while (last + 1 < parent.childCount && last - index < 8 && joined(last)) last++;
   let source = '';
-  for (let at = first; at <= last; at++)
-    source += separatorSource(parent, at, at === index ? before : undefined) + blockSource(parent.child(at));
+  for (let at = first; at <= last; at++) source += separator(at) + blockSource(parent.child(at));
   // An included file is parsed on its own, so its blocks are wrapped only up to the include.
-  let root = 0;
-  for (let depth = $at.depth; depth > 0 && !root; depth--)
-    if ($at.node(depth).type.name === 'latex_include') root = depth;
-  for (let depth = $at.depth; depth > root; depth--) {
-    const container = $at.node(depth);
+  const root = ancestors.findLastIndex(node => node.type.name === 'latex_include') + 1;
+  const wrapping = ancestors.slice(root);
+  for (let depth = wrapping.length - 1; depth >= 0; depth--) {
+    const container = wrapping[depth]!;
     if (!wrappers.has(container.type.name)) return true;
-    const open = containerOpen(container);
     let close = containerClose(container);
     // The checked block's comment would otherwise hide the close, which other blocks follow.
-    if (depth === $at.depth && endsInComment(parent.child(last)) && !/^\r?\n/.test(close))
+    if (depth === wrapping.length - 1 && endsInComment(parent.child(last)) && !/^\r?\n/.test(close))
       close = '\n' + close;
-    source = open + source + close;
+    source = containerOpen(container) + source + close;
   }
   let parsed = Fragment.fromArray(blocks(source, context).nodes);
-  for (let depth = root + 1; depth <= $at.depth; depth++) {
-    if (parsed.childCount !== 1 || parsed.firstChild!.type !== $at.node(depth).type) return false;
+  for (const container of wrapping) {
+    if (parsed.childCount !== 1 || parsed.firstChild!.type !== container.type) return false;
     parsed = parsed.firstChild!.content;
   }
   if (parsed.childCount !== last - first + 1) return false;
@@ -1239,12 +1248,45 @@ function reopensApart($at: ResolvedPos, index: number, before: string, context: 
  */
 function existed(previous: Node, mapping: Mapping, position: number,
   before: Node, beforeAt: number, after: Node, afterAt: number) {
-  const $position = previous.resolve(position);
-  const oldBefore = $position.nodeBefore;
-  const oldAfter = $position.nodeAfter;
-  return oldBefore != null && oldAfter != null && oldAfter.attrs.before === after.attrs.before &&
+  const boundary = blocksAround(previous, position);
+  if (!boundary) return false;
+  const [oldBefore, oldAfter] = boundary;
+  return oldAfter.attrs.before === after.attrs.before &&
     same(mapping, oldBefore, position - oldBefore.nodeSize, before, beforeAt) &&
     same(mapping, oldAfter, position, after, afterAt);
+}
+
+const childStarts = new WeakMap<Node, number[]>();
+
+/**
+ * The sibling blocks either side of `position` in `document`, found by binary search so that a
+ * paste checking many boundaries does not rescan every sibling for each one.
+ */
+function blocksAround(document: Node, position: number): [Node, Node] | undefined {
+  let parent = document;
+  let contentStart = 0;
+  for (;;) {
+    let starts = childStarts.get(parent);
+    if (!starts) {
+      starts = [];
+      parent.forEach((_child, offset) => starts!.push(offset));
+      childStarts.set(parent, starts);
+    }
+    const offset = position - contentStart;
+    let low = 0;
+    let high = starts.length - 1;
+    while (low < high) {
+      const middle = (low + high + 1) >> 1;
+      if (starts[middle]! <= offset) low = middle;
+      else high = middle - 1;
+    }
+    if (!starts.length || offset < 0) return undefined;
+    if (starts[low] === offset) return low ? [parent.child(low - 1), parent.child(low)] : undefined;
+    const child = parent.child(low);
+    if (child.isTextblock || child.isAtom || offset >= starts[low]! + child.nodeSize) return undefined;
+    parent = child;
+    contentStart += starts[low]! + 1;
+  }
 }
 
 /** Whether `node` at `at` is `old` at `position` carried through `mapping`. */
