@@ -1073,6 +1073,18 @@ function blockSource(node: Node): string {
   return result;
 }
 
+/** Whether `before` already ends the paragraph ahead of it with a blank line. */
+function blankLine(before: string) {
+  return /\n[^\S\n]*\n/.test(before);
+}
+
+/** `before` with a blank line ahead of it, keeping any indentation, comment or spacing command. */
+function withBlankLine(before: string) {
+  return /^\s*$/.test(before)
+    ? '\n\n' + before.slice(before.lastIndexOf('\n') + 1)
+    : '\n\n' + before.trimStart();
+}
+
 /**
  * The source before a block. Parsed blocks keep the spacing they were authored with. A block the
  * editor created has none, so the block after it may hold spacing written for a different
@@ -1085,10 +1097,39 @@ function separatorSource(parent: Node, index: number) {
     node.attrs.before ?? (index === 0 ? '' : node.type.name === 'list_item' ? '\n' : '\n\n');
   const previous = index ? parent.child(index - 1) : undefined;
   if (previous?.type.name !== 'paragraph' || previous.attrs.before != null ||
-    parent.type.name === 'latex_contents_line' || /\n[^\S\n]*\n/.test(before)) return before;
-  return /^\s*$/.test(before)
-    ? '\n\n' + before.slice(before.lastIndexOf('\n') + 1)
-    : '\n\n' + before.trimStart();
+    parent.type.name === 'latex_contents_line' || blankLine(before)) return before;
+  return withBlankLine(before);
+}
+
+/**
+ * Give a blank line to blocks that an edit placed after a paragraph, when their authored spacing
+ * would let the paragraph run on into them, such as text pasted, lifted out of a list or turned
+ * from a heading before a paragraph that followed on the next line. Only boundaries inside the
+ * changed range are checked, so untouched source keeps its bytes.
+ */
+export function separateLatexParagraphs(transform: Transform, previous: Node) {
+  const { doc } = transform;
+  const start = doc.content.findDiffStart(previous.content);
+  const end = doc.content.findDiffEnd(previous.content)?.a;
+  if (start == null || end == null) return;
+  const from = Math.min(start, end);
+  const to = Math.max(start, end);
+  const visit = (parent: Node, contentStart: number) => {
+    if (parent.type.name === 'latex_contents_line') return;
+    parent.forEach((child, offset, index) => {
+      const at = contentStart + offset;
+      if (index && at >= from && at <= to) {
+        const before: unknown = child.attrs.before;
+        const paragraph = parent.child(index - 1);
+        if (typeof before === 'string' && !blankLine(before) &&
+          paragraph.type.name === 'paragraph' && paragraph.attrs.close == null)
+          transform.setNodeAttribute(at, 'before', withBlankLine(before));
+      }
+      if (!child.isTextblock && !child.isAtom && at <= to && at + child.nodeSize >= from)
+        visit(child, at + 1);
+    });
+  };
+  visit(doc, 0);
 }
 
 function childrenSource(parent: Node) {

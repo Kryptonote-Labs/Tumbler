@@ -36,7 +36,13 @@ import { latexClipboard } from './latex-clipboard';
 import { syncLatexIncludes } from './latex-includes';
 import { latexIncludeEditing } from './latex-include-editing';
 import { latexHeadingLevel, setLatexHeadingLevel } from './latex-headings';
-import { parseLatex, refreshRebasedLatexFiles, retainDetachedLatexFiles, serializeLatex } from './latex';
+import {
+  parseLatex,
+  refreshRebasedLatexFiles,
+  retainDetachedLatexFiles,
+  separateLatexParagraphs,
+  serializeLatex,
+} from './latex';
 import { latexNumberingPlugin } from './latex-numbering-view';
 import { latexObjectSelection } from './latex-selection';
 export { latexLetterPartSpec, latexNumberSpec, type LatexNumberSpec } from './latex-numbering-view';
@@ -425,6 +431,11 @@ export function latexState(
             refreshLatexHeadingContents(transaction, previous.doc, position,
               mapping.map(position, -1), mapping.map($from.after(), 1));
           }
+          // Remote steps arrive already separated, and source edits keep the spacing typed there.
+          if (transactions.some(item => item.docChanged) &&
+              !transactions.some(item =>
+                item.getMeta('rebased') !== undefined || item.getMeta('latexSourceEdit')))
+            separateLatexParagraphs(transaction, previous.doc);
           syncLatexIncludes(transaction, previous.doc);
           retainDetachedLatexFiles(transaction, previous.doc);
           for (const received of transactions)
