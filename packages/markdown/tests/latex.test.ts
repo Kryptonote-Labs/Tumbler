@@ -1,4 +1,5 @@
 import { expect, test } from 'bun:test';
+import { Fragment, Slice } from 'prosemirror-model';
 import { TextSelection } from 'prosemirror-state';
 import { Step } from 'prosemirror-transform';
 import { noteSchema } from '../src';
@@ -7,6 +8,7 @@ import {
   latexBlockAtOffset,
   latexNumbering,
   latexRunningFields,
+  latexSourceMap,
   paginateLatex,
   parseLatex,
   replaceLatexSource,
@@ -70,6 +72,93 @@ test('LaTeX keeps original bytes around visual text, ribbon formatting and equat
       .replace('Ordinary', '\\textbf{Ordinary}')
       .replace('\\frac{1}{2}', '\\frac{2}{3}'),
   );
+});
+
+test('a paragraph inserted after a block stays apart from the paragraph that followed it', () => {
+  for (const separator of ['\n', '']) {
+    const document = parseLatex(`\\begin{center}\nBox\n\\end{center}${separator}Tail.`);
+    const tail = document.content.size - document.lastChild!.nodeSize;
+    const paragraph = noteSchema.nodes.paragraph!.create(null, noteSchema.text('New'));
+    const edited = document.replace(tail, tail, new Slice(Fragment.from(paragraph), 0, 0));
+    const source = serializeLatex(edited);
+    expect(source).toEndWith('New\n\nTail.');
+    expect(parseLatex(source).childCount).toBe(edited.childCount);
+    // Source navigation agrees with the serialized spacing.
+    const map = latexSourceMap(edited);
+    const position = tail + paragraph.nodeSize + 1;
+    expect(map.sourceAt(position)?.offset).toBe(source.indexOf('Tail.'));
+    expect(map.positionAt({ offset: source.indexOf('Tail.') })).toBe(position);
+  }
+});
+
+test('authored paragraph boundaries round-trip unchanged', () => {
+  for (const source of [
+    '{\\raggedleft First.\\par}\nSecond.',
+    'First % note\n\nSecond.',
+    'Use \\verb|100%|\\begin{math}x\\end{math}',
+    '\\begin{quote}\nBox % note\n\\end{quote}{\\sffamily Tail.\\par}',
+    '\\begin{quote}\r\nA note. % aside\r\n\\end{quote}',
+    String.raw`\documentclass{report}
+\makeatletter
+\newcommand{\chapentry}[2]{\@dottedtocline{0}{0em}{1em}{#1}{#2}}
+\makeatother
+\begin{document}
+\chapentry{Introduction}
+  {12}
+\end{document}`,
+  ]) expect(serializeLatex(parseLatex(source))).toBe(source);
+  expect(parseLatex('First % note\n\nSecond.').childCount).toBe(2);
+  expect(serializeLatex(parseLatex('First. \\section X'))).toBe('First. \\section X');
+  const macro = '\\documentclass{article}\n\\newcommand{\\bibfiles}{references}\n\\begin{document}\nFirst. \\bibliography\\bibfiles\n\\end{document}';
+  expect(serializeLatex(parseLatex(macro))).toBe(macro);
+});
+
+test('a paragraph inserted after a heading stays apart across a comment or spacing line', () => {
+  for (const between of ['% Note\n', '\n\\vspace{1em}\n']) {
+    const document = parseLatex(`\\section{Intro}${between}Tail.`);
+    const after = document.firstChild!.nodeSize;
+    const paragraph = noteSchema.nodes.paragraph!.create(null, noteSchema.text('New.'));
+    const edited = document.replace(after, after, new Slice(Fragment.from(paragraph), 0, 0));
+    const reparsed = parseLatex(serializeLatex(edited));
+    expect(reparsed.childCount).toBe(edited.childCount);
+    expect(reparsed.lastChild!.textContent).toBe('Tail.');
+  }
+});
+
+test('a paragraph inserted with a trailing comment ends its line before a same-line block', () => {
+  const document = parseLatex('\\begin{center}\nBox\n\\end{center}{\\raggedleft Tail.\\par}');
+  const tail = document.content.size - document.lastChild!.nodeSize;
+  const paragraph = noteSchema.nodes.paragraph!.create(null, parseLatex('New % note').firstChild!.content);
+  const edited = document.replace(tail, tail, new Slice(Fragment.from(paragraph), 0, 0));
+  expect(parseLatex(serializeLatex(edited)).childCount).toBe(edited.childCount);
+});
+
+test('a paragraph inserted with a trailing comment ends its line before display math', () => {
+  const document = parseLatex('\\section{Intro}\\[x\\]');
+  const at = document.firstChild!.nodeSize;
+  const paragraph = noteSchema.nodes.paragraph!.create(null, parseLatex('New % note').firstChild!.content);
+  const edited = document.replace(at, at, new Slice(Fragment.from(paragraph), 0, 0));
+  expect(parseLatex(serializeLatex(edited)).childCount).toBe(edited.childCount);
+});
+
+test('a pasted paragraph ending in a comment keeps a following equation visible', () => {
+  const document = parseLatex('\\section{Intro}\\[x\\]');
+  const pasted = parseLatex('New % note').firstChild!;
+  const edited = document.replace(0, document.firstChild!.nodeSize, new Slice(Fragment.from(pasted), 0, 0));
+  expect(serializeLatex(edited)).toBe('New % note\n\\[x\\]');
+});
+
+test('a comment ending the document body leaves its closing source visible', () => {
+  const document = parseLatex('\\documentclass{article}\n\\begin{document}\nA note. % aside\n\\[x\\]\\end{document}\n');
+  const edited = document.replace(document.content.size - document.lastChild!.nodeSize, document.content.size, Slice.empty);
+  expect(serializeLatex(edited)).toEndWith('A note. % aside\n\\end{document}\n');
+});
+
+test('a heading ending in a comment keeps its closing brace', () => {
+  const document = parseLatex('Introduction % keep this note\n\nBody text.');
+  const edited = document.copy(document.content.replaceChild(0,
+    noteSchema.nodes.heading!.create({ level: 1 }, document.firstChild!.content)));
+  expect(parseLatex(serializeLatex(edited)).childCount).toBe(2);
 });
 
 test('source edits use the same undo history and leave the rest of the article intact', () => {

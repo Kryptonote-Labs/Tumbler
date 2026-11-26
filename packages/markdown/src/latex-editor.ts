@@ -9,7 +9,7 @@ import {
 import { refreshLatexHeadingContents } from './latex-contents';
 import { Mapping } from 'prosemirror-transform';
 import { collab } from 'prosemirror-collab';
-import { history, redo, undo } from 'prosemirror-history';
+import { history, isHistoryTransaction, redo, undo } from 'prosemirror-history';
 import { InputRule, inputRules, undoInputRule, wrappingInputRule } from 'prosemirror-inputrules';
 import { keymap } from 'prosemirror-keymap';
 import {
@@ -36,7 +36,13 @@ import { latexClipboard } from './latex-clipboard';
 import { syncLatexIncludes } from './latex-includes';
 import { latexIncludeEditing } from './latex-include-editing';
 import { latexHeadingLevel, setLatexHeadingLevel } from './latex-headings';
-import { parseLatex, refreshRebasedLatexFiles, retainDetachedLatexFiles, serializeLatex } from './latex';
+import {
+  parseLatex,
+  refreshRebasedLatexFiles,
+  retainDetachedLatexFiles,
+  separateLatexParagraphs,
+  serializeLatex,
+} from './latex';
 import { latexNumberingPlugin } from './latex-numbering-view';
 import { latexObjectSelection } from './latex-selection';
 export { latexLetterPartSpec, latexNumberSpec, type LatexNumberSpec } from './latex-numbering-view';
@@ -424,6 +430,17 @@ export function latexState(
             const position = $from.before();
             refreshLatexHeadingContents(transaction, previous.doc, position,
               mapping.map(position, -1), mapping.map($from.after(), 1));
+          }
+          // Remote steps arrive already separated, source edits keep the spacing typed there, and
+          // undo and redo bring back spacing exactly as it was.
+          if (transactions.some(item => item.docChanged) &&
+              !transactions.some(item => item.getMeta('rebased') !== undefined ||
+                item.getMeta('latexSourceEdit') || isHistoryTransaction(item)))
+          {
+            const mapping = new Mapping();
+            for (const item of transactions) mapping.appendMapping(item.mapping);
+            mapping.appendMapping(transaction.mapping);
+            separateLatexParagraphs(transaction, previous.doc, mapping);
           }
           syncLatexIncludes(transaction, previous.doc);
           retainDetachedLatexFiles(transaction, previous.doc);

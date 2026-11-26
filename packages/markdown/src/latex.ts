@@ -49,7 +49,7 @@ import { usesLatexPackage } from './latex-preamble';
 export { withLatexPackage } from './latex-preamble';
 import { latexFormattingAlias, readLatexParagraphMacro, readLatexTextMacros } from './latex-macros';
 import { Fragment, type Mark, type Node } from 'prosemirror-model';
-import { Transform } from 'prosemirror-transform';
+import { Transform, type Mapping } from 'prosemirror-transform';
 import { updateLatexBoundary, updateLatexNodeSource } from './latex-boundary-step';
 import { LatexProjectFileStep, updateLatexProjectFile } from './latex-project-step';
 export { updateLatexBoundary, updateLatexNodeSource } from './latex-boundary-step';
@@ -410,7 +410,8 @@ function paragraphEnd(source: string, position: number, context: SourceContext) 
     if (blank.test(source)) return next;
     if (next > position && blockStart(source, next, context)) return next;
     const character = source[next];
-    if (character === '%') next = lineEnd(source, next);
+    // A comment runs to its line ending, which can still begin the blank line that ends the paragraph.
+    if (character === '%') next = lineEnd(source, next) - 1;
     else if (character === '$' || source.startsWith('\\(', next)) {
       const dollar = character === '$';
       const close = dollar ? '$' : '\\)';
@@ -1014,6 +1015,35 @@ function mathSource(node: Node) {
 
 const serialized = new WeakMap<Node, string>();
 
+const environments: Record<string, string> = {
+  bullet_list: 'itemize', ordered_list: 'enumerate', latex_landscape: 'landscape',
+};
+
+/** The source a container begins with, before its children. */
+function containerOpen(node: Node): string {
+  if (node.attrs.open != null) return node.attrs.open;
+  if (node.type.name === 'list_item') return '\\item ';
+  return '\\begin{' + (environments[node.type.name] ?? 'quote') + '}\n';
+}
+
+/** The source a container ends with, after its children. */
+function containerClose(node: Node): string {
+  if (node.type.name === 'list_item') return '';
+  const ending: string = node.attrs.close ?? '\n\\end{' + (environments[node.type.name] ?? 'quote') + '}';
+  // A comment ending the last block would hide the closing source on its line.
+  const endComment = node.lastChild && endsInComment(node.lastChild) && !/^\r?\n/.test(ending) ? '\n' : '';
+  return endComment + ending;
+}
+
+/** Container types whose source is their opening, children and closing source. */
+const wrappers = new Set(['bullet_list', 'ordered_list', 'latex_landscape', 'latex_container', 'blockquote', 'list_item']);
+
+/** A line break before `close` when the textblock ends in a comment that would otherwise hide it. */
+function inlineEndComment(node: Node, close: string | null) {
+  const source = node.lastChild?.type.name === 'latex_inline' ? String(node.lastChild.attrs.source) : '';
+  return close && source.startsWith('%') && !source.endsWith('\n') ? '\n' : '';
+}
+
 function blockSource(node: Node): string {
   const cached = serialized.get(node);
   if (cached !== undefined) return cached;
@@ -1032,16 +1062,13 @@ function blockSource(node: Node): string {
     case 'heading':
     case 'latex_heading': {
       const command = latexHeadings[node.attrs.level - 1] ?? latexHeadings[0];
-      result = (open ?? '\\' + command + '{') + inlineSource(node) + (close ?? '}');
+      const ending = close ?? '}';
+      result = (open ?? '\\' + command + '{') + inlineSource(node) + inlineEndComment(node, ending) + ending;
       break;
     }
-    case 'paragraph': {
-      const last = node.lastChild;
-      const comment = last?.type.name === 'latex_inline' && String(last.attrs.source).startsWith('%');
-      const endComment = close && comment && !String(last.attrs.source).endsWith('\n') ? '\n' : '';
-      result = (open ?? '') + inlineSource(node) + endComment + (close ?? '');
+    case 'paragraph':
+      result = (open ?? '') + inlineSource(node) + inlineEndComment(node, close) + (close ?? '');
       break;
-    }
     case 'latex_contents_line':
       result = (open ?? '') + childrenSource(node) + (close ?? '');
       break;
@@ -1049,21 +1076,9 @@ function blockSource(node: Node): string {
     case 'ordered_list':
     case 'latex_landscape':
     case 'latex_container':
-    case 'blockquote': {
-      const environment =
-        node.type.name === 'bullet_list'
-          ? 'itemize'
-          : node.type.name === 'ordered_list'
-            ? 'enumerate'
-            : node.type.name === 'latex_landscape' ? 'landscape' : 'quote';
-      result =
-        (open ?? '\\begin{' + environment + '}\n') +
-        childrenSource(node) +
-        (close ?? '\n\\end{' + environment + '}');
-      break;
-    }
+    case 'blockquote':
     case 'list_item':
-      result = (open ?? '\\item ') + childrenSource(node);
+      result = containerOpen(node) + childrenSource(node) + containerClose(node);
       break;
     default:
       result = node.isTextblock ? inlineSource(node) : childrenSource(node);
@@ -1072,18 +1087,230 @@ function blockSource(node: Node): string {
   return result;
 }
 
+/** Whether `before` already ends the paragraph ahead of it with a blank line. */
+function blankLine(before: string) {
+  return /\n[^\S\n]*\n/.test(before);
+}
+
+/**
+ * Blocks a paragraph can run on into without a blank line: another paragraph, raw lines such as a
+ * comment or spacing command, or a group such as `{\sffamily …\par}`. Display math, headings
+ * and environments start their own block.
+ */
+function joinsParagraph(node: Node) {
+  return node.type.name === 'paragraph' || node.type.name === 'latex_raw' ||
+    node.type.name === 'latex_container' && String(node.attrs.open).startsWith('{');
+}
+
+/**
+ * Whether a block's source ends in a comment: an unwrapped paragraph whose last inline is one, a
+ * raw line that ends in one, or a container without closing source, such as a list item, whose
+ * last block does.
+ */
+function endsInComment(node: Node): boolean {
+  if (!node.isTextblock && node.type.name !== 'latex_raw')
+    return node.attrs.close == null && node.lastChild != null && endsInComment(node.lastChild);
+  const source: unknown = node.isTextblock ? node.lastChild?.attrs.source : node.attrs.source;
+  if (typeof source !== 'string') return false;
+  if (node.isTextblock)
+    return node.attrs.close == null && node.lastChild?.type.name === 'latex_inline' && source.startsWith('%');
+  return /(?:^|[^\\])(?:\\\\)*%[^\n]*$/.test(source);
+}
+
+/** `before` beginning on a new line, so the block does not join the end of the one before. */
+function withLineBreak(before: string) {
+  return before.includes('\n') ? before : '\n' + before;
+}
+
+/** `before` with a blank line ahead of it, keeping any indentation, comment or spacing command. */
+function withBlankLine(before: string) {
+  if (blankLine(before)) return before;
+  return /^\s*$/.test(before)
+    ? '\n\n' + before.slice(before.lastIndexOf('\n') + 1)
+    : '\n\n' + before.trimStart();
+}
+
+/**
+ * The source before a block. Parsed blocks keep the spacing they were authored with. A block the
+ * editor created has none, so the block after it may hold spacing written for a different
+ * neighbour, such as a single line break after a table. After a new paragraph, that spacing
+ * gains a blank line before another paragraph so the two do not run together. Contents entries spell their parts inline.
+ */
+function separatorSource(parent: Node, index: number, authored: string | null = parent.child(index).attrs.before) {
+  const node = parent.child(index);
+  const before = authored ?? (index === 0 ? '' : node.type.name === 'list_item' ? '\n' : '\n\n');
+  const previous = index ? parent.child(index - 1) : undefined;
+  if (!previous || parent.type.name === 'latex_contents_line') return before;
+  if (previous.type.name === 'paragraph' && previous.attrs.before == null && joinsParagraph(node))
+    return withBlankLine(before);
+  // A block placed after a comment needs its own line, or the comment would hide it.
+  return endsInComment(previous) ? withLineBreak(before) : before;
+}
+
+/**
+ * Separate blocks that an edit placed where their authored spacing would let them join what comes
+ * before, such as text pasted, lifted out of a list or left beside a paragraph by a deleted
+ * equation. Each boundary the edit created is parsed again with the blocks around it, and gains
+ * a line break, then a blank line, until the blocks reopen as they are shown. `mapping` leads
+ * from `previous` to the transform's document. Boundaries the edit did not create keep their bytes.
+ */
+export function separateLatexParagraphs(transform: Transform, previous: Node, mapping: Mapping) {
+  const back = mapping.invert();
+  const { doc } = transform;
+  const start = doc.content.findDiffStart(previous.content);
+  const end = doc.content.findDiffEnd(previous.content)?.a;
+  if (start == null || end == null) return;
+  const from = Math.min(start, end);
+  const to = Math.max(start, end);
+  let context: SourceContext | undefined;
+  const visit = (parent: Node, contentStart: number, ancestors: readonly Node[]) => {
+    if (parent.type.name === 'latex_contents_line') return;
+    // Separators repaired so far among these children, which later checks must see.
+    const repaired = new Map<number, string>();
+    let neighbour = contentStart;
+    parent.forEach((child, offset, index) => {
+      const at = contentStart + offset;
+      const before: unknown = child.attrs.before;
+      if (index && at >= from && at <= to && typeof before === 'string' &&
+        !existed(previous, mapping, back.map(at, -1), parent.child(index - 1), neighbour, child, at)) {
+        context ??= sourceContext(latexEffectivePrefix(doc));
+        const window = { parent, ancestors, index, repaired, context };
+        // When no spacing reopens the same blocks, a blank line at least ends the paragraph.
+        const separated = [before, withLineBreak(before)]
+          .find(candidate => reopensApart(window, candidate)) ?? withBlankLine(before);
+        if (separated !== before) {
+          transform.setNodeAttribute(at, 'before', separated);
+          repaired.set(index, separated);
+        }
+      }
+      if (!child.isTextblock && !child.isAtom && at <= to && at + child.nodeSize >= from)
+        visit(child, at + 1, [...ancestors, child]);
+      neighbour = at;
+    });
+  };
+  visit(doc, 0, []);
+}
+
+type ReparseWindow = {
+  parent: Node;
+  /** The containers from the document down to `parent`, outermost first. */
+  ancestors: readonly Node[];
+  index: number;
+  repaired: ReadonlyMap<number, string>;
+  context: SourceContext;
+};
+
+/**
+ * Whether the block at `index` of `parent`, given `before`, reopens as the same blocks together
+ * with its neighbours up to the nearest blank lines on either side. They are parsed inside their
+ * enclosing containers, with the document's macros.
+ */
+function reopensApart({ parent, ancestors, index, repaired, context }: ReparseWindow, before: string) {
+  const separator = (at: number) =>
+    separatorSource(parent, at, at === index ? before : repaired.get(at));
+  const joined = (at: number) => !blankLine(separator(at + 1));
+  let first = index;
+  while (first > 0 && index - first < 8 && joined(first - 1)) first--;
+  let last = index;
+  while (last + 1 < parent.childCount && last - index < 8 && joined(last)) last++;
+  let source = '';
+  for (let at = first; at <= last; at++) source += separator(at) + blockSource(parent.child(at));
+  // An included file is parsed on its own, so its blocks are wrapped only up to the include.
+  const root = ancestors.findLastIndex(node => node.type.name === 'latex_include') + 1;
+  const wrapping = ancestors.slice(root);
+  for (let depth = wrapping.length - 1; depth >= 0; depth--) {
+    const container = wrapping[depth]!;
+    if (!wrappers.has(container.type.name)) return true;
+    let close = containerClose(container);
+    // The checked block's comment would otherwise hide the close, which other blocks follow.
+    if (depth === wrapping.length - 1 && endsInComment(parent.child(last)) && !/^\r?\n/.test(close))
+      close = '\n' + close;
+    source = containerOpen(container) + source + close;
+  }
+  let parsed = Fragment.fromArray(blocks(source, context).nodes);
+  for (const container of wrapping) {
+    if (parsed.childCount !== 1 || parsed.firstChild!.type !== container.type) return false;
+    parsed = parsed.firstChild!.content;
+  }
+  if (parsed.childCount !== last - first + 1) return false;
+  for (let at = first; at <= last; at++) {
+    const shown = parent.child(at).type.name;
+    const reopened = parsed.child(at - first).type.name;
+    // Without the project's files, an include reparses as its raw command.
+    if (reopened !== shown && !(shown === 'latex_include' && reopened === 'latex_raw')) return false;
+  }
+  return true;
+}
+
+/**
+ * Whether the boundary between `before` and `after` existed in `previous` at `position`, with
+ * both blocks there before the edit: the same blocks, perhaps edited since, or the same raw lines.
+ */
+function existed(previous: Node, mapping: Mapping, position: number,
+  before: Node, beforeAt: number, after: Node, afterAt: number) {
+  const boundary = blocksAround(previous, position);
+  if (!boundary) return false;
+  const [oldBefore, oldAfter] = boundary;
+  return oldAfter.attrs.before === after.attrs.before &&
+    same(mapping, oldBefore, position - oldBefore.nodeSize, before, beforeAt) &&
+    same(mapping, oldAfter, position, after, afterAt);
+}
+
+const childStarts = new WeakMap<Node, number[]>();
+
+/**
+ * The sibling blocks either side of `position` in `document`, found by binary search so that a
+ * paste checking many boundaries does not rescan every sibling for each one.
+ */
+function blocksAround(document: Node, position: number): [Node, Node] | undefined {
+  let parent = document;
+  let contentStart = 0;
+  for (;;) {
+    let starts = childStarts.get(parent);
+    if (!starts) {
+      starts = [];
+      parent.forEach((_child, offset) => starts!.push(offset));
+      childStarts.set(parent, starts);
+    }
+    const offset = position - contentStart;
+    let low = 0;
+    let high = starts.length - 1;
+    while (low < high) {
+      const middle = (low + high + 1) >> 1;
+      if (starts[middle]! <= offset) low = middle;
+      else high = middle - 1;
+    }
+    if (!starts.length || offset < 0) return undefined;
+    if (starts[low] === offset) return low ? [parent.child(low - 1), parent.child(low)] : undefined;
+    const child = parent.child(low);
+    if (child.isTextblock || child.isAtom || offset >= starts[low]! + child.nodeSize) return undefined;
+    parent = child;
+    contentStart += starts[low]! + 1;
+  }
+}
+
+/** Whether `node` at `at` is `old` at `position` carried through `mapping`. */
+function same(mapping: Mapping, old: Node, position: number, node: Node, at: number) {
+  if (old.type !== node.type) return false;
+  if (!node.isTextblock) return old.eq(node);
+  const start = mapping.mapResult(position + 1, -1);
+  return !start.deleted && start.pos === at + 1;
+}
+
 function childrenSource(parent: Node) {
   let result = '';
   parent.forEach((child, _offset, index) => {
-    result +=
-      (child.attrs.before ?? (index === 0 ? '' : child.type.name === 'list_item' ? '\n' : '\n\n')) +
-      blockSource(child);
+    result += separatorSource(parent, index) + blockSource(child);
   });
   return result;
 }
 
 export function serializeLatex(document: Node) {
-  return document.attrs.prefix + childrenSource(document) + document.attrs.suffix;
+  const suffix: string = document.attrs.suffix;
+  // A comment ending the last block would hide the document's closing source on its line.
+  const last = document.lastChild;
+  const endComment = last && suffix && endsInComment(last) && !/^\r?\n/.test(suffix) ? '\n' : '';
+  return document.attrs.prefix + childrenSource(document) + endComment + suffix;
 }
 
 function flattenSelectedIncludes(content: Fragment): Fragment {
@@ -1432,8 +1659,7 @@ export function latexSourceMap(document: Node) {
     const blocks = files.get(file)!;
     let offset = start;
     parent.forEach((node, childOffset, index) => {
-      const before = node.attrs.before ?? (index === 0 ? '' : node.type.name === 'list_item' ? '\n' : '\n\n');
-      offset += before.length;
+      offset += separatorSource(parent, index).length;
       const end = offset + blockSource(node).length;
       const at = position + childOffset;
       blocks.push({ position: at, node, offset, end, depth });
