@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { compile } from "svelte/compiler";
 import type { WordLayout } from "@tumblerjs/word";
-import { browserWordTextMeasurer, calculateWordPageViewport, wordTextCss } from "../src/index.ts";
+import { browserWordTextMeasurer, calculateWordPageViewport, wordPageAtOffset, wordTextCss } from "../src/index.ts";
 
 describe("owned Svelte Word document head", () => {
   test("compiles accessible virtualized page markup", async () => {
@@ -46,6 +46,22 @@ describe("owned Svelte Word document head", () => {
     expect(top.totalWidth).toBe(1104);
     expect(bottom.totalWidth).toBe(top.totalWidth);
     expect(calculateWordPageViewport(layout, 0, 800, 12).totalWidth).toBe(1080);
+  });
+
+  test("locates the current page across mixed portrait and landscape sections", () => {
+    const layout = {
+      fragmentCount: 0,
+      pages: [792, 612, 792].map((height, index) => ({
+        index, width: index === 1 ? 792 : 612, height, section: {} as never,
+        columns: [], headerLines: [], footerLines: [], headerTables: [], footerTables: [],
+        noteLines: [], noteTables: [], noteSeparatorY: undefined,
+      })),
+    } satisfies WordLayout;
+    const { offsets } = calculateWordPageViewport(layout, 1600, 700, 32);
+    expect(offsets).toEqual([32, 1120, 1968]);
+    expect(wordPageAtOffset(offsets, 1950)).toBe(1);
+    expect(wordPageAtOffset(offsets, 1968)).toBe(2);
+    expect(wordPageAtOffset(offsets, 2000)).toBe(2);
   });
 
   test("converts browser pixel metrics back into document points", () => {
